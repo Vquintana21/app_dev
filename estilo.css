@@ -1,0 +1,152 @@
+	.auto-expand {
+        height: auto; /* Permite que la altura sea dinámica */
+        overflow: hidden; /* Oculta las barras de desplazamiento */
+        resize: none; /* Evita que el usuario ajuste manualmente el tamaño */
+    }
+	
+    /* Estilos base del calendario */
+    .calendar-header {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .week-number {
+        background-color: #e9ecef;
+        font-weight: bold;
+        text-align: center;
+        vertical-align: middle;
+        width: 8%;
+    }
+    
+    .calendar-cell {
+        min-height: 120px;
+        border: 1px solid #dee2e6;
+        padding: 5px;
+        vertical-align: top;
+        width: 15.4%; /* (100% - 8% - 15%) / 5 para las columnas de L-V */
+    }
+
+    /* Columna de autoaprendizaje */
+    .calendar-cell.autoaprendizaje {
+        width: 15%;
+        background-color: #f8f9fa;
+        border-left: 3px solid #6c757d;
+    }
+
+    /* Estilos de los botones */
+    .activity-button {
+        margin-bottom: 5px;
+        text-align: left;
+        font-size: 0.85rem;
+        white-space: normal;
+        width: 100%;
+        min-height: 60px;
+        height: auto;
+        padding: 8px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        color: white !important;
+        transition: all 0.2s ease;
+        word-wrap: break-word;
+        word-break: break-word;
+        hyphens: auto;
+    }
+    
+	.activity-button.btn-light.feriado {
+    color: #000 !important;
+}
+	
+    .activity-button:hover {
+        transform: scale(1.02);
+        opacity: 0.9;
+    }
+    
+    .activity-button.default {
+        background-color: #0d6efd !important;
+        border-color: #0d6efd !important;
+    }
+    
+    .activity-button.completed {
+        background-color: #198754 !important;
+        border-color: #198754 !important;
+    }
+    
+    .activity-button.autoaprendizaje {
+        background-color: #6c757d !important;
+        border-color: #6c757d !important;
+    }
+
+    .class-time {
+        font-size: 0.75rem;
+        font-weight: bold;
+        margin-bottom: 4px;
+        opacity: 0.9;
+    }
+
+    /* Estilos para el texto dentro del botón */
+    .activity-title {
+        font-size: 0.85rem;
+        line-height: 1.2;
+        flex-grow: 1;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Estilos responsivos */
+    @media (max-width: 1200px) {
+        .activity-button {
+            font-size: 1rem;
+            padding: 6px;
+        }
+        
+        .class-time {
+            font-size: 1rem;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .calendar-cell {
+            min-height: 100px;
+        }
+        
+        .activity-button {
+            font-size: 0.85rem;
+            padding: 4px;
+            min-height: 50px;
+        }
+        
+        .class-time {
+            font-size: 0.85rem;
+            margin-bottom: 2px;
+        }
+    }
+
+    /* Mejoras para dispositivos muy pequeños */
+    @media (max-width: 576px) {
+        .table-responsive {
+            font-size: 0.8rem;
+        }
+        
+        .calendar-cell {
+            min-height: 80px;
+        }
+        
+        .activity-button {
+            min-height: 40px;
+        }
+    }
+
+    /* Estilos para el contenedor principal del calendario */
+    .month-section {
+        margin-bottom: 2rem;
+    }
+
+    .month-section h3 {
+        color: #333;
+        padding: 10px 0;
+        border-bottom: 2px solid #dee2e6;
+    }
