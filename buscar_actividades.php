@@ -19,7 +19,7 @@ try {
     }
     
     // Construir consulta base
-    $query = "SELECT idplanclases, pcl_tituloActividad, pcl_Fecha, pcl_Inicio, pcl_Termino, 
+    $query = "SELECT idplanclases, pcl_tituloActividad, pcl_Fecha, DAYNAME(pcl_Fecha) AS dia_semana, pcl_Inicio, pcl_Termino, 
              pcl_TipoSesion, pcl_SubTipoSesion, dia
              FROM planclases 
              WHERE cursos_idcursos = ? 
@@ -42,13 +42,8 @@ try {
         $query .= " AND dia = ?";
         $params[] = $diaSemana;
         $tipos .= "s";
-    }
-    
-    if (!empty($subtipo)) {
-        $query .= " AND pcl_SubTipoSesion = ?";
-        $params[] = $subtipo;
-        $tipos .= "s";
-    }
+    }    
+   
     
     if (!empty($fechaInicio)) {
         $query .= " AND pcl_Fecha >= ?";

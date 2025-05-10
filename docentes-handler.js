@@ -1,43 +1,57 @@
 // docentes-handler.js
 document.addEventListener('DOMContentLoaded', function() {
     function initializeDocenteSelect() {
-        const docenteSelect = $('#docente');
         
-        if (!docenteSelect.length) return;
+    const docenteSelect = $('#docente');
+    
+    if (!docenteSelect.length) return;
 
-        // Destruir instancia previa si existe
-        if (docenteSelect.hasClass('select2-hidden-accessible')) {
-            docenteSelect.select2('destroy');
-        }
-        
-        // Configuraci√≥n del Select2
-        docenteSelect.select2({
-            theme: 'bootstrap-5',
-            placeholder: 'üîç Buscar Docente',
-            allowClear: true,
-            width: '100%',
-            language: {
-                noResults: function() {
-                    return "No se encontraron docentes";
-                },
-                searching: function() {
-                    return "Buscando...";
-                },
-				inputTooShort: function() {
-					return 'Ingrese nombre a buscar ...';
-				}
-            },
-            dropdownParent: docenteSelect.parent(), // Cambio importante aqui
-            minimumInputLength: 1, // Reducido a 1 para mejor usabilidad
-            minimumResultsForSearch: 0, // Permitir b√∫squeda inmediata
-            maximumSelectionSize: 1 // Cambiado de maximumSelectionLength a maximumSelectionSize
-        });
-
-        // Manejar el cambio de selecci√≥n
-        docenteSelect.on('change', function() {
-            $('#boton_agregar').prop('disabled', !$(this).val());
-        });
+    // Destruir instancia previa si existe
+    if (docenteSelect.hasClass('select2-hidden-accessible')) {
+        docenteSelect.select2('destroy');
     }
+    
+    docenteSelect.select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Escriba nombre o RUT para buscar',
+        allowClear: true,
+        width: '100%',
+        minimumInputLength: 3, // Requiere al menos 3 caracteres
+        ajax: {
+            url: 'buscar_docentes_ajax.php',
+            dataType: 'json',
+            delay: 300, // Espera 300ms despuÈs de que el usuario deje de escribir
+            data: function (params) {
+                return {
+                    q: params.term,
+                    page: params.page || 1
+                };
+            },
+            processResults: function (data, params) {
+                params.page = params.page || 1;
+                return {
+                    results: data.items,
+                    pagination: {
+                        more: data.pagination.more
+                    }
+                };
+            },
+            cache: true
+        },
+        language: {
+            searching: function() { return "Buscando..."; },
+            noResults: function() { return "No se encontraron docentes"; },
+            inputTooShort: function() { return 'Escriba al menos 3 caracteres para buscar'; },
+            loadingMore: function() { return 'Cargando m·s resultados...'; },
+            errorLoading: function() { return 'Error al cargar los resultados'; }
+        }
+    });
+
+    // Manejar el cambio de selecciÛn
+    docenteSelect.on('change', function() {
+        $('#boton_agregar').prop('disabled', !$(this).val());
+    });
+}
 	
 	// Agregar evento al boton de asignar docente
 $(document).off('click', '#boton_agregar').on('click', '#boton_agregar', function() {

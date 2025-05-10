@@ -297,20 +297,21 @@ $stmt->execute();
 $result = $stmt->get_result();
 ?>
 
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Gestión de Salas</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css" rel="stylesheet">
-</head>
-<body>
 
-<div class="card">
-    <div class="card-header">
-        <h5 class="card-title">Gestión de Salas</h5>
-    </div>
-    <div class="card-body">
+
+<div class="container py-4">
+        <!-- Información del curso -->
+        <div class="card mb-4">
+            <div class="card-body text-center">
+               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
+                
+            </div>
+        </div>
+		
+
+        <!-- Filtros y selección -->
+        <div class="card mb-4">
+            <div class="card-header">
         <div class="table-responsive">
             <table class="table table-hover">
                 <thead>
@@ -338,7 +339,22 @@ $result = $stmt->get_result();
 						<td><?php echo $row['idplanclases']; ?></td>
                         <td><?php echo $fecha->format('d/m/Y'); ?></td>
                         <td><?php echo substr($row['pcl_Inicio'], 0, 5) . ' - ' . substr($row['pcl_Termino'], 0, 5); ?></td>
-                        <td><?php echo $row['pcl_tituloActividad']; ?></td>
+                        <td>
+                            <?php 
+                            $tituloCompleto = $row['pcl_tituloActividad'];
+                            $tituloCorto = strlen($tituloCompleto) > 25 ? 
+                                          substr($tituloCompleto, 0, 25) . '...' : 
+                                          $tituloCompleto;
+                            $needsTooltip = strlen($tituloCompleto) > 25;
+                            ?>
+                            <?php if($needsTooltip): ?>
+                                <span data-bs-toggle="tooltip" data-bs-placement="top" title="<?php echo htmlspecialchars($tituloCompleto); ?>">
+                                    <?php echo htmlspecialchars($tituloCorto); ?>
+                                </span>
+                            <?php else: ?>
+                                <?php echo htmlspecialchars($tituloCorto); ?>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <?php echo $row['pcl_TipoSesion']; ?>
                             <?php if($row['pcl_SubTipoSesion']): ?>
@@ -526,172 +542,4 @@ $result = $stmt->get_result();
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-// async function solicitarSala(idPlanClase) {
-//     document.getElementById('salaForm').reset();
-//     document.getElementById('idplanclases').value = idPlanClase;
-//     document.getElementById('action').value = 'solicitar';
-//     document.getElementById('salaModalTitle').textContent = 'Solicitar Sala';
-//     
-// 	 // Obtener el número de alumnos del elemento de la tabla
-//     const tr = document.querySelector(`tr[data-id="${idPlanClase}"]`);
-//     if (tr) {
-//         const alumnosTotales = tr.dataset.alumnos;
-//         document.getElementById('alumnosTotales').value = alumnosTotales;
-//         document.getElementById('alumnosTotales').readOnly = true; // Hacerlo de solo lectura
-//         calcularAlumnosPorSala(); // Calcular automáticamente alumnos por sala
-//     }
-// 	
-//     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
-//     modal.show();
-// }
-// 
-// function calcularAlumnosPorSala() {
-//     const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
-//     const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
-//     // Usar Math.ceil para redondear hacia arriba
-//     const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
-//     document.getElementById('alumnosPorSala').value = alumnosPorSala;
-// }
-// 
-// async function modificarSala(idPlanClase) {
-//     document.getElementById('idplanclases').value = idPlanClase;
-//     document.getElementById('action').value = 'modificar';
-//     document.getElementById('salaModalTitle').textContent = 'Modificar Solicitud';
-//     
-//     try {
-//         const response = await fetch(`salas2.php?idPlanClase=${idPlanClase}`);
-//         const datos = await response.json();
-//         
-//         if (datos) {
-//             document.getElementById('campus').value = datos.pcl_campus;
-//             document.getElementById('nSalas').value = datos.pcl_nSalas;
-//         }
-//     } catch (error) {
-//         console.error('Error:', error);
-//     }
-//     
-//     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
-//     modal.show();
-// }
-// 
-// async function mostrarModalLiberarSalas(idPlanClase) {
-//     try {
-//         // Obtener las salas asignadas
-//         const response = await fetch(`salas2.php`, {
-//             method: 'POST',
-//             headers: {
-//                 'Content-Type': 'application/json',
-//             },
-//             body: JSON.stringify({
-//                 action: 'obtener_salas_asignadas',
-//                 idPlanClase: idPlanClase
-//             })
-//         });
-//         
-//         const datos = await response.json();
-//         
-//         if (datos.salas && datos.salas.length > 0) {
-//             // Llenar la tabla con las salas
-//             const tbody = document.getElementById('listaSalasAsignadas');
-//             tbody.innerHTML = '';
-//             
-//             datos.salas.forEach(sala => {
-//                 const tr = document.createElement('tr');
-//                 tr.innerHTML = `
-//                     <td>${sala.idSala}</td>
-//                     <td>
-//                         <button class="btn btn-danger btn-sm" 
-//                                 onclick="liberarSala(${sala.id})">
-//                             <i class="bi bi-x-circle"></i> Liberar
-//                         </button>
-//                     </td>
-//                 `;
-//                 tbody.appendChild(tr);
-//             });
-//             
-//             // Mostrar el modal
-//             const modal = new bootstrap.Modal(document.getElementById('liberarSalaModal'));
-//             modal.show();
-//         } else {
-//             alert('No hay salas asignadas para liberar');
-//         }
-//     } catch (error) {
-//         console.error('Error:', error);
-//         alert('Error al cargar las salas asignadas');
-//     }
-// }
-// 
-// async function liberarSala(idAsignacion) {
-//     if (!confirm('¿Está seguro que desea liberar esta sala?')) {
-//         return;
-//     }
-//     
-//     try {
-//         const response = await fetch('salas2.php', {
-//             method: 'POST',
-//             headers: {
-//                 'Content-Type': 'application/json',
-//             },
-//             body: JSON.stringify({
-//                 action: 'liberar',
-//                 idAsignacion: idAsignacion
-//             })
-//         });
-//         
-//         if (response.ok) {
-//             location.reload();
-//         } else {
-//             alert('Error al liberar la sala');
-//         }
-//     } catch (error) {
-//         console.error('Error:', error);
-//         alert('Error al procesar la solicitud');
-//     }
-// }
-// 
-// async function guardarSala() {
-//     const form = document.getElementById('salaForm');
-//     if (!form.checkValidity()) {
-//         form.reportValidity();
-//         return;
-//     }
-//     
-//     const formData = new FormData(form);
-//     const datos = Object.fromEntries(formData.entries());
-//     
-//     try {
-//         const response = await fetch('salas2.php', {
-//             method: 'POST',
-//             headers: {
-//                 'Content-Type': 'application/json',
-//             },
-//             body: JSON.stringify(datos)
-//         });
-//         
-//         if (response.ok) {
-//             const modal = bootstrap.Modal.getInstance(document.getElementById('salaModal'));
-//             modal.hide();
-//             location.reload();
-//         } else {
-//             alert('Error al guardar los cambios');
-//         }
-//     } catch (error) {
-//         console.error('Error:', error);
-//         alert('Error al procesar la solicitud');
-//     }
-// }
-// 
-// // Añadir justo después de las funciones
-// document.addEventListener('DOMContentLoaded', function() {
-//     // Agregar event listener para el cambio de número de salas
-//     const nSalasSelect = document.getElementById('nSalas');
-//     if (nSalasSelect) {
-//         nSalasSelect.addEventListener('change', calcularAlumnosPorSala);
-//     }
-// });
-</script>
-
-</body>
-</html>
+</div>

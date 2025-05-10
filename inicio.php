@@ -9,13 +9,12 @@ $rut = "016784781K";
 //8858
 //8924
 
-$spre_personas = "SELECT * FROM spre_personas WHERE Rut ='$rut' ";
+//Consulta Funcionario
+$spre_personas = "SELECT * FROM spre_personas WHERE Rut='$rut' ";
 $spre_personasQ = mysqli_query($conexion3,$spre_personas);
-
 $fila_personas = mysqli_fetch_assoc($spre_personasQ);
 
-$nombreFuncionario = utf8_encode($fila_personas["Nombres"]." ".$fila_personas["Paterno"]." ".$fila_personas["Materno"]);
-$nombreFuncionario2 = utf8_encode($fila_personas["Nombres"]." ".$fila_personas["Paterno"]);
+$funcionario = utf8_encode($fila_personas["Funcionario"]);
 
 function InfoDocenteUcampus($rut){
 	
@@ -90,15 +89,15 @@ $foto_docente = InfoDocenteUcampus($rut);
   <!-- CSS personalizado -->
   <link href="estilo.css" rel="stylesheet">
   
-  <script src="docentes-handler.js"></script>
+
     
 </head>
-<body>
+<body class="toggle-sidebar">
 
  <!-- ======= Header ======= -->
   <header id="header" class="header fixed-top d-flex align-items-center">
     <div class="d-flex align-items-center justify-content-between">
-      <a href="planificacion.php" class="logo d-flex align-items-center">
+      <a href="inicio.php" class="logo d-flex align-items-center">
         <img src="assets/img/logo.png" alt="">
         <span class="d-none d-lg-block">Calendario Académico</span>
       </a>
@@ -154,8 +153,7 @@ $foto_docente = InfoDocenteUcampus($rut);
       <h1>Gestión de docencia 2025.1</h1>
       <nav>
         <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="index.html">Home</a></li>
-          <li class="breadcrumb-item">Inicio</li>
+          <li class="breadcrumb-item"><a href="index.html">Inicio</a></li>
         </ol>
       </nav>
     </div><!-- End Page Title -->
@@ -166,9 +164,9 @@ $foto_docente = InfoDocenteUcampus($rut);
           <div class="card">
             <div class="card-body profile-card pt-4 d-flex flex-column align-items-center">
 			
-              <img src="<?php echo $foto_docente; ?>" alt="Profile" class="rounded-circle">
-              <h2><?php echo $nombreFuncionario; ?></h2>
-              <h3>Académico/a</h3>
+              
+              <h2> <i class="bi bi-person-raised-hand"></i> Instrucciones</h2>
+              
             </div>
           </div> 
 
@@ -207,7 +205,7 @@ $foto_docente = InfoDocenteUcampus($rut);
                   <p class="small fst-italic">Sunt est soluta temporibus accusantium neque nam maiores cumque temporibus. Tempora libero non est unde veniam est qui dolor. Ut sunt iure rerum quae quisquam autem eveniet perspiciatis odit. Fuga sequi sed ea saepe at unde.</p>
 
                   <h5 class="card-title">Tutorial de uso de plataforma</h5>
-				  <iframe width="50%" height="500" src="https://www.youtube.com/embed/p7U5yRgQ93A?si=hk9LyudYrBlD6a54" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+				  <!--<iframe width="50%" height="500" src="https://www.youtube.com/embed/p7U5yRgQ93A?si=hk9LyudYrBlD6a54" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>-->
            
                 </div>
 
@@ -235,9 +233,7 @@ $foto_docente = InfoDocenteUcampus($rut);
 									</th>
 									<th>ID</th>
 									<th>Periodo</th>
-									<th>Tipo curso</th>
 									<th>Participación</th>
-									<th>Duración semanas</th>
 									<th>Acciones</th>
 								  </tr>
 								</thead>
@@ -260,15 +256,23 @@ $foto_docente = InfoDocenteUcampus($rut);
 									  $num_cursos = mysqli_num_rows($cursosQuery);
 									  
 									  while($fila_cursos = mysqli_fetch_assoc($cursosQuery)){
-									  ?> 
+									  // Separar el periodo en año y semestre
+    $periodo_parts = explode('.', $fila_cursos["idperiodo"]);
+    $anio = $periodo_parts[0];
+    $semestre = $periodo_parts[1];
+    
+    // Construir la URL de U-Cursos
+    $url_ucursos = "https://www.u-cursos.cl/medicina/{$anio}/{$semestre}/{$fila_cursos["codigoCurso"]}/1/historial";
+?> 
 								
 										  <tr>
-											<td><?php echo utf8_encode($fila_cursos["codigoCurso"]); ?>-<?php echo $fila_cursos["seccion"]; ?> <?php echo utf8_encode($fila_cursos["NombreCurso"]); ?></td>
+											<td><?php echo utf8_encode($fila_cursos["codigoCurso"]); ?>-<?php echo $fila_cursos["seccion"]; ?>
+											<?php echo utf8_encode($fila_cursos["NombreCurso"]); ?>
+											<?php if($fila_cursos["VersionCalendario"] == 1){ echo "<button type='button' class='btn btn-sm btn-warning' disabled><small>Clínico</small></button>";}  ?>
+											</td>
 											<td><?php echo $fila_cursos["idcurso"]; ?></td>
 											<td><?php echo $fila_cursos["idperiodo"]; ?></td>
-											<td><?php if($fila_cursos["VersionCalendario"] == 0){ echo "Curso regular"; }else{ echo "Curso clínico"; } ?></td>
 											<td><span class="badge bg-secondary text-white"><i class="bi bi-star me-1"></i> <?php echo $fila_cursos["CargoTexto"]; ?> </span></td>
-											<td><?php echo $fila_cursos["Semanas"]; ?></td>
 											<td>
 												<a type="button" class="btn btn-outline-primary btn-sm" target="" href="<?php echo ($fila_cursos["VersionCalendario"] == 1) ? 'index_clinico.php' : 'index.php'; ?>?curso=<?php echo $fila_cursos["idcurso"]; ?>"><i class="ri ri-calendar-check-fill"></i> Calendario</a>
 												
@@ -279,14 +283,14 @@ $foto_docente = InfoDocenteUcampus($rut);
 														
 													}else{ 
 
-														$link_programa = "https://dpi.med.uchile.cl/programa/api/pdf.php?curso=$fila_cursos[codigoCurso]&periodof=$fila_cursos[idperiodo]";
+														$link_programa = "https://dpi.med.uchile.cl/programa/print.php?nik=$fila_cursos[codigoCurso]";
 														$icon_programa = " ri ri-arrow-go-back-fill"; 
 													
 													}?> <!--Periodo activo-->
 												
 												<a type="button" class="btn btn-outline-success btn-sm " target="_blank" href="<?php echo $link_programa; ?>" > <i class="<?php echo $icon_programa; ?>"></i> Programa</a>
-												<button type="button" class="btn btn-outline-danger btn-sm"> <i class="bx bx-link-external"></i> U cursos</button>
-												<a type="button" class="btn btn-outline-info btn-sm" href="data.php?codigo=<?php echo utf8_encode($fila_cursos["codigoCurso"]); ?>&seccion=<?php echo $fila_cursos["seccion"]; ?>&periodo=<?php echo $fila_cursos["idperiodo"]; ?>"> <i class="ri ri-map-pin-user-fill"></i> Estudiantes </a>
+												<a type="button" class="btn btn-outline-danger btn-sm" target="_blank" href="<?php echo $url_ucursos; ?>" > <i class="bx bx-link-external"></i> U cursos</a>
+												<!-- <a type="button" class="btn btn-outline-info btn-sm" href="data.php?codigo=<?php echo utf8_encode($fila_cursos["codigoCurso"]); ?>&seccion=<?php echo $fila_cursos["seccion"]; ?>&periodo=<?php echo $fila_cursos["idperiodo"]; ?>"> <i class="ri ri-map-pin-user-fill"></i> Estudiantes </a>-->
 											</td>
 										  </tr>
 									  <?php } ?> 
@@ -319,6 +323,11 @@ $foto_docente = InfoDocenteUcampus($rut);
 					
 					Informanos sobre tu problema <a target="_blank" href="https://dpi.med.uchile.cl/gestion/sugerencias/"> aquí </a> o escríbenos directamente a dpi.med@uchile.cl
 
+					<h5 class="card-title">¿Necesitas ayuda de aulas docentes?</h5>
+					
+					informa sobre tu problema a correo de aulas <a target="_blank" href="mailto:felpilla@gmail.com"> aulas@uchile.cl</a>
+
+
                 </div>
 
               </div><!-- End Bordered Tabs -->
@@ -335,16 +344,12 @@ $foto_docente = InfoDocenteUcampus($rut);
   <!-- ======= Footer ======= -->
   <footer id="footer" class="footer">
     <div class="copyright">
-      &copy; Copyright <strong><span>NiceAdmin</span></strong>. All Rights Reserved
+      &copy; <b>2025 Facultad de Medicina Universidad de Chile</b>
     </div>
     <div class="credits">
-      <!-- All the links in the footer should remain intact. -->
-      <!-- You can delete the links only if you purchased the pro version. -->
-      <!-- Licensing information: https://bootstrapmade.com/license/ -->
-      <!-- Purchase the pro version with working PHP/AJAX contact form: https://bootstrapmade.com/nice-admin-bootstrap-admin-html-template/ -->
-      Designed by <a href="https://bootstrapmade.com/">BootstrapMade</a>
+      Diseñado por <b><a target="_blank" href="https://dpi.med.uchile.cl">DPI</b></a>
     </div>
-  </footer><!-- End Footer -->
+  </footer>
 
   <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
 

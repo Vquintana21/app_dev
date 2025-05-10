@@ -5,7 +5,7 @@ include("conexion.php");
 // Obtener el ID del curso desde la URL
 $idCurso = $_GET['curso']; 
 //$idCurso = 8942; // 8158
-$rut = "0167847811";
+$rut = "016784781K";
 //$ano = 2024; 
 // Consulta SQL
 $query = "SELECT `idplanclases`, pcl_tituloActividad, `pcl_Fecha`, `pcl_Inicio`, `pcl_Termino`, 
@@ -105,11 +105,36 @@ function InfoDocenteUcampus($rut){
 }
 
 //Consulta para obtener horas no presenciales
-$queryHoras = "SELECT C.idcurso, A.`HNPSemanales`, concat(FLOOR(HNPSemanales),':',LPAD(ROUND((HNPSemanales - FLOOR(HNPSemanales)) * 60),2,'0')) AS tiempo 
-               FROM `spre_maestropresencialidad` A 
-               JOIN spre_ramosperiodo B ON A.SCT = B.SCT AND A.Semanas = B.NroSemanas AND A.idTipoBloque = B.idTipoBloque 
-               JOIN spre_cursos C ON B.CodigoCurso = C.CodigoCurso 
-               WHERE C.idcurso = ? and B.idPeriodo=C.idperiodo";
+$queryHoras = "SELECT
+    C.idcurso,
+    A.`HNPSemanales`,
+    FLOOR(A.HNPSemanales) AS horas,
+    ROUND(
+        (
+            A.HNPSemanales - FLOOR(A.HNPSemanales)
+        ) * 60
+    ) AS minutos,
+    CONCAT(
+        FLOOR(HNPSemanales),
+        ':',
+        LPAD(
+            ROUND(
+                (
+                    HNPSemanales - FLOOR(HNPSemanales)
+                ) * 60
+            ),
+            2,
+            '0'
+        )
+    ) AS tiempo
+FROM
+    `spre_maestropresencialidad` A
+JOIN spre_ramosperiodo B ON
+    A.SCT = B.SCT AND A.Semanas = B.NroSemanas AND A.idTipoBloque = B.idTipoBloque
+JOIN spre_cursos C ON
+    B.CodigoCurso = C.CodigoCurso
+WHERE
+    C.idcurso = ? AND B.idPeriodo = C.idperiodo;";
 
 $stmtHoras = $conexion3->prepare($queryHoras);
 $stmtHoras->bind_param("i", $idCurso);
@@ -133,9 +158,9 @@ $conn->close();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calendario Académico</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-	
-	 <!-- Vendor CSS Files 
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">	
+	  
+	 <!-- Vendor CSS Files   -->
   <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
   <link href="assets/vendor/boxicons/css/boxicons.min.css" rel="stylesheet">
@@ -143,7 +168,7 @@ $conn->close();
   <link href="assets/vendor/quill/quill.bubble.css" rel="stylesheet">
   <link href="assets/vendor/remixicon/remixicon.css" rel="stylesheet">
   <link href="assets/vendor/simple-datatables/style.css" rel="stylesheet">
-  -->
+
  <!-- Favicons -->
   <link href="assets/img/favicon.png" rel="icon">
   <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon">
@@ -156,9 +181,11 @@ $conn->close();
   <link href="assets/css/style.css" rel="stylesheet">
   <!-- CSS personalizado -->
   <link href="estilo.css" rel="stylesheet">
+  <link href="estilo2.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
     
 </head>
-<body>
+<body class="toggle-sidebar">
 
  <!-- ======= Header ======= -->
   <header id="header" class="header fixed-top d-flex align-items-center">
@@ -223,12 +250,12 @@ $conn->close();
 
  <main id="main" class="main">
     <div class="pagetitle">
-        <h1><?php echo $codigo_curso."-".$seccion; ?> <?php echo $nombre_curso; ?></h1>
+        <h1><?php echo $codigo_curso."-".$seccion; ?> <?php echo $nombre_curso; ?> <?php echo "2024-2"; ?></h1>
         <small style="float: right;">ID curso: <?php echo $idCurso; ?></small>
         <nav>
             <ol class="breadcrumb">
-                <li class="breadcrumb-item"><a href="index.html">Inicio</a></li>
-                <li class="breadcrumb-item active">Plan de clases <?php echo $codigo_curso."-".$seccion; ?> <?php echo $nombre_curso; ?></li>
+                <li class="breadcrumb-item"><a href="inicio.php">Inicio</a></li>
+                <li class="breadcrumb-item active">Plan de clases </li>
             </ol>
         </nav>
     </div>
@@ -239,7 +266,7 @@ $conn->close();
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title">Editar información</h5>
+                    <h5 class="card-title"><i class="bi bi-pencil"></i> Editar información </h5>
                     <!-- Bordered Tabs Justified -->
                     <ul class="nav nav-tabs nav-tabs-bordered d-flex" id="borderedTabJustified" role="tablist">
                         <li class="nav-item flex-fill" role="presentation">
@@ -262,13 +289,10 @@ $conn->close();
                     <!-- Tab Calendario -->
                     <div class="tab-pane fade show active" id="bordered-justified-home" role="tabpanel" aria-labelledby="home-tab">
                         <div class="card-body">
-                            <h4 class="mb-0">Calendario Académico<span>/ Hoy es <?php echo date("d-m-Y"); ?></span></h4>
+                           
                             </br>
                             <nav>
-                                <ol class="breadcrumb">
-                                    <li class="breadcrumb-item"><i class="bi bi-circle-fill text-primary"></i> <small>Actividad regular (Clase, Actividad Grupal, Trabajo Práctico, Evaluación, Examen)</small></li>
-                                    <li class="breadcrumb-item"><i class="bi bi-circle-fill text-secondary"></i> <small>Actividad de autoaprendizaje</small></li>
-                                </ol>
+                                
                             </nav>
                         </div>
                         <div class="card-body" id="calendar-container">
@@ -305,8 +329,11 @@ $conn->close();
         <div class="modal fade" id="activityModal" tabindex="-1">
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
-                    <div class="modal-header">
-                        <h4 class="card-title">Detalle de la actividad <span id="modal-idplanclases"></span></h4>
+                     <div class="modal-header">
+                        <div>
+                            <h4 class="card-title">Detalle de la actividad <span id="modal-idplanclases"></span></h4>
+                            <p class="mb-0 text-muted" id="modal-fecha-hora"></p>
+                        </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -316,6 +343,7 @@ $conn->close();
                                     <div class="col-8">
                                         <form id="activityForm">
                                             <input type="hidden" id="idplanclases" name="idplanclases">
+												</br>
                                             <div class="row mb-3">
                                                 <label class="col-sm-2 col-form-label">Título de la actividad</label>
                                                 <div class="col-sm-10">  
@@ -378,7 +406,9 @@ $conn->close();
                                             </fieldset>
                                         </form>
                                     </div>
+									</br>
                                     <div class="col-4 border" id="docentes-container" style="overflow: scroll; max-height: 600px;">
+									</br>
                                         <!-- El contenido de docentes se cargará dinámicamente -->
                                     </div>
                                 </div>
@@ -425,7 +455,7 @@ $conn->close();
 								</div>
 							</div>
 						</div>
-						<small class="text-muted">Tiempo máximo semanal: <span id="max-hours"><?php echo $horasData['tiempo']; ?></span></small>
+						<small class="text-muted">Tiempo máximo semanal autorizado por pregrado: <b><?php echo $horasData['horas']; ?></b> Hora <b><?php echo $horasData['minutos']; ?></b> Minutos.</small>
 					</div>
 					<div class="alert alert-warning" id="auto-no-hours-message" style="display: none;">
 						Este curso no posee horas NO presenciales asignadas.
@@ -445,13 +475,13 @@ $conn->close();
 		 
   <footer id="footer" class="footer">
     <div class="copyright">
-      &copy; Copyright <strong><span>Facultad de Medicina Universidad de Chile</span></strong>. Todos los derechos reservados
+      &copy; <b>2025 Facultad de Medicina Universidad de Chile</b>
     </div>
     <div class="credits">
-      
-      Desarrollado por <a href="https://dpi.med.uchile.cl">Diseño de Procesos Internos (DPI)</a>
+      Diseñado por <b><a target="_blank" href="https://dpi.med.uchile.cl">DPI</b></a>
     </div>
   </footer>
+
 
   <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
 
@@ -550,12 +580,12 @@ function updateSubTypes() {
         return months;
     }
 
-     function createActivityButton(activity) {
+function createActivityButton(activity) {
     const button = document.createElement('button');
-	
-	 // Verificar primero si es un feriado
+    
+    // Verificar primero si es un feriado
     if (activity.pcl_TipoSesion === 'Feriado') {
-         button.className = 'btn btn-lg activity-button btn-light feriado';  // Estilo light de Bootstrap
+        button.className = 'btn btn-lg activity-button btn-light feriado';
         button.innerHTML = `<div class="activity-title">Feriado</div>`;
         // No agregamos data-bs-toggle ni onclick para que no sea clickeable
         return button;
@@ -568,27 +598,47 @@ function updateSubTypes() {
         
         let content = '';
         if (activity.pcl_tituloActividad) {
-            content = `<div class="activity-title">${activity.pcl_tituloActividad}</div>`;
+            content = `<div class="activity-title">${truncateText(activity.pcl_tituloActividad, 20)}</div>`;
         } else {
-            content = `<div class="activity-title">Autoaprendizaje <i class="fas fa-plus"></i></div>`;
+            content = `<div class="activity-title"><i class="fas fa-plus"></i> Autoaprendizaje </div>`;
         }
         button.innerHTML = content;
         button.onclick = () => loadAutoActivityData(activity);
+        
+        // Agregar tooltip si el título es largo
+        if (activity.pcl_tituloActividad && activity.pcl_tituloActividad.length > 25) {
+            button.setAttribute('data-bs-toggle', 'tooltip');
+            button.setAttribute('data-bs-placement', 'top');
+            button.setAttribute('title', activity.pcl_tituloActividad);
+        }
     } else {
         const isCompleted = activity.estado === 'completed';
         button.className = `btn btn-lg activity-button ${isCompleted ? 'completed' : 'default'}`;
         button.setAttribute('data-bs-toggle', 'modal');
         button.setAttribute('data-bs-target', '#activityModal');
         
+       // Formatear la fecha
+		const fecha = new Date(activity.pcl_Fecha);
+const day = fecha.getDate().toString().padStart(2, '0');
+const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
+const fechaFormateada = `${day} - ${month}`;
+        
         let content = '';
         if (activity.pcl_tituloActividad) {
             content = `
-                <div class="class-time">${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
-                <div class="activity-title">${activity.pcl_tituloActividad}</div>
+                <div class="class-date"><i class="fas fa-calendar-days me-1"></i>${fechaFormateada}</div>
+<div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
+                <div class="activity-title"><i class="fas fa-book me-1"></i>${truncateText(activity.pcl_tituloActividad, 25)}</div>
             `;
+            
+            // Agregar tooltip si el título es largo
+            if (activity.pcl_tituloActividad.length > 25) {
+                button.setAttribute('title', activity.pcl_tituloActividad);
+            }
         } else {
             content = `
-                <div class="class-time">${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
+                <div class="class-date"><i class="fas fa-calendar-days me-1"></i>${fechaFormateada}</div>
+<div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
                 <div class="activity-title" style="color: #ffc107;">
                     <i class="fas fa-plus"></i> Agregar actividad
                 </div>
@@ -598,7 +648,22 @@ function updateSubTypes() {
         button.onclick = () => loadActivityData(activity);
     }
     
+    // Inicializar tooltips de Bootstrap
+    if (button.getAttribute('title')) {
+        setTimeout(() => {
+            new bootstrap.Tooltip(button);
+        }, 100);
+    }
+    
     return button;
+}
+
+// Función auxiliar para truncar texto
+function truncateText(text, maxLength) {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return text.substring(0, maxLength) + '...';
 }
 
 function loadAutoActivityData(activity) {
@@ -631,11 +696,36 @@ function loadAutoActivityData(activity) {
 	
 	 // Modificar la función loadActivityData existente
 function loadActivityData(activity) {
+	
+	 console.log('Datos de actividad recibidos:', activity); // Para debug
+    console.log('ID específico:', activity.idplanclases); // Para debug
+    console.log('Horarios de esta actividad:', {
+        inicio: activity.pcl_Inicio,
+        termino: activity.pcl_Termino
+    }); 
+	
 	  console.log('Datos de actividad recibidos:', activity); // Para debug
     // Actualizar los campos del modal
     document.getElementById('modal-idplanclases').textContent = activity.idplanclases;
     document.getElementById('idplanclases').value = activity.idplanclases;
     
+	 // Formatear y mostrar fecha y hora
+    const fecha = new Date(activity.pcl_Fecha);
+    const fechaFormateada = fecha.toLocaleDateString('es-ES', { 
+        day: '2-digit', 
+        month: '2-digit' 
+    }).replace('/', '-');
+    const horaInicio = activity.pcl_Inicio.substring(0,5);
+    const horaTermino = activity.pcl_Termino.substring(0,5);
+    
+	console.log('Horarios que se están usando:', {
+        inicio: horaInicio,
+        termino: horaTermino
+    }); // Para debug
+	
+    document.getElementById('modal-fecha-hora').textContent = 
+        `Día ${fechaFormateada} desde las ${horaInicio} a las ${horaTermino}`;
+	
 	 // Actualizar título y ajustar altura
     const titleTextarea = document.getElementById('activity-title');
     titleTextarea.value = activity.pcl_tituloActividad;
@@ -765,12 +855,23 @@ function generateTimeOptions(bloqueInicio, bloqueTermino, selectedStart, selecte
         currentTime.setMinutes(currentTime.getMinutes() + 5);
     }
     
-    // Mantener la lógica de validación existente
-    startSelect.addEventListener('change', function() {
-        if (endSelect.value < this.value) {
-            endSelect.value = this.value;
-        }
+    // desabilita los termino anteriores al inicio.
+// Reemplazar el event listener existente en generateTimeOptions
+startSelect.addEventListener('change', function() {
+    Array.from(endSelect.options).forEach(option => {
+        option.disabled = option.value <= this.value;
     });
+    
+    if (endSelect.value <= this.value) {
+        // Buscar la siguiente opción válida
+        for (let option of endSelect.options) {
+            if (option.value > this.value) {
+                endSelect.value = option.value;
+                break;
+            }
+        }
+    }
+});
     
     endSelect.addEventListener('change', function() {
         if (startSelect.value > this.value) {
@@ -793,7 +894,7 @@ function formatTimeString(date) {
 }
 
 
-   function loadDocentes(idplanclases) {
+function loadDocentes(idplanclases) {
     const docentesContainer = document.getElementById('docentes-container');
     docentesContainer.innerHTML = '<h5 class="card-title">Cargando docentes...</h5>';
     
@@ -803,6 +904,8 @@ function formatTimeString(date) {
             docentesContainer.innerHTML = html;
             // Agregar el event listener después de cargar el contenido
             setupDocentesEvents();
+            // Ordenar inicialmente
+            reordenarDocentes();
         })
         .catch(error => {
             docentesContainer.innerHTML = '<div class="alert alert-danger">Error al cargar docentes</div>';
@@ -818,6 +921,8 @@ function setupDocentesEvents() {
         docenteCheckboxes.forEach(docente => {
             docente.checked = this.checked;
         });
+        // Reordenar después de seleccionar/deseleccionar todos
+        reordenarDocentes();
     });
 
     // Event listener para checkboxes individuales
@@ -826,8 +931,44 @@ function setupDocentesEvents() {
             const docenteCheckboxes = document.querySelectorAll('.docente-check');
             const allChecked = Array.from(docenteCheckboxes).every(checkbox => checkbox.checked);
             selectAllCheckbox.checked = allChecked;
+            
+            // Reordenar cuando se selecciona/deselecciona un docente
+            reordenarDocentes();
         }
     });
+}
+
+// Nueva función para reordenar docentes
+function reordenarDocentes() {
+    const container = document.getElementById('docentes-container');
+    const docenteRows = Array.from(container.querySelectorAll('.docente-row'));
+    
+    // Separar en dos grupos
+    const selected = [];
+    const notSelected = [];
+    
+    docenteRows.forEach(row => {
+        const checkbox = row.querySelector('.docente-check');
+        if (checkbox.checked) {
+            selected.push(row);
+        } else {
+            notSelected.push(row);
+        }
+    });
+    
+    // Ordenar los no seleccionados alfabéticamente por nombre del docente
+    notSelected.sort((a, b) => {
+        const nameA = a.querySelector('p.mt-3').textContent.toLowerCase();
+        const nameB = b.querySelector('p.mt-3').textContent.toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    // Remover todos los rows del contenedor
+    docenteRows.forEach(row => row.remove());
+    
+    // Agregar primero los seleccionados, luego los no seleccionados
+    selected.forEach(row => container.appendChild(row));
+    notSelected.forEach(row => container.appendChild(row));
 }
 	
 	function setupTimeRestrictions(startInput, endInput, originalStart, originalEnd) {
@@ -854,8 +995,22 @@ function setupDocentesEvents() {
 
          
 
-    // Función para guardar los cambios
   function saveActivity() {
+	  
+	    // Validar título
+    const activityTitle = document.getElementById('activity-title').value.trim();
+    if (activityTitle === '') {
+        mostrarToast('El título de la actividad no puede estar vacío', 'danger');
+        return;
+    }
+    
+    // Mostrar toast de carga
+    mostrarToastCarga('Guardando cambios...');
+    
+    // Deshabilitar el botón de guardar para evitar múltiples clicks
+    const saveButton = document.querySelector('button[onclick="saveActivity()"]');
+    saveButton.disabled = true;
+	  
     const form = document.getElementById('activityForm');
     const formData = new FormData();
     
@@ -871,11 +1026,15 @@ function setupDocentesEvents() {
     } else {
         formData.append('subtype', document.getElementById('activity-subtype').value);
     }
-	
+    
     formData.append('start_time', document.getElementById('start-time').value);
     formData.append('end_time', document.getElementById('end-time').value);
     formData.append('mandatory', document.getElementById('mandatory').checked);
     formData.append('is_evaluation', document.getElementById('is-evaluation').checked);
+
+    // Verificar si la actividad requiere docentes
+    const tipoInfo = tiposSesion.find(t => t.tipo_sesion === tipoActividad);
+    const requiereDocentes = tipoInfo && tipoInfo.docentes === "1";
 
     // Calcular las horas de la actividad
     const startTime = document.getElementById('start-time').value;
@@ -901,20 +1060,32 @@ function setupDocentesEvents() {
             throw new Error('Error al guardar la actividad');
         }
 
-        const docentesData = new FormData();
-        const idplanclases = document.getElementById('idplanclases').value;
-        const idcurso = new URLSearchParams(window.location.search).get('curso');
-        
-        docentesData.append('idplanclases', idplanclases);
-        docentesData.append('idcurso', idcurso);
-        docentesData.append('horas', horasActividad);
-        docentesData.append('docentes', JSON.stringify(docentesSeleccionados));
+        // Solo guardar docentes si la actividad los requiere
+        if (requiereDocentes && docentesSeleccionados.length > 0) {
+            const docentesData = new FormData();
+            const idplanclases = document.getElementById('idplanclases').value;
+            const idcurso = new URLSearchParams(window.location.search).get('curso');
+            
+            docentesData.append('idplanclases', idplanclases);
+            docentesData.append('idcurso', idcurso);
+            docentesData.append('horas', horasActividad);
+            docentesData.append('docentes', JSON.stringify(docentesSeleccionados));
 
-        // Luego guardar los docentes
-        return fetch('guardar_docentes.php', {
-            method: 'POST',
-            body: docentesData
-        });
+            // Guardar los docentes
+            return fetch('guardar_docentes.php', {
+                method: 'POST',
+                body: docentesData
+            });
+        } else {
+            // Si no requiere docentes o no hay docentes seleccionados, 
+            // devolver una respuesta exitosa simulada
+            return Promise.resolve({ 
+                json: () => Promise.resolve({ 
+                    success: true, 
+                    message: requiereDocentes ? 'No se seleccionaron docentes' : 'Actividad guardada sin docentes'
+                }) 
+            });
+        }
     })
     .then(response => response.json())
     .then(data => {
@@ -956,12 +1127,45 @@ function setupDocentesEvents() {
             toastElement.show();
             
             // Recargar página después de mostrar el toast
-            setTimeout(() => location.reload(), 2000);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            throw new Error(data.message || 'Error al guardar los cambios');
         }
     })
     .catch(error => {
+        console.error('Error completo:', error);
         mostrarToast('Error al guardar los cambios: ' + error.message, 'danger');
     });
+}
+
+function mostrarToastCarga(mensaje) {
+    const toastHTML = `
+        <div class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    ${mensaje}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.innerHTML = ''; // Limpiar toasts anteriores
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toast = new bootstrap.Toast(toastContainer.firstElementChild, {
+        autohide: false
+    });
+    toast.show();
 }
 
 // Función auxiliar para mostrar toasts
@@ -990,7 +1194,9 @@ function mostrarToast(mensaje, tipo) {
     toast.show();
 }
 	
-	// Función auxiliar para obtener el rango de fechas de la semana
+	
+
+// Función auxiliar para obtener el rango de fechas de la semana
 function getWeekDates(activity) {
     const fecha = new Date(activity.pcl_Fecha);
     const diaSemana = fecha.getDay();
@@ -1003,9 +1209,16 @@ function getWeekDates(activity) {
     const viernes = new Date(lunes);
     viernes.setDate(lunes.getDate() + 4);
     
+    // Formatear las fechas manualmente para asegurar el formato dd-mm
+    const formatDate = (date) => {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        return `${day}-${month}`;
+    };
+    
     return {
-        inicio: lunes.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }),
-        fin: viernes.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
+        inicio: formatDate(lunes),
+        fin: formatDate(viernes)
     };
 }
 
@@ -1057,10 +1270,10 @@ function generateCalendar(activitiesForMonth, calendarBody, currentMonth) {
         const weekCell = document.createElement('td');
         weekCell.className = 'week-number';
         const weekDates = getWeekDates(week.activities[0]);
-        weekCell.innerHTML = `Semana ${week.weekNum}<br>(${weekDates.inicio} - ${weekDates.fin})`;
+        weekCell.innerHTML = `Semana ${week.weekNum}<br><small class="text-muted">${weekDates.inicio} al ${weekDates.fin}</small>`;
         weekRow.appendChild(weekCell);
         
-        // Celdas de días
+     // Celdas de días
         ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].forEach(day => {
             const dayCell = document.createElement('td');
             dayCell.className = 'calendar-cell';
@@ -1189,6 +1402,13 @@ function generateFullCalendar() {
         generateFullCalendar();
 		loadActivityTypes();
 		
+		  // Inicializar tooltips de Bootstrap
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+		
+		
     // Obtener el ID del curso de la URL
     const urlParams = new URLSearchParams(window.location.search);
     const cursoId = urlParams.get('curso');
@@ -1223,7 +1443,6 @@ function generateFullCalendar() {
         });
 });
 
- // Agregar evento para cargar docentes masivos
 document.getElementById('docente-masivo-tab').addEventListener('click', function() {
     const docentesMasivoList = document.getElementById('docentes-masivo-list');
     
@@ -1234,6 +1453,8 @@ document.getElementById('docente-masivo-tab').addEventListener('click', function
         .then(response => response.text())
         .then(html => {
             docentesMasivoList.innerHTML = html;
+            // IMPORTANTE: Inicializar los event listeners después de cargar el contenido
+            inicializarAsignadorMasivo();
         })
         .catch(error => {
             docentesMasivoList.innerHTML = '<div class="alert alert-danger">Error al cargar los datos</div>';
@@ -1398,16 +1619,33 @@ window.actualizarFuncion = function(selectElement, idProfesoresCurso) {
 // }
 
 // Función para cargar el contenido de salas en el tab
-function loadSalas() {
-  fetch('salas2.php')
-    .then(response => response.text())
-    .then(html => {
-      document.getElementById('salas-list').innerHTML = html;
-    });
-}
+//function loadSalas() {
+//  fetch('salas2.php')
+//    .then(response => response.text())
+//    .then(html => {
+//      document.getElementById('salas-list').innerHTML = html;
+//    });
+//}
+//
 
-// Agregar evento para cargar salas cuando se hace clic en la pestaña
-document.getElementById('salas-tab').addEventListener('click', loadSalas);
+// Eliminar el código duplicado y usar solo esta versión
+//document.getElementById('salas-tab').addEventListener('click', function() {
+//    const salasList = document.getElementById('salas-list');
+//    
+//    // Mostrar spinner de carga - mismo estilo que docentes
+//    salasList.innerHTML = '<div class="text-center p-5"><i class="bi bi-arrow-repeat spinner"></i><p>Cargando...</p></div>';
+//    
+//    // Fetch con el curso como parámetro
+//    fetch('salas2.php?curso=' + cursoId)
+//        .then(response => response.text())
+//        .then(html => {
+//            salasList.innerHTML = html;
+//        })
+//        .catch(error => {
+//            salasList.innerHTML = '<div class="alert alert-danger">Error al cargar la información de salas</div>';
+//        });
+//});
+
 </script>
 
 <!-- FUNCIONAES DE SALAS -->
@@ -1771,7 +2009,592 @@ function saveAutoActivity() {
     });
 }
 
+
+
 </script>
+
+<script>
+
+// Variables globales para el asignador masivo
+let actividadesSeleccionadas = [];
+
+// Funciones del asignador masivo
+function inicializarAsignadorMasivo() {
+    // Inicializar interfaz
+    $('#btnVisualizar').off('click').on('click', buscarActividades);
+    
+    $('#seleccionarTodos').off('change').on('change', function() {
+        $('.docente-check').prop('checked', $(this).is(':checked'));
+    });
+    
+    // Botones de asignación y eliminación
+    $('#btnAsignarDocentes').off('click').on('click', function() {
+        gestionarDocentes('asignar');
+    });
+    
+    $('#btnEliminarDocentes').off('click').on('click', function() {
+        gestionarDocentes('eliminar');
+    });
+    
+    // Verificar cambios en los checkboxes de docentes
+    $(document).off('change', '.docente-check').on('change', '.docente-check', function() {
+        const todasSeleccionadas = $('.docente-check:checked').length === $('.docente-check').length;
+        $('#seleccionarTodos').prop('checked', todasSeleccionadas);
+        verificarSelecciones();
+    });
+	
+	$('#seleccionarTodos').off('change').on('change', function() {
+        $('.docente-check').prop('checked', $(this).is(':checked'));
+        // AGREGAR ESTA LÍNEA para verificar las selecciones después de marcar/desmarcar todos
+        verificarSelecciones();
+    });
+    
+    // Botón para limpiar filtros
+    $('#btnLimpiarFiltros').off('click').on('click', function() {
+        // Limpiar campos de filtro
+        $('#tipoActividad').val('');
+        $('#diaSemana').val('');
+        $('#subtipo').val('');
+        $('#fechaInicio').val('');
+        $('#fechaTermino').val('');
+        $('#horaInicio').val('');
+        $('#horaTermino').val('');
+        
+        // Ocultar mensaje de sin resultados
+        $('#sinResultados').addClass('d-none');
+        
+        // Limpiar tabla de actividades
+        $('#tablaActividades tbody').empty();
+        
+        // Deshabilitar botones
+        $('#btnAsignarDocentes').prop('disabled', true);
+        $('#btnEliminarDocentes').prop('disabled', true);
+        
+        // Reiniciar lista de actividades seleccionadas
+        actividadesSeleccionadas = [];
+        
+        // Desmarcar todos los profesores
+        $('.docente-check').prop('checked', false);
+        $('#seleccionarTodos').prop('checked', false);
+    });
+	
+	 // Agregar evento para validar filtros en tiempo real
+    $('#tipoActividad, #diaSemana, #fechaInicio, #fechaTermino, #horaInicio, #horaTermino').on('change', function() {
+        verificarFiltros();
+    });
+    
+    // Verificar filtros al inicio
+    verificarFiltros();
+}
+
+function verificarFiltros() {
+    const tipoActividad = $('#tipoActividad').val();
+    const diaSemana = $('#diaSemana').val();
+    const fechaInicio = $('#fechaInicio').val();
+    const fechaTermino = $('#fechaTermino').val();
+    const horaInicio = $('#horaInicio').val();
+    const horaTermino = $('#horaTermino').val();
+    
+    // Habilitar/deshabilitar el botón según si hay algún filtro
+    const hayFiltro = tipoActividad || diaSemana || fechaInicio || fechaTermino || horaInicio || horaTermino;
+    $('#btnVisualizar').prop('disabled', !hayFiltro);
+}
+
+function buscarActividades() {
+    // Obtener valores de los filtros
+    const tipoActividad = $('#tipoActividad').val();
+    const diaSemana = $('#diaSemana').val();
+    const fechaInicio = $('#fechaInicio').val();
+    const fechaTermino = $('#fechaTermino').val();
+    const horaInicio = $('#horaInicio').val();
+    const horaTermino = $('#horaTermino').val();
+    
+    // Validar que al menos un filtro esté presente
+    if (!tipoActividad && !diaSemana && !fechaInicio && !fechaTermino && !horaInicio && !horaTermino) {
+        mostrarNotificacionAsignacion('Debe seleccionar al menos un filtro para buscar actividades', 'warning');
+        return;
+    }
+    
+    // Obtener el ID del curso actual
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
+    
+    // Crear objeto con los filtros
+    const filtros = {
+        idcurso: idCurso,
+        tipoActividad: tipoActividad,
+        diaSemana: diaSemana,
+        subtipo: '', // Ya no usas subtipo en los filtros actuales
+        fechaInicio: fechaInicio,
+        fechaTermino: fechaTermino,
+        horaInicio: horaInicio,
+        horaTermino: horaTermino
+    };
+    
+    // Realizar solicitud AJAX
+    $.ajax({
+        url: 'buscar_actividades.php',
+        type: 'POST',
+        dataType: 'json',
+        data: filtros,
+        success: function(response) {
+            if (response.success) {
+                mostrarActividades(response.actividades);
+                actividadesSeleccionadas = response.actividades.map(act => act.idplanclases);
+                
+                // Habilitar/deshabilitar botones según resultados
+                const hayActividades = response.actividades.length > 0;
+                $('#btnAsignarDocentes').prop('disabled', !hayActividades);
+                $('#btnEliminarDocentes').prop('disabled', !hayActividades);
+                
+                if (!hayActividades) {
+                    $('#sinResultados').removeClass('d-none');
+                } else {
+                    $('#sinResultados').addClass('d-none');
+                    
+                    // Obtener docentes asignados a las actividades filtradas
+                    obtenerDocentesComunes(actividadesSeleccionadas);
+                }
+            } else {
+                mostrarNotificacionAsignacion(response.message || 'Error al buscar actividades', 'danger');
+            }
+        },
+        error: function() {
+            mostrarNotificacionAsignacion('Error de comunicación con el servidor', 'danger');
+        }
+    });
+}
+
+function obtenerDocentesComunes(actividades) {
+    if (!actividades || actividades.length === 0) return;
+    
+    // Desmarcar todos los docentes primero
+    $('.docente-check').prop('checked', false);
+    $('#seleccionarTodos').prop('checked', false);
+    
+    // Obtener el ID del curso actual
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
+    
+    // Consultar los docentes asignados a todas las actividades
+    $.ajax({
+        url: 'get_docentes_actividades.php',
+        type: 'POST',
+        dataType: 'json',
+        data: {
+            actividades: actividades,
+            idcurso: idCurso
+        },
+        success: function(response) {
+            if (response.success && response.docentesComunes) {
+                // Marcar docentes comunes
+                response.docentesComunes.forEach(rut => {
+                    $(`.docente-check[data-rut="${rut}"]`).prop('checked', true);
+                });
+                
+                // Verificar si todos están seleccionados
+                const todasSeleccionadas = $('.docente-check:checked').length === $('.docente-check').length;
+                $('#seleccionarTodos').prop('checked', todasSeleccionadas);
+                
+                // Actualizar estado de los botones
+                verificarSelecciones();
+            }
+        },
+        error: function() {
+            console.error('Error al obtener docentes comunes');
+        }
+    });
+}
+
+function mostrarActividades(actividades) {
+    const tbody = $('#tablaActividades tbody');
+    tbody.empty();
+    
+    if (actividades.length === 0) {
+        return;
+    }
+    
+    actividades.forEach(act => {
+        // Formatear fecha
+        const fecha = new Date(act.pcl_Fecha);
+        const fechaFormateada = fecha.toLocaleDateString('es-ES');
+        
+        // Formatear horas
+        const horaInicio = act.pcl_Inicio ? act.pcl_Inicio.substring(0, 5) : '';
+        const horaTermino = act.pcl_Termino ? act.pcl_Termino.substring(0, 5) : '';
+        
+		// Día de la semana en español
+    const diaSemana = fecha.toLocaleDateString('es-ES', { weekday: 'long' });
+	
+        // Crear fila
+        const fila = `
+            <tr data-id="${act.idplanclases}">
+                <td>${fechaFormateada}</td>
+				<td>${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)}</td>
+                <td>${horaInicio}</td>
+                <td>${horaTermino}</td>
+                <td>${act.pcl_tituloActividad || ''}</td>
+                <td>${act.pcl_TipoSesion}${act.pcl_SubTipoSesion ? ' (' + act.pcl_SubTipoSesion + ')' : ''}</td>
+            </tr>
+        `;
+        
+        tbody.append(fila);
+    });
+}
+
+function verificarSelecciones() {
+    const docentesSeleccionados = $('.docente-check:checked').length > 0;
+    const hayActividades = actividadesSeleccionadas.length > 0;
+    
+    $('#btnAsignarDocentes, #btnEliminarDocentes').prop('disabled', !hayActividades || !docentesSeleccionados);
+}
+
+function gestionarDocentes(accion) {
+    // Verificar que haya actividades seleccionadas
+    if (actividadesSeleccionadas.length === 0) {
+        mostrarNotificacionAsignacion('No hay actividades seleccionadas', 'warning');
+        return;
+    }
+    
+    // Obtener docentes seleccionados
+    const docentesSeleccionados = [];
+    $('.docente-check:checked').each(function() {
+        docentesSeleccionados.push({
+            rut: $(this).data('rut'),
+            nombre: $(this).closest('.docente-row').find('p.mb-0').text(),
+            cargo: $(this).closest('.docente-row').find('small.text-muted').text()
+        });
+    });
+    
+    if (docentesSeleccionados.length === 0) {
+        mostrarNotificacionAsignacion('No hay docentes seleccionados', 'warning');
+        return;
+    }
+    
+    // Llenar el modal con la información
+    $('#accionTitulo').text(accion === 'asignar' ? 'Asignación' : 'Desvinculación');
+    $('#accionDescripcion').text(accion === 'asignar' ? 'Asignar docentes a las actividades' : 'Desvincular docentes de las actividades');
+    $('#numActividades').text(actividadesSeleccionadas.length);
+    $('#numDocentes').text(docentesSeleccionados.length);
+    
+     const actividadesPreview = $('#actividadesPreview');
+    actividadesPreview.empty();
+    
+    // Primero, encontrar las filas de las actividades seleccionadas
+    $('#tablaActividades tbody tr').each(function() {
+        const row = $(this);
+        const idActividad = parseInt(row.data('id'));
+        
+        // Verificar si esta actividad está seleccionada
+        if (actividadesSeleccionadas.includes(idActividad)) {
+            const fecha = row.find('td:eq(0)').text();
+			const dia = row.find('td:eq(1)').text();
+            const horaInicio = row.find('td:eq(2)').text();
+            const horaTermino = row.find('td:eq(3)').text();
+            const titulo = row.find('td:eq(4)').text();
+            
+            
+            // Crear la fila para el preview
+            const previewRow = `
+                <tr>
+                    <td>${fecha}</td>
+                    <td>${dia}</td>
+                    <td>${horaInicio} a las ${horaTermino}</td>
+                    <td>${titulo || 'Sin título'}</td>
+                </tr>
+            `;
+            actividadesPreview.append(previewRow);
+        }
+    });
+    
+    // Si no encuentra actividades de esta forma, intentar otra aproximación
+    if (actividadesPreview.find('tr').length === 0) {
+        // Mensaje de debug para ver qué está pasando
+        console.log('Actividades seleccionadas:', actividadesSeleccionadas);
+        console.log('Filas encontradas:', $('#tablaActividades tbody tr').length);
+        
+        // Agregar una fila de aviso
+        actividadesPreview.append(`
+            <tr>
+                <td colspan="4" class="text-center text-muted">
+                    Error al cargar las actividades. IDs: ${actividadesSeleccionadas.join(', ')}
+                </td>
+            </tr>
+        `);
+    }
+    
+    // Llenar tabla de docentes
+    const docentesPreview = $('#docentesPreview');
+    docentesPreview.empty();
+    
+    docentesSeleccionados.forEach(docente => {
+        const row = `
+            <tr>
+                <td>${docente.nombre}</td>
+                <td>${docente.cargo}</td>
+            </tr>
+        `;
+        docentesPreview.append(row);
+    });
+    
+    // Mostrar el modal
+    const modal = new bootstrap.Modal(document.getElementById('previsualizacionModal'));
+    modal.show();
+    
+    // Configurar el botón de confirmar
+    $('#confirmarAccion').off('click').on('click', function() {
+        modal.hide();
+        procesarAsignacion(accion, docentesSeleccionados.map(d => d.rut));
+    });
+}
+
+function procesarAsignacion(accion, docentesRuts) {
+    // Obtener el ID del curso actual
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
+    
+    // Preparar datos para enviar
+    const datos = {
+        idcurso: idCurso,
+        actividades: actividadesSeleccionadas,
+        docentes: docentesRuts,
+        accion: accion
+    };
+    
+    // Mostrar indicador de carga
+    mostrarNotificacionAsignacion(`Procesando... Por favor espere.`, 'info');
+    
+    // Realizar solicitud AJAX
+    $.ajax({
+        url: 'procesar_asignacion_masiva.php',
+        type: 'POST',
+        dataType: 'json',
+        data: JSON.stringify(datos),
+        contentType: 'application/json',
+        success: function(response) {
+            if (response.success) {
+                mostrarNotificacionAsignacion(
+                    `${accion === 'asignar' ? 'Asignación' : 'Desvinculación'} completada correctamente. 
+                    ${response.operaciones || 0} operaciones realizadas.`, 
+                    'success'
+                );
+                // Opcional: recargar la página o actualizar la vista
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                mostrarNotificacionAsignacion(response.message || 'Error al procesar la solicitud', 'danger');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error("Error AJAX:", xhr.responseText);
+            mostrarNotificacionAsignacion('Error de comunicación con el servidor: ' + (error || status), 'danger');
+        }
+    });
+}
+
+function mostrarNotificacionAsignacion(mensaje, tipo = 'success') {
+    // Crear toast
+    const toastId = 'toast-' + Date.now();
+    const toastHTML = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${tipo === 'success' ? 'check-circle' : tipo === 'danger' ? 'x-circle' : 'info-circle'} me-2"></i>
+                    ${mensaje}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    // Añadir a contenedor
+    $('.toast-container').append(toastHTML);
+    
+    // Mostrar toast
+    const toastElement = new bootstrap.Toast(document.getElementById(toastId), {
+        autohide: true,
+        delay: 5000
+    });
+    toastElement.show();
+}
+
+</script>
+
+<script>
+
+// En index.php, después del JavaScript del asignador masivo, agregar:
+
+// Funciones para crear docente
+function inicializarCrearDocente() {
+    // Event listener para el botón guardar
+    $('#btnGuardarDocente').off('click').on('click', guardar_docente);
+    
+    // Event listener para validar RUT mientras se escribe
+    $('#rut_docente').off('input').on('input', function() {
+        checkRut(this);
+    });
+    
+    // Event listener para habilitar/deshabilitar unidad externa
+    $('#unidad_academica').off('change').on('change', function() {
+        habilitar_unidad(this);
+    });
+}
+
+function checkRut(rut) {
+    // Despejar Puntos
+    var valor = rut.value.replace('.','');
+    // Despejar Guión
+    valor = valor.replace('-','');
+    
+    // Aislar Cuerpo y Digito Verificador
+    cuerpo = valor.slice(0,-1);
+    dv = valor.slice(-1).toUpperCase();
+    
+    // Formatear RUN
+    rut.value = cuerpo + '-'+ dv
+    
+    // Si no cumple con el minimo ej. (n.nnn.nnn)
+    if(cuerpo.length < 7) { 
+        rut.setCustomValidity("RUT Incompleto"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Calcular Digito Verificador
+    suma = 0;
+    multiplo = 2;
+    
+    // Para cada digito del Cuerpo
+    for(i=1;i<=cuerpo.length;i++) {
+        // Obtener su Producto con el Múltiplo Correspondiente
+        index = multiplo * valor.charAt(cuerpo.length - i);
+        
+        // Sumar al Contador General
+        suma = suma + index;
+        
+        // Consolidar Múltiplo dentro del rango [2,7]
+        if(multiplo < 7) { multiplo = multiplo + 1; } else { multiplo = 2; }
+    }
+    
+    // Calcular Digito Verificador en base al Módulo 11
+    dvEsperado = 11 - (suma % 11);
+    
+    // Casos Especiales (0 y K)
+    dv = (dv == 'K')?10:dv;
+    dv = (dv == 0)?11:dv;
+    
+    // Validar que el Cuerpo coincide con su Digito Verificador
+    if(dvEsperado != dv) { 
+        rut.setCustomValidity("RUT Inválido"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Validar RUTs repetidos o inválidos
+    if(cuerpo == '0000000000' || cuerpo == '00000000' ||
+       cuerpo == '11111111' || cuerpo == '1111111' ||
+       cuerpo == '22222222' || cuerpo == '2222222' ||
+       cuerpo == '33333333' || cuerpo == '3333333' ||
+       cuerpo == '44444444' || cuerpo == '4444444' ||
+       cuerpo == '55555555' || cuerpo == '5555555' ||
+       cuerpo == '66666666' || cuerpo == '6666666' ||
+       cuerpo == '77777777' || cuerpo == '7777777' ||
+       cuerpo == '88888888' || cuerpo == '8888888' ||
+       cuerpo == '99999999' || cuerpo == '9999999') {
+        rut.setCustomValidity("RUT Inválido"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Si todo sale bien, eliminar errores (decretar que es válido)
+    rut.setCustomValidity('');
+    $('#flag').val('true');
+}
+
+function habilitar_unidad(sel) {
+    var depto = sel.value;
+    
+    if(depto == 'Unidad Externa') {
+        document.getElementById("unidad_externa").disabled = false;
+        document.getElementById("unidad_externa").required = true;
+        document.getElementById("unidad_externa").placeholder = 'Unidad Externa *';
+    } else {
+        document.getElementById("unidad_externa").disabled = true;
+        document.getElementById("unidad_externa").required = false;
+        document.getElementById("unidad_externa").placeholder = 'Unidad Externa';
+    }
+}
+
+function guardar_docente() {
+    var curso = $("#curso").val(); 
+    var rut = $("#rut_docente").val(); 
+    var flag = $("#flag").val();
+    var unidad = $("#unidad_academica").val(); 
+    
+    var largo_rut = rut.length;
+    
+    if($("#unidad_externa").val() != '') {
+        var uE = $("#unidad_externa").val();
+    } else {
+        var uE = "Sin Unidad"; 
+    }
+    
+    var nombres = $("#nombres").val(); 
+    var paterno = $("#paterno").val(); 
+    var materno = $("#materno").val(); 
+    var email = $("#email").val(); 
+    var funcion = $("#funcion").val();
+    
+    if(flag == 'true') {
+        if(rut != '' && largo_rut >= 9 && unidad != '' && uE != '' && nombres != '' && paterno != '' && email != '' && funcion != '') {
+            $.ajax({
+                dataType: "json", // Cambiar para esperar JSON
+                data: {
+                    "curso": curso,
+                    "rut_docente": rut,
+                    "unidad_academica": unidad,
+                    "unidad_externa": uE,
+                    "nombres": nombres,
+                    "paterno": paterno,
+                    "materno": materno,
+                    "email": email,
+                    "funcion": funcion
+                },
+                url: 'guardar_docente_nuevo.php', 
+                type: 'POST',
+                beforeSend: function() {
+                    // Lo que se hace antes de enviar el formulario
+                },
+                success: function(respuesta) {
+                    console.log('Respuesta:', respuesta); // Debug
+                    
+                    if(respuesta.success) {
+                        alert("DOCENTE HA SIDO AGREGADO AL CURSO CORRECTAMENTE");
+                        // Recargar la pestaña de docentes
+                        $('#docente-tab').click();
+                    } else {
+                        // Mostrar el mensaje específico del error
+                        alert(respuesta.message);
+                        console.error('Debug:', respuesta.debug);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error:', xhr.responseText);
+                    alert("ERROR: " + error);
+                }
+            });
+        } else {
+            alert("¡HAY CAMPOS OBLIGATORIOS QUE ESTÁN VACIOS! ");
+        }
+    } else {
+        alert("EL FORMATO DEL RUT NO ES VÁLIDO. POR FAVOR VERIFIQUE QUE SEA EL RUT CORRECTO");
+    }
+}
+
+</script>
+
+
+
+
 
 <!-- Justo antes del cierre del body -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>

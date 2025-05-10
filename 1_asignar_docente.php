@@ -40,60 +40,24 @@ $control_profe = mysqli_num_rows($ValidarQuery);
 
 if($rut!='' && $control_profe > 0){
 ?>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Equipo Docente</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css">
-    <!-- Select2 for better dropdowns -->
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
-	
-	  <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
-	<!-- CSS personalizado -->
-	<link href="estilo2.css" rel="stylesheet">
 
-</head>
-<body class="bg-light">
     
 
-    <div class="container py-4">      
-
-        <!-- Course Info -->
-        <div class="card mb-4">
+    <div class="container py-4">  
+	 <div class="card mb-4">
             <div class="card-body text-center">
-                <h4 class="card-title">
-                    <?php echo $fila_curso['CodigoCurso']; ?> 
-                    <?php echo utf8_encode($fila_curso['nombreCurso']); ?>
-                </h4>
-                <h5 class="text-muted">Sección <?php echo $fila_curso['seccion']; ?></h5>
+               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
+                
             </div>
         </div>
-
-        <!-- Faculty Search -->
+        <!-- Search -->
         <div class="card mb-4">
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-lg-8">
                         <select class="form-select" id="docente" data-live-search="true">
-                            <option value="" selected disabled>🔍 Buscar Docente</option>
-                            <?php 
-                            $elegir = "SELECT * FROM spre_bancodocente ORDER BY Funcionario ASC";
-                            $elegir_query = mysqli_query($conexion3,$elegir);
-                            while($fila_elegir = mysqli_fetch_assoc($elegir_query)){
-                            ?>
-                            <option value="<?php echo $fila_elegir["rut"]; ?>">
-                                <?php echo $fila_elegir["rut"]; ?>
-                                - <?php echo utf8_encode($fila_elegir["Funcionario"]); ?>
-                            </option>
-                            <?php } ?>
-                        </select>
+							<option value="" selected disabled>Escriba nombre o RUT para buscar</option>
+						</select>
                     </div>
                     <div class="col-lg-2">
                         <button type="button" id="boton_agregar" class="btn btn-success w-100" disabled>
@@ -109,25 +73,7 @@ if($rut!='' && $control_profe > 0){
             </div>
         </div>
         
-<script>
-//$(document).ready(function() {
-//    $('#docente').select2({
-//        theme: 'bootstrap-5',
-//        placeholder: '🔍 Buscar Docente',
-//        allowClear: true,
-//        language: {
-//            noResults: function() {
-//                return "No se encontraron docentes";
-//            },
-//            searching: function() {
-//                return "Buscando...";
-//            }
-//        },
-//        width: '100%',
-//        dropdownParent: $('#docente').parent()
-//    });
-//});
-</script>
+
 
         <!-- Faculty Table -->
         <div class="card">
@@ -139,7 +85,7 @@ if($rut!='' && $control_profe > 0){
                                 <th></th>
                                 <th>Docente</th>
                                 <th>Correo</th>
-                                <th>Función</th>
+                                <th>Participación</th>
 								<th>Total Horas Directas</th>
                                 <th>Acciones</th>
                             </tr>
@@ -209,12 +155,14 @@ if($rut!='' && $control_profe > 0){
 									<?php endif; ?>
 								</td>
                                 <td>
+								<?php if ($state<>'disabled'){ ?>
                                     <button type="button" 
         onclick="eliminarDocente(<?php echo $fila_profesores['idProfesoresCurso']; ?>)" 
         class="btn btn-outline-danger btn-sm"
-        title="Remover docente">
+        title="Remover docente" >
     <i class="bi bi-trash"></i>
 </button>
+<?php } ?>
                                 </td>
                             </tr>
                             <?php } ?>
@@ -230,49 +178,6 @@ if($rut!='' && $control_profe > 0){
 
  
 
-    <script>
- //   $(document).ready(function() {
- //       // Initialize Select2
- //       $('#docente').select2({
- //           theme: 'bootstrap-5',
- //           placeholder: 'Buscar docente...',
- //           allowClear: true
- //       });
- //
- //       // Enable/disable add button based on selection
- //       $('#docente').on('change', function() {
- //           $('#boton_agregar').prop('disabled', !$(this).val());
- //       });
- //
- //       // Initialize all tooltips
- //       const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
- //       tooltips.forEach(tooltip => new bootstrap.Tooltip(tooltip));
- //   });
- //
- // function showNotification(message, type = 'success') {
- //     const toast = `
- //         <div class="toast align-items-center text-white bg-${type} border-0" role="alert">
- //             <div class="d-flex">
- //                 <div class="toast-body">
- //                     ${message}
- //                 </div>
- //                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
- //             </div>
- //         </div>
- //     `;
- //     
- //     $('.toast-container').append(toast);
- //     const toastElement = new bootstrap.Toast($('.toast').last());
- //     toastElement.show();
- // }
- 
- 
-    </script>
-
-
-
-</body>
-</html>
 <?php }else{ ?>
 
 
