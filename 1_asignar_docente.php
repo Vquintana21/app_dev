@@ -62,7 +62,7 @@ if($rut!='' && $control_profe > 0){
                     <div class="col-lg-2">
                         <button type="button" id="boton_agregar" class="btn btn-success w-100" disabled>
                             <i class="bi bi-plus-circle"></i> Asignar Docente
-                        </button>
+                        </button>						
                     </div>
 					 <div class="col-lg-2">
                         <button type="button" id="nuevo-docente-btn" class="btn btn-primary w-100">

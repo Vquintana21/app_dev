@@ -1485,7 +1485,7 @@ document.getElementById('docente-masivo-tab').addEventListener('click', function
 </script>
 
 <script>
-// Función global para eliminar docentes
+
 // Función global para eliminar docentes con modal de confirmación
 window.eliminarDocente = function(id) {
     if(!id) return;
@@ -1591,6 +1591,150 @@ window.eliminarDocente = function(id) {
         $(this).remove();
     });
 };
+
+// Modificar la función asignarDocente para que funcione exactamente como la eliminación
+window.asignarDocente = function() {
+    const selectDocente = document.getElementById('docente');
+    const botonAgregar = document.getElementById('boton_agregar');
+    
+    if (!selectDocente.value) {
+        mostrarToast('Debe seleccionar un docente', 'warning');
+        return;
+    }
+    
+    // Mostrar loading en el botón
+    const textoOriginal = botonAgregar.innerHTML;
+    botonAgregar.disabled = true;
+    botonAgregar.innerHTML = '<i class="spinner-border spinner-border-sm me-2" role="status"></i>Asignando...';
+    
+    // Obtener el ID del curso de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
+    
+    // Obtener el RUT seleccionado
+    const rutDocente = selectDocente.value;
+    const funcion = 7; // función por defecto
+    
+    // Datos a enviar
+    const formData = new FormData();
+    formData.append('rut_docente', rutDocente);
+    formData.append('idcurso', idCurso);
+    formData.append('funcion', funcion);
+    
+    // Realizar la petición AJAX
+    fetch('asignar_docente.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Mostrar notificación de éxito
+            mostrarToast('Docente asignado correctamente', 'success');
+            
+            // Limpiar el select2
+            $('#docente').val(null).trigger('change');
+            
+            // Recargar toda la pestaña de docentes (igual que en la eliminación)
+            const docentesList = document.getElementById('docentes-list');
+            
+            // Mostrar spinner de carga
+            docentesList.innerHTML = '<div class="text-center p-5"><i class="bi bi-arrow-repeat spinner"></i><p>Cargando...</p></div>';
+            
+            // Cargar el contenido actualizado
+            fetch('1_asignar_docente.php?idcurso=' + idCurso)
+                .then(response => response.text())
+                .then(html => {
+                    docentesList.innerHTML = html;
+                    
+                    // Reinicializar Select2 después de cargar el nuevo contenido
+                    setTimeout(() => {
+                        if ($('#docente').length) {
+                            $('#docente').select2({
+                                theme: 'bootstrap-5',
+                                placeholder: '🔍 Buscar Docente',
+                                allowClear: true,
+                                language: {
+                                    noResults: function() {
+                                        return "No se encontraron docentes";
+                                    },
+                                    searching: function() {
+                                        return "Buscando...";
+                                    },
+                                    inputTooShort: function() {
+                                        return 'Ingrese nombre a buscar ...';
+                                    }
+                                },
+                                width: '100%',
+                                minimumInputLength: 1,
+                                ajax: {
+                                    url: 'buscar_docentes_ajax.php',
+                                    dataType: 'json',
+                                    delay: 250,
+                                    data: function(params) {
+                                        return {
+                                            q: params.term,
+                                            page: params.page || 1
+                                        };
+                                    },
+                                    processResults: function(data, params) {
+                                        params.page = params.page || 1;
+                                        return {
+                                            results: data.items,
+                                            pagination: {
+                                                more: data.pagination.more
+                                            }
+                                        };
+                                    },
+                                    cache: true
+                                },
+                                escapeMarkup: function(markup) { return markup; },
+                                templateResult: function(repo) {
+                                    if (repo.loading) return repo.text;
+                                    return repo.html || repo.text;
+                                },
+                                templateSelection: function(repo) {
+                                    return repo.text;
+                                }
+                            });
+                            
+                            // Volver a conectar el evento change
+                            $('#docente').on('change', function() {
+                                $('#boton_agregar').prop('disabled', !$(this).val());
+                            });
+                        }
+                    }, 100);
+                })
+                .catch(error => {
+                    docentesList.innerHTML = '<div class="alert alert-danger">Error al cargar los datos</div>';
+                });
+            
+        } else {
+            // Restaurar el botón
+            botonAgregar.disabled = false;
+            botonAgregar.innerHTML = textoOriginal;
+            
+            mostrarToast(data.message || 'Error al asignar docente', 'danger');
+        }
+    })
+    .catch(error => {
+        // Restaurar el botón
+        botonAgregar.disabled = false;
+        botonAgregar.innerHTML = textoOriginal;
+        
+        console.error('Error:', error);
+        mostrarToast('Error al comunicarse con el servidor', 'danger');
+    });
+};
+
+// Asegurarse de que el botón esté configurado correctamente
+$(document).ready(function() {
+    // Usar delegación de eventos para el botón
+    $(document).on('click', '#boton_agregar', function(e) {
+        e.preventDefault();
+        asignarDocente();
+    });
+});
 
 // Función auxiliar para mostrar toasts
 function mostrarToast(mensaje, tipo = 'success') {
