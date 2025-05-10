@@ -1,13 +1,13 @@
 <?php
-
-$input = file_get_contents('php://input');
-error_log("Datos recibidos en procesar_asignacion_masiva.php: " . $input);
 header('Content-Type: application/json');
 include("conexion.php");
 
 try {
     // Recibir datos JSON del cuerpo de la solicitud
     $datos = json_decode(file_get_contents('php://input'), true);
+    
+    // Debug
+    error_log("Datos recibidos: " . json_encode($datos));
     
     // Verificar que todos los campos necesarios estén presentes
     if (!isset($datos['idcurso']) || !isset($datos['actividades']) || !isset($datos['docentes']) || !isset($datos['accion'])) {
@@ -37,36 +37,37 @@ try {
             $idplanclases = (int)$idplanclases;
             $rutDocente = mysqli_real_escape_string($conn, $rutDocente);
             
-            // Validar que el docente pertenezca al curso
-            $validarDocente = "SELECT COUNT(*) as existe FROM spre_profesorescurso 
-                              WHERE rut = '$rutDocente' AND idcurso = $idCurso AND Vigencia = 1";
-            $resultValidacion = mysqli_query($conn, $validarDocente);
-            $filaValidacion = mysqli_fetch_assoc($resultValidacion);
-            
-            if ($filaValidacion['existe'] == 0) {
-                continue; // El docente no pertenece al curso, pasamos al siguiente
-            }
-            
             // Verificar relación existente entre actividad y docente
             $verificarExistencia = "SELECT idDocenteClases, vigencia FROM docenteclases 
-                                   WHERE idPlanClases = $idplanclases AND rutDocente = '$rutDocente'";
+                                   WHERE idPlanClases = $idplanclases 
+                                   AND rutDocente = '$rutDocente'
+                                   AND idCurso = $idCurso";
             $resultVerificacion = mysqli_query($conn, $verificarExistencia);
+            
+            if (!$resultVerificacion) {
+                throw new Exception("Error al verificar existencia: " . mysqli_error($conn));
+            }
             
             if ($accion === 'asignar') {
                 if (mysqli_num_rows($resultVerificacion) > 0) {
-                    // La relación ya existe, actualizamos vigencia = 1 si es necesario
+                    // La relación ya existe, actualizamos vigencia = 1
                     $filaExistente = mysqli_fetch_assoc($resultVerificacion);
-                    if ($filaExistente['vigencia'] != 1) {
-                        $query = "UPDATE docenteclases SET vigencia = 1, 
-                                 fechaModificacion = NOW(), usuarioModificacion = 'asignacion_masiva' 
-                                 WHERE idDocenteClases = " . $filaExistente['idDocenteClases'];
-                        mysqli_query($conn, $query);
+                    $query = "UPDATE docenteclases 
+                             SET vigencia = 1, 
+                                 fechaModificacion = NOW(), 
+                                 usuarioModificacion = 'asignacion_masiva' 
+                             WHERE idDocenteClases = " . $filaExistente['idDocenteClases'];
+                    
+                    if (mysqli_query($conn, $query)) {
                         $operacionesRealizadas++;
+                    } else {
+                        throw new Exception("Error al actualizar: " . mysqli_error($conn));
                     }
+                    
                 } else {
                     // La relación no existe, la creamos
                     
-                    // Obtener la duración de la actividad para el campo horas
+                    // Obtener la duración de la actividad
                     $queryHoras = "SELECT 
                                      TIME_TO_SEC(TIMEDIFF(pcl_Termino, pcl_Inicio))/3600 as duracion_horas
                                   FROM planclases 
@@ -75,23 +76,34 @@ try {
                     $filaHoras = mysqli_fetch_assoc($resultHoras);
                     $horas = $filaHoras ? $filaHoras['duracion_horas'] : 0;
                     
-                    // Obtener unidad académica del docente
-                    $queryUnidad = "SELECT unidad_academica_docente FROM spre_profesorescurso 
-                                   WHERE rut = '$rutDocente' AND idcurso = $idCurso AND Vigencia = 1 
-                                   LIMIT 1";
-                    $resultUnidad = mysqli_query($conexion3, $queryUnidad);
-                    $unidadAcademica = '';
-                    if ($rowUnidad = mysqli_fetch_assoc($resultUnidad)) {
-                        $unidadAcademica = $rowUnidad['unidad_academica_docente'];
-                    }
-                    
                     $query = "INSERT INTO docenteclases 
-                             (rutDocente, idPlanClases, idCurso, horas, unidadAcademica, vigencia, 
-                             fechaModificacion, usuarioModificacion)
-                             VALUES ('$rutDocente', $idplanclases, $idCurso, $horas, 
-                             '$unidadAcademica', 1, NOW(), 'asignacion_masiva')";
-                    mysqli_query($conn, $query);
-                    $operacionesRealizadas++;
+                             (rutDocente, idPlanClases, idCurso, horas, vigencia, 
+                             fechaModificacion, usuarioModificacion, unidadAcademica)
+                             VALUES ('$rutDocente', $idplanclases, $idCurso, $horas, 1, 
+                             NOW(), 'asignacion_masiva', '')";
+                    
+                    if (mysqli_query($conn, $query)) {
+                        $operacionesRealizadas++;
+                    } else {
+                        throw new Exception("Error al insertar: " . mysqli_error($conn));
+                    }
+                }
+                
+            } else if ($accion === 'eliminar') {
+                if (mysqli_num_rows($resultVerificacion) > 0) {
+                    // La relación existe, actualizamos vigencia = 0
+                    $filaExistente = mysqli_fetch_assoc($resultVerificacion);
+                    $query = "UPDATE docenteclases 
+                             SET vigencia = 0, 
+                                 fechaModificacion = NOW(), 
+                                 usuarioModificacion = 'asignacion_masiva' 
+                             WHERE idDocenteClases = " . $filaExistente['idDocenteClases'];
+                    
+                    if (mysqli_query($conn, $query)) {
+                        $operacionesRealizadas++;
+                    } else {
+                        throw new Exception("Error al actualizar: " . mysqli_error($conn));
+                    }
                 }
             }
         }
@@ -123,16 +135,5 @@ try {
 // Cerrar conexión
 if (isset($conn)) {
     $conn->close();
-} else if ($accion === 'eliminar') {
-                if (mysqli_num_rows($resultVerificacion) > 0) {
-                    // La relación existe, la desactivamos (vigencia = 0)
-                    $filaExistente = mysqli_fetch_assoc($resultVerificacion);
-                    if ($filaExistente['vigencia'] == 1) {
-                        $query = "UPDATE docenteclases SET vigencia = 0, 
-                                 fechaModificacion = NOW(), usuarioModificacion = 'asignacion_masiva' 
-                                 WHERE idDocenteClases = " . $filaExistente['idDocenteClases'];
-                        mysqli_query($conn, $query);
-                        $operacionesRealizadas++;
-                    }
-                }
 }
+?>

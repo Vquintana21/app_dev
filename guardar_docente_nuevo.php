@@ -202,12 +202,31 @@ try {
         }
     }
     
-    // Éxito total
-    sendResponse(true, "Docente guardado correctamente", array(
-        'idBancoDocente' => $idBancoDocente,
-        'rut_debug' => $rut_debug,
-        'nombre' => $funcionario
+ // insertar en spre_personas, agregar al curso
+$queryAsignarCurso = "INSERT INTO spre_profesorescurso (idcurso, rut, idTipoParticipacion, Vigencia) 
+                     VALUES (?, ?, ?, '1')";
+$stmtAsignarCurso = $conexion3->prepare($queryAsignarCurso);
+
+if (!$stmtAsignarCurso) {
+    sendResponse(false, "Error al preparar asignación al curso", array(
+        'error' => $conexion3->error
     ));
+}
+
+$stmtAsignarCurso->bind_param("ssi", $idcurso, $rut_formateado, $funcion);
+
+if (!$stmtAsignarCurso->execute()) {
+    sendResponse(false, "Error al asignar docente al curso", array(
+        'error' => $stmtAsignarCurso->error
+    ));
+}
+
+// Éxito total
+sendResponse(true, "Docente guardado correctamente", array(
+    'idBancoDocente' => $idBancoDocente,
+    'rut_debug' => $rut_debug,
+    'nombre' => $funcionario
+));
     
 } catch (Exception $e) {
     // Capturar cualquier excepción

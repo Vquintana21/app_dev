@@ -160,8 +160,8 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                             <button id="btnAsignarDocentes" class="btn btn-success" disabled>
                                 <i class="bi bi-check-circle"></i> Asignar docentes
                             </button>
-                            <button id="btnEliminarDocentes" class="btn btn-danger" hidden>
-								<i class="bi bi-x-circle"></i> Desvincular docentes
+                            <button id="btnEliminarDocentes" class="btn btn-danger" disabled>
+								<i class="bi bi-x-circle"></i> Eliminar docentes
 							</button>
                         </div>
                     </div>

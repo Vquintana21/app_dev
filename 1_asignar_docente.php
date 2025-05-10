@@ -155,14 +155,14 @@ if($rut!='' && $control_profe > 0){
 									<?php endif; ?>
 								</td>
                                 <td>
-								<?php if ($state<>'disabled'){ ?>
-                                    <button type="button" 
-        onclick="eliminarDocente(<?php echo $fila_profesores['idProfesoresCurso']; ?>)" 
-        class="btn btn-outline-danger btn-sm"
-        title="Remover docente" >
-    <i class="bi bi-trash"></i>
-</button>
-<?php } ?>
+			<?php if ($state<>'disabled'){ ?>
+				<button type="button" 
+					onclick="eliminarDocente(<?php echo $fila_profesores['idProfesoresCurso']; ?>)" 
+					class="btn btn-outline-danger btn-sm"
+					title="Remover docente del curso">
+					<i class="bi bi-trash"></i>
+				</button>
+				<?php } ?>
                                 </td>
                             </tr>
                             <?php } ?>
@@ -172,6 +172,83 @@ if($rut!='' && $control_profe > 0){
             </div>
         </div>
     </div>
+
+<!-- Modal para nuevo docente -->
+<div class="modal fade" id="nuevoDocenteModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-person-add"></i> Agregar Nuevo Docente
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="nuevoDocenteForm" class="needs-validation" novalidate>
+                    <input type="hidden" id="curso" value="<?php echo $_GET['idcurso']; ?>">
+                    <input type="hidden" id="flag" value="false">
+                    
+                    <!-- Campos del formulario existente -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">RUT *</label>
+                            <input type="text" class="form-control" id="rut_docente" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email *</label>
+                            <input type="email" class="form-control" id="email" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Nombres *</label>
+                            <input type="text" class="form-control" id="nombres" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Apellido Paterno *</label>
+                            <input type="text" class="form-control" id="paterno" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Apellido Materno</label>
+                            <input type="text" class="form-control" id="materno">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Unidad Académica *</label>
+                            <select class="form-select" id="unidad_academica" required>
+                                <option value="">Seleccione...</option>
+                                <!-- Opciones de unidades -->
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Unidad Externa</label>
+                            <input type="text" class="form-control" id="unidad_externa" disabled>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Función *</label>
+                            <select class="form-select" id="funcion" required>
+                                <option value="">Seleccione...</option>
+                                <!-- Opciones de funciones -->
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnGuardarDocente">
+                    <i class="bi bi-save"></i> Guardar Docente
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
     <!-- Contenedor para notificaciones -->
     <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>

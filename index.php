@@ -1,5 +1,6 @@
 <?php
 //index.php 99677 ultimo profesor
+header('Content-type: text/html; charset=utf-8');
 include("conexion.php");
 
 // Obtener el ID del curso desde la URL
@@ -1485,47 +1486,137 @@ document.getElementById('docente-masivo-tab').addEventListener('click', function
 
 <script>
 // Función global para eliminar docentes
+// Función global para eliminar docentes con modal de confirmación
 window.eliminarDocente = function(id) {
     if(!id) return;
     
-    $.ajax({
-        url: 'eliminar_docente.php',
-        type: 'POST',
-        data: { idProfesoresCurso: id },
-        dataType: 'json',
-        success: function(response) {
-            if(response.status === 'success') {
-                // Eliminar la fila
-                var $btn = $(`button[onclick="eliminarDocente(${id})"]`);
-                var $row = $btn.closest('tr');
-                
-                $row.fadeOut(300, function() {
-                    $(this).remove();
-                });
-
-                // Crear y mostrar toast
-                const toastHTML = `
-                    <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                        <div class="d-flex">
-                            <div class="toast-body">
-                                <i class="bi bi-check-circle me-2"></i>
-                                Docente removido exitosamente
-                            </div>
-                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    // Crear el modal de confirmación
+    const modalHTML = `
+        <div class="modal fade" id="confirmarEliminarModal" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-exclamation-triangle text-danger"></i> 
+                            Confirmar eliminación
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>¿Está seguro que desea eliminar este docente del curso?</p>
+                        <div class="alert alert-warning">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Importante:</strong> Esta acción también eliminará al docente de todas las actividades asignadas en este curso.
                         </div>
                     </div>
-                `;
-                
-                $('.toast-container').append(toastHTML);
-                const toastElement = new bootstrap.Toast($('.toast').last(), {
-                    autohide: true,
-                    delay: 2000
-                });
-                toastElement.show();
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-danger" id="confirmarEliminar">
+                            <i class="bi bi-trash"></i> Eliminar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Si ya existe el modal, eliminarlo
+    $('#confirmarEliminarModal').remove();
+    
+    // Agregar el modal al body
+    $('body').append(modalHTML);
+    
+    // Mostrar el modal
+    const modal = new bootstrap.Modal(document.getElementById('confirmarEliminarModal'));
+    modal.show();
+    
+    // Handler para el botón de confirmar
+    $('#confirmarEliminar').off('click').on('click', function() {
+        // Cerrar el modal
+        modal.hide();
+        
+        // Proceder con la eliminación
+        $.ajax({
+            url: 'eliminar_docente.php',
+            type: 'POST',
+            data: { idProfesoresCurso: id },
+            dataType: 'json',
+            success: function(response) {
+                if(response.status === 'success') {
+                    // Eliminar la fila de la tabla
+                    var $btn = $(`button[onclick="eliminarDocente(${id})"]`);
+                    var $row = $btn.closest('tr');
+                    
+                    $row.fadeOut(300, function() {
+                        $(this).remove();
+                    });
+
+                    // Crear y mostrar toast de éxito
+                    const toastHTML = `
+                        <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                            <div class="d-flex">
+                                <div class="toast-body">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    ${response.message || 'Docente removido exitosamente'}
+                                </div>
+                                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Asegurar que existe el contenedor de toasts
+                    if ($('.toast-container').length === 0) {
+                        $('body').append('<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>');
+                    }
+                    
+                    $('.toast-container').append(toastHTML);
+                    const toastElement = new bootstrap.Toast($('.toast').last(), {
+                        autohide: true,
+                        delay: 3000
+                    });
+                    toastElement.show();
+                } else {
+                    // Mostrar error
+                    mostrarToast(response.message || 'Error al eliminar docente', 'danger');
+                }
+            },
+            error: function() {
+                mostrarToast('Error de comunicación con el servidor', 'danger');
             }
-        }
+        });
+    });
+    
+    // Limpiar el modal cuando se cierre
+    $('#confirmarEliminarModal').on('hidden.bs.modal', function () {
+        $(this).remove();
     });
 };
+
+// Función auxiliar para mostrar toasts
+function mostrarToast(mensaje, tipo = 'success') {
+    const toastHTML = `
+        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${tipo === 'success' ? 'check-circle' : 'x-circle'} me-2"></i>
+                    ${mensaje}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    if ($('.toast-container').length === 0) {
+        $('body').append('<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>');
+    }
+    
+    $('.toast-container').append(toastHTML);
+    const toastElement = new bootstrap.Toast($('.toast').last(), {
+        autohide: true,
+        delay: 3000
+    });
+    toastElement.show();
+}
 </script>
 <script>
 // Función global para actualizar función de docente
@@ -2033,8 +2124,8 @@ function inicializarAsignadorMasivo() {
     });
     
     $('#btnEliminarDocentes').off('click').on('click', function() {
-        gestionarDocentes('eliminar');
-    });
+		gestionarDocentes('eliminar');
+	});
     
     // Verificar cambios en los checkboxes de docentes
     $(document).off('change', '.docente-check').on('change', '.docente-check', function() {
@@ -2050,33 +2141,38 @@ function inicializarAsignadorMasivo() {
     });
     
     // Botón para limpiar filtros
-    $('#btnLimpiarFiltros').off('click').on('click', function() {
-        // Limpiar campos de filtro
-        $('#tipoActividad').val('');
-        $('#diaSemana').val('');
-        $('#subtipo').val('');
-        $('#fechaInicio').val('');
-        $('#fechaTermino').val('');
-        $('#horaInicio').val('');
-        $('#horaTermino').val('');
-        
-        // Ocultar mensaje de sin resultados
-        $('#sinResultados').addClass('d-none');
-        
-        // Limpiar tabla de actividades
-        $('#tablaActividades tbody').empty();
-        
-        // Deshabilitar botones
-        $('#btnAsignarDocentes').prop('disabled', true);
-        $('#btnEliminarDocentes').prop('disabled', true);
-        
-        // Reiniciar lista de actividades seleccionadas
-        actividadesSeleccionadas = [];
-        
-        // Desmarcar todos los profesores
-        $('.docente-check').prop('checked', false);
-        $('#seleccionarTodos').prop('checked', false);
-    });
+    // Reemplaza la función de limpiar filtros en index.php con esta versión corregida:
+
+$('#btnLimpiarFiltros').off('click').on('click', function() {
+    // Limpiar campos de filtro
+    $('#tipoActividad').val('');
+    $('#diaSemana').val('');
+    $('#subtipo').val('');
+    $('#fechaInicio').val('');
+    $('#fechaTermino').val('');
+    $('#horaInicio').val('');
+    $('#horaTermino').val('');
+    
+    // Ocultar mensaje de sin resultados
+    $('#sinResultados').addClass('d-none');
+    
+    // Limpiar tabla de actividades
+    $('#tablaActividades tbody').empty();
+    
+    // Deshabilitar botones
+    $('#btnAsignarDocentes').prop('disabled', true);
+    $('#btnEliminarDocentes').prop('disabled', true);
+    
+    // Reiniciar lista de actividades seleccionadas
+    actividadesSeleccionadas = [];
+    
+    // Desmarcar todos los profesores
+    $('.docente-check').prop('checked', false);
+    $('#seleccionarTodos').prop('checked', false);
+    
+    // AGREGAR ESTA LÍNEA para verificar filtros después de limpiar
+    verificarFiltros();
+});
 	
 	 // Agregar evento para validar filtros en tiempo real
     $('#tipoActividad, #diaSemana, #fechaInicio, #fechaTermino, #horaInicio, #horaTermino').on('change', function() {
@@ -2272,8 +2368,12 @@ function gestionarDocentes(accion) {
     }
     
     // Llenar el modal con la información
-    $('#accionTitulo').text(accion === 'asignar' ? 'Asignación' : 'Desvinculación');
-    $('#accionDescripcion').text(accion === 'asignar' ? 'Asignar docentes a las actividades' : 'Desvincular docentes de las actividades');
+    $('#accionTitulo').text(accion === 'asignar' ? 'Asignación' : 'Eliminación');
+    $('#accionDescripcion').text(
+        accion === 'asignar' ? 
+        'Se asignarán los docentes seleccionados a todas las actividades listadas' : 
+        'Se eliminarán los docentes seleccionados de todas las actividades listadas'
+    );
     $('#numActividades').text(actividadesSeleccionadas.length);
     $('#numDocentes').text(docentesSeleccionados.length);
     
@@ -2348,6 +2448,7 @@ function gestionarDocentes(accion) {
     });
 }
 
+// En la función procesarAsignacion, asegúrate de que esté así:
 function procesarAsignacion(accion, docentesRuts) {
     // Obtener el ID del curso actual
     const urlParams = new URLSearchParams(window.location.search);
@@ -2361,8 +2462,14 @@ function procesarAsignacion(accion, docentesRuts) {
         accion: accion
     };
     
-    // Mostrar indicador de carga
-    mostrarNotificacionAsignacion(`Procesando... Por favor espere.`, 'info');
+    // Debug - para verificar que se están enviando los datos correctos
+    console.log('Datos a enviar:', datos);
+    
+    // Mostrar indicador de carga inmediatamente
+    mostrarNotificacionAsignacion('Procesando... Por favor espere.', 'info');
+    
+    // Deshabilitar botones para evitar múltiples clicks
+    $('#confirmarAccion').prop('disabled', true);
     
     // Realizar solicitud AJAX
     $.ajax({
@@ -2372,14 +2479,24 @@ function procesarAsignacion(accion, docentesRuts) {
         data: JSON.stringify(datos),
         contentType: 'application/json',
         success: function(response) {
+            console.log('Respuesta:', response); // Debug
+            
+            // Cerrar el modal de previsualización primero
+            const modal = bootstrap.Modal.getInstance(document.getElementById('previsualizacionModal'));
+            if (modal) modal.hide();
+            
+            // Mostrar resultado
             if (response.success) {
                 mostrarNotificacionAsignacion(
                     `${accion === 'asignar' ? 'Asignación' : 'Desvinculación'} completada correctamente. 
                     ${response.operaciones || 0} operaciones realizadas.`, 
                     'success'
                 );
-                // Opcional: recargar la página o actualizar la vista
-                setTimeout(() => location.reload(), 2000);
+                
+                // Actualizar la vista después de un breve retraso
+                setTimeout(() => {
+                    $('#btnVisualizar').click();
+                }, 1500);
             } else {
                 mostrarNotificacionAsignacion(response.message || 'Error al procesar la solicitud', 'danger');
             }
@@ -2387,18 +2504,41 @@ function procesarAsignacion(accion, docentesRuts) {
         error: function(xhr, status, error) {
             console.error("Error AJAX:", xhr.responseText);
             mostrarNotificacionAsignacion('Error de comunicación con el servidor: ' + (error || status), 'danger');
+        },
+        complete: function() {
+            // Rehabilitar el botón
+            $('#confirmarAccion').prop('disabled', false);
         }
     });
 }
 
 function mostrarNotificacionAsignacion(mensaje, tipo = 'success') {
-    // Crear toast
+    // Buscar el contenedor de toast principal
+    let toastContainer = document.querySelector('.toast-container');
+    
+    // Si no existe, crearlo
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        toastContainer.style.zIndex = '11';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Crear el toast
     const toastId = 'toast-' + Date.now();
+     // Modificar el HTML del toast según el tipo
+    let iconHtml = '';
+    if (tipo === 'info' && mensaje.includes('Procesando')) {
+        iconHtml = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Cargando...</span></div>';
+    } else {
+        iconHtml = `<i class="bi bi-${tipo === 'success' ? 'check-circle' : tipo === 'danger' ? 'x-circle' : 'info-circle'} me-2"></i>`;
+    }
+    
     const toastHTML = `
         <div id="${toastId}" class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
             <div class="d-flex">
                 <div class="toast-body">
-                    <i class="bi bi-${tipo === 'success' ? 'check-circle' : tipo === 'danger' ? 'x-circle' : 'info-circle'} me-2"></i>
+                    ${iconHtml}
                     ${mensaje}
                 </div>
                 <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
@@ -2406,15 +2546,21 @@ function mostrarNotificacionAsignacion(mensaje, tipo = 'success') {
         </div>
     `;
     
-    // Añadir a contenedor
-    $('.toast-container').append(toastHTML);
+    // Añadir al contenedor
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
     
     // Mostrar toast
-    const toastElement = new bootstrap.Toast(document.getElementById(toastId), {
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
         autohide: true,
         delay: 5000
     });
-    toastElement.show();
+    toast.show();
+    
+    // Eliminar toast después de ocultarse
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        toastElement.remove();
+    });
 }
 
 </script>
@@ -2425,6 +2571,12 @@ function mostrarNotificacionAsignacion(mensaje, tipo = 'success') {
 
 // Funciones para crear docente
 function inicializarCrearDocente() {
+	
+	$('#nuevo-docente-btn').off('click').on('click', function() {
+    const modal = new bootstrap.Modal(document.getElementById('nuevoDocenteModal'));
+    modal.show();
+});
+	
     // Event listener para el botón guardar
     $('#btnGuardarDocente').off('click').on('click', guardar_docente);
     
@@ -2546,8 +2698,13 @@ function guardar_docente() {
     
     if(flag == 'true') {
         if(rut != '' && largo_rut >= 9 && unidad != '' && uE != '' && nombres != '' && paterno != '' && email != '' && funcion != '') {
+            // Mostrar loading en el botón
+            const $btnGuardar = $('#btnGuardarDocente');
+            const textoOriginal = $btnGuardar.html();
+            $btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Guardando...');
+            
             $.ajax({
-                dataType: "json", // Cambiar para esperar JSON
+                dataType: "json",
                 data: {
                     "curso": curso,
                     "rut_docente": rut,
@@ -2561,32 +2718,43 @@ function guardar_docente() {
                 },
                 url: 'guardar_docente_nuevo.php', 
                 type: 'POST',
-                beforeSend: function() {
-                    // Lo que se hace antes de enviar el formulario
-                },
                 success: function(respuesta) {
-                    console.log('Respuesta:', respuesta); // Debug
+                    // Restaurar botón
+                    $btnGuardar.prop('disabled', false).html(textoOriginal);
                     
                     if(respuesta.success) {
-                        alert("DOCENTE HA SIDO AGREGADO AL CURSO CORRECTAMENTE");
+                        // Cerrar el modal de nuevo docente
+                        const modalElement = document.getElementById('nuevoDocenteModal');
+                        const modal = bootstrap.Modal.getInstance(modalElement);
+                        if (modal) modal.hide();
+                        
+                        // Mostrar notificación de éxito
+                        mostrarToast('Docente agregado correctamente', 'success');
+                        
                         // Recargar la pestaña de docentes
                         $('#docente-tab').click();
+                        
+                        // Limpiar el formulario para la próxima vez
+                        $('#nuevoDocenteForm')[0].reset();
+                        $('#unidad_externa').prop('disabled', true);
                     } else {
-                        // Mostrar el mensaje específico del error
-                        alert(respuesta.message);
-                        console.error('Debug:', respuesta.debug);
+                        // Mostrar error
+                        mostrarToast(respuesta.message || 'Error al agregar docente', 'danger');
                     }
                 },
                 error: function(xhr, status, error) {
+                    // Restaurar botón
+                    $btnGuardar.prop('disabled', false).html(textoOriginal);
+                    
                     console.error('Error:', xhr.responseText);
-                    alert("ERROR: " + error);
+                    mostrarToast('Error de comunicación con el servidor', 'danger');
                 }
             });
         } else {
-            alert("¡HAY CAMPOS OBLIGATORIOS QUE ESTÁN VACIOS! ");
+            mostrarToast('Por favor complete todos los campos obligatorios', 'warning');
         }
     } else {
-        alert("EL FORMATO DEL RUT NO ES VÁLIDO. POR FAVOR VERIFIQUE QUE SEA EL RUT CORRECTO");
+        mostrarToast('El formato del RUT no es válido', 'warning');
     }
 }
 
@@ -2602,5 +2770,6 @@ function guardar_docente() {
 <script src="docentes-handler.js"></script>
 
 
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 11"></div>
 </body>
 </html>
