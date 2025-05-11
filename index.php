@@ -2118,6 +2118,8 @@ function inicializarAsignadorMasivo() {
     
     $('#seleccionarTodos').off('change').on('change', function() {
         $('.docente-check').prop('checked', $(this).is(':checked'));
+        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
+        verificarSelecciones();
     });
     
     // Botones de asignación y eliminación
@@ -2126,57 +2128,51 @@ function inicializarAsignadorMasivo() {
     });
     
     $('#btnEliminarDocentes').off('click').on('click', function() {
-		gestionarDocentes('eliminar');
-	});
+        gestionarDocentes('eliminar');
+    });
     
     // Verificar cambios en los checkboxes de docentes
     $(document).off('change', '.docente-check').on('change', '.docente-check', function() {
         const todasSeleccionadas = $('.docente-check:checked').length === $('.docente-check').length;
         $('#seleccionarTodos').prop('checked', todasSeleccionadas);
-        verificarSelecciones();
-    });
-	
-	$('#seleccionarTodos').off('change').on('change', function() {
-        $('.docente-check').prop('checked', $(this).is(':checked'));
-        // AGREGAR ESTA LÍNEA para verificar las selecciones después de marcar/desmarcar todos
+        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
         verificarSelecciones();
     });
     
-    // Botón para limpiar filtros
-    // Reemplaza la función de limpiar filtros en index.php con esta versión corregida:
-
-$('#btnLimpiarFiltros').off('click').on('click', function() {
-    // Limpiar campos de filtro
-    $('#tipoActividad').val('');
-    $('#diaSemana').val('');
-    $('#subtipo').val('');
-    $('#fechaInicio').val('');
-    $('#fechaTermino').val('');
-    $('#horaInicio').val('');
-    $('#horaTermino').val('');
+    $('#btnLimpiarFiltros').off('click').on('click', function() {
+        // Limpiar campos de filtro
+        $('#tipoActividad').val('');
+        $('#diaSemana').val('');
+        $('#subtipo').val('');
+        $('#fechaInicio').val('');
+        $('#fechaTermino').val('');
+        $('#horaInicio').val('');
+        $('#horaTermino').val('');
+        
+        // Ocultar mensaje de sin resultados
+        $('#sinResultados').addClass('d-none');
+        
+        // Limpiar tabla de actividades
+        $('#tablaActividades tbody').empty();
+        
+        // Deshabilitar botones
+        $('#btnAsignarDocentes').prop('disabled', true);
+        $('#btnEliminarDocentes').prop('disabled', true);
+        
+        // Reiniciar lista de actividades seleccionadas
+        actividadesSeleccionadas = [];
+        
+        // Desmarcar todos los profesores
+        $('.docente-check').prop('checked', false);
+        $('#seleccionarTodos').prop('checked', false);
+        
+        // Reordenar después de limpiar
+        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
+        
+        verificarFiltros();
+    });
     
-    // Ocultar mensaje de sin resultados
-    $('#sinResultados').addClass('d-none');
-    
-    // Limpiar tabla de actividades
-    $('#tablaActividades tbody').empty();
-    
-    // Deshabilitar botones
-    $('#btnAsignarDocentes').prop('disabled', true);
-    $('#btnEliminarDocentes').prop('disabled', true);
-    
-    // Reiniciar lista de actividades seleccionadas
-    actividadesSeleccionadas = [];
-    
-    // Desmarcar todos los profesores
-    $('.docente-check').prop('checked', false);
-    $('#seleccionarTodos').prop('checked', false);
-    
-    // AGREGAR ESTA LÍNEA para verificar filtros después de limpiar
-    verificarFiltros();
-});
-	
-	 // Agregar evento para validar filtros en tiempo real
+    // Agregar evento para validar filtros en tiempo real
     $('#tipoActividad, #diaSemana, #fechaInicio, #fechaTermino, #horaInicio, #horaTermino').on('change', function() {
         verificarFiltros();
     });
@@ -2212,6 +2208,8 @@ function buscarActividades() {
         mostrarNotificacionAsignacion('Debe seleccionar al menos un filtro para buscar actividades', 'warning');
         return;
     }
+	
+	   mostrarNotificacionMasiva('Buscando actividades...', 'info', 1000);
     
     // Obtener el ID del curso actual
     const urlParams = new URLSearchParams(window.location.search);
@@ -2230,7 +2228,7 @@ function buscarActividades() {
     };
     
     // Realizar solicitud AJAX
-    $.ajax({
+       $.ajax({
         url: 'buscar_actividades.php',
         type: 'POST',
         dataType: 'json',
@@ -2250,20 +2248,24 @@ function buscarActividades() {
                 } else {
                     $('#sinResultados').addClass('d-none');
                     
-                    // Obtener docentes asignados a las actividades filtradas
-                    obtenerDocentesComunes(actividadesSeleccionadas);
+                    // IMPORTANTE: Siempre desmarcar todos los docentes al buscar
+                    $('.docente-check').prop('checked', false);
+                    $('#seleccionarTodos').prop('checked', false);
+                    reordenarDocentesMasivo();
+                    verificarSelecciones();
                 }
             } else {
-                mostrarNotificacionAsignacion(response.message || 'Error al buscar actividades', 'danger');
+                mostrarNotificacionMasiva(response.message || 'Error al buscar actividades', 'danger');
             }
         },
         error: function() {
-            mostrarNotificacionAsignacion('Error de comunicación con el servidor', 'danger');
+            mostrarNotificacionMasiva('Error de comunicación con el servidor', 'danger');
         }
     });
 }
 
-function obtenerDocentesComunes(actividades) {
+// la dejare por si se requiere a futuro o se puede reutilizar
+function obtenerDocentesComunes_desactivada(actividades) {
     if (!actividades || actividades.length === 0) return;
     
     // Desmarcar todos los docentes primero
@@ -2368,6 +2370,11 @@ function gestionarDocentes(accion) {
         mostrarNotificacionAsignacion('No hay docentes seleccionados', 'warning');
         return;
     }
+	
+	 if (actividadesSeleccionadas.length === 0) {
+        mostrarNotificacionMasiva('No hay actividades seleccionadas', 'warning');
+        return;
+    }
     
     // Llenar el modal con la información
     $('#accionTitulo').text(accion === 'asignar' ? 'Asignación' : 'Eliminación');
@@ -2464,14 +2471,16 @@ function procesarAsignacion(accion, docentesRuts) {
         accion: accion
     };
     
-    // Debug - para verificar que se están enviando los datos correctos
+    // Debug
     console.log('Datos a enviar:', datos);
     
-    // Mostrar indicador de carga inmediatamente
-    mostrarNotificacionAsignacion('Procesando... Por favor espere.', 'info');
+    // Mostrar indicador de carga y guardar la referencia
+    let toastCarga = mostrarNotificacionMasiva('Procesando... Por favor espere.', 'info');
     
     // Deshabilitar botones para evitar múltiples clicks
     $('#confirmarAccion').prop('disabled', true);
+    $('#btnAsignarDocentes').prop('disabled', true);
+    $('#btnEliminarDocentes').prop('disabled', true);
     
     // Realizar solicitud AJAX
     $.ajax({
@@ -2481,15 +2490,21 @@ function procesarAsignacion(accion, docentesRuts) {
         data: JSON.stringify(datos),
         contentType: 'application/json',
         success: function(response) {
-            console.log('Respuesta:', response); // Debug
+            console.log('Respuesta:', response);
             
-            // Cerrar el modal de previsualización primero
+            // Cerrar el toast de carga de forma segura
+            if (toastCarga) {
+                // Forzar el cierre del toast
+                $(toastCarga).remove();
+            }
+            
+            // Cerrar el modal de previsualización
             const modal = bootstrap.Modal.getInstance(document.getElementById('previsualizacionModal'));
             if (modal) modal.hide();
             
             // Mostrar resultado
             if (response.success) {
-                mostrarNotificacionAsignacion(
+                mostrarNotificacionMasiva(
                     `${accion === 'asignar' ? 'Asignación' : 'Desvinculación'} completada correctamente. 
                     ${response.operaciones || 0} operaciones realizadas.`, 
                     'success'
@@ -2500,16 +2515,28 @@ function procesarAsignacion(accion, docentesRuts) {
                     $('#btnVisualizar').click();
                 }, 1500);
             } else {
-                mostrarNotificacionAsignacion(response.message || 'Error al procesar la solicitud', 'danger');
+                mostrarNotificacionMasiva(response.message || 'Error al procesar la solicitud', 'danger');
             }
         },
         error: function(xhr, status, error) {
+            // Cerrar el toast de carga
+            if (toastCarga) {
+                $(toastCarga).remove();
+            }
+            
             console.error("Error AJAX:", xhr.responseText);
-            mostrarNotificacionAsignacion('Error de comunicación con el servidor: ' + (error || status), 'danger');
+            mostrarNotificacionMasiva('Error de comunicación con el servidor: ' + (error || status), 'danger');
         },
         complete: function() {
-            // Rehabilitar el botón
+            // Asegurarse de que el toast de carga se cierre
+            if (toastCarga) {
+                $(toastCarga).remove();
+            }
+            
+            // Rehabilitar los botones
             $('#confirmarAccion').prop('disabled', false);
+            $('#btnAsignarDocentes').prop('disabled', false);
+            $('#btnEliminarDocentes').prop('disabled', false);
         }
     });
 }
@@ -2760,6 +2787,103 @@ function guardar_docente() {
     }
 }
 
+// Esta función se agregará SOLO en la sección del asignador masivo
+function mostrarNotificacionMasiva(mensaje, tipo = 'success', duracion = 3000) {
+    // Buscar o crear el contenedor específico para el asignador masivo
+    let toastContainer = document.querySelector('.toast-container-masivo');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container-masivo position-fixed bottom-0 end-0 p-3';
+        toastContainer.style.zIndex = '1055';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Determinar si es un mensaje de carga
+    const esCarga = tipo === 'info' && mensaje.toLowerCase().includes('procesando');
+    
+    // Determinar el ícono según el tipo
+    let iconHtml = '';
+    if (esCarga) {
+        iconHtml = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Cargando...</span></div>';
+    } else {
+        const iconos = {
+            'success': 'check-circle',
+            'danger': 'exclamation-circle',
+            'warning': 'exclamation-triangle',
+            'info': 'info-circle'
+        };
+        iconHtml = `<i class="bi bi-${iconos[tipo] || 'info-circle'} me-2"></i>`;
+    }
+    
+    // Crear el toast
+    const toastId = 'toast-masivo-' + Date.now();
+    const toastHTML = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-tipo="${tipo}">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${iconHtml}
+                    ${mensaje}
+                </div>
+                ${!esCarga ? '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' : ''}
+            </div>
+        </div>
+    `;
+    
+    // Añadir al contenedor
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    // Mostrar el toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: !esCarga,  // No auto-ocultar si es carga
+        delay: duracion
+    });
+    toast.show();
+    
+    // Si NO es un toast de carga, eliminarlo después de ocultar
+    if (!esCarga) {
+        toastElement.addEventListener('hidden.bs.toast', function() {
+            toastElement.remove();
+        });
+    }
+    
+    return toastElement;
+}
+
+
+function reordenarDocentesMasivo() {
+    const container = document.getElementById('listaDocentes');
+    if (!container) return;
+    
+    const docenteRows = Array.from(container.querySelectorAll('.docente-row'));
+    
+    // Separar en dos grupos
+    const selected = [];
+    const notSelected = [];
+    
+    docenteRows.forEach(row => {
+        const checkbox = row.querySelector('.docente-check');
+        if (checkbox && checkbox.checked) {
+            selected.push(row);
+        } else {
+            notSelected.push(row);
+        }
+    });
+    
+    // Mantener el orden alfabético en los no seleccionados
+    notSelected.sort((a, b) => {
+        const nameA = a.querySelector('p.mb-0').textContent.toLowerCase();
+        const nameB = b.querySelector('p.mb-0').textContent.toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    // Reconstruir el contenedor
+    container.innerHTML = '';
+    
+    // Agregar primero los seleccionados, luego los no seleccionados
+    selected.forEach(row => container.appendChild(row));
+    notSelected.forEach(row => container.appendChild(row));
+}
 </script>
 
 

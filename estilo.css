@@ -286,3 +286,25 @@
 .activity-button .fa-plus {
     color: #ffc107 !important;
 }
+
+/* CSS específico para el asignador masivo */
+.toast-container-masivo {
+    z-index: 1055 !important;
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+}
+
+.toast-container-masivo .toast {
+    min-width: 250px;
+}
+
+.toast-container-masivo .toast-body {
+    display: flex;
+    align-items: center;
+}
+
+.toast-container-masivo .spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+}

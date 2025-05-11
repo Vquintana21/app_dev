@@ -256,7 +256,7 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                               WHERE idcurso = '$idCurso'
                                               AND spre_profesorescurso.idTipoParticipacion NOT IN (8,10)
                                               AND Vigencia = 1
-                                              ORDER BY Paterno ASC, Nombres ASC";
+                                               ORDER BY Nombres ASC, Paterno ASC, Materno ASC";
                             $result_docentes = mysqli_query($conexion3, $equipo_docente);
                             
                             function obtenerFoto($rut) {
@@ -281,30 +281,31 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                             }
                             
                             while($docente = mysqli_fetch_assoc($result_docentes)) {
-                                $foto = obtenerFoto($docente["rut"]);
-                                $nombre_completo = utf8_encode($docente["Nombres"] . " " . $docente["Paterno"] . " " . $docente["Materno"]);
-                                $cargo = utf8_encode($docente["CargoTexto"]);
-                                echo '
-                                <div class="row mb-3 docente-row">
-                                    <div class="col-3">
-                                        <img src="'.$foto.'" alt="Foto" class="rounded-circle img-fluid">
-                                    </div>
-                                    <div class="col-7">
-                                        <p class="mb-0">'.$nombre_completo.'</p>
-                                        <small class="text-muted">'.$cargo.'</small>
-                                    </div>
-                                    <div class="col-2">
-                                        <div class="form-check form-switch">
-                                            <input class="form-check-input docente-check" type="checkbox" 
-                                                   data-rut="'.$docente["rut"].'">
-                                        </div>
-                                    </div>
-                                </div>';
-                            }
-                            
-                            if(mysqli_num_rows($result_docentes) == 0) {
-                                echo '<div class="alert alert-warning">No hay docentes asignados al curso</div>';
-                            }
+							$foto = obtenerFoto($docente["rut"]);
+							// CAMBIAR EL ORDEN DE CONCATENACIÓN DEL NOMBRE
+							$nombre_completo = utf8_encode($docente["Nombres"] . " " .$docente["Paterno"] . " " . $docente["Materno"]);
+							$cargo = utf8_encode($docente["CargoTexto"]);
+							echo '
+							<div class="row mb-3 docente-row">
+								<div class="col-3">
+									<img width="70%" src="'.$foto.'" alt="Foto" class="rounded-circle img-fluid">
+								</div>
+								<div class="col-7">
+									<p class="mb-0">'.$nombre_completo.'</p>
+									<small class="text-muted">'.$cargo.'</small>
+								</div>
+								<div class="col-2">
+									<div class="form-check form-switch">
+										<input class="form-check-input docente-check" type="checkbox" 
+											   data-rut="'.$docente["rut"].'">
+									</div>
+								</div>
+							</div>';
+						}
+						
+						if(mysqli_num_rows($result_docentes) == 0) {
+							echo '<div class="alert alert-warning">No hay docentes asignados al curso</div>';
+						}
                             ?>
                         </div>
                     </div>
