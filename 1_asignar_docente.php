@@ -93,10 +93,17 @@ if($rut!='' && $control_profe > 0){
                         <tbody>
                             <?php 
                             $profesores = "SELECT *,spre_tipoparticipacion.CargoTexto FROM spre_profesorescurso
-                            INNER JOIN spre_personas ON spre_profesorescurso.rut = spre_personas.Rut 
-                            INNER JOIN spre_tipoparticipacion ON spre_profesorescurso.idTipoParticipacion = spre_tipoparticipacion.idTipoParticipacion 
-                            WHERE idcurso='$_GET[idcurso]' AND Vigencia='1' AND spre_profesorescurso.idTipoParticipacion NOT IN ('10') 
-                            ORDER BY spre_tipoparticipacion.idTipoParticipacion, Nombres ASC";
+               INNER JOIN spre_personas ON spre_profesorescurso.rut = spre_personas.Rut 
+               INNER JOIN spre_tipoparticipacion ON spre_profesorescurso.idTipoParticipacion = spre_tipoparticipacion.idTipoParticipacion 
+               WHERE idcurso='$_GET[idcurso]' AND Vigencia='1' AND spre_profesorescurso.idTipoParticipacion NOT IN ('10') 
+               ORDER BY 
+                   CASE 
+                       WHEN spre_profesorescurso.idTipoParticipacion IN (1, 2, 3, 10) THEN 0 
+                       ELSE 1 
+                   END,
+                   spre_personas.Nombres ASC, 
+                   spre_personas.Paterno ASC, 
+                   spre_personas.Materno ASC";
                             $profesores_query = mysqli_query($conexion3,$profesores);
                             while($fila_profesores = mysqli_fetch_assoc($profesores_query)){
 								
@@ -128,23 +135,31 @@ if($rut!='' && $control_profe > 0){
 			  
 			  ?>
 				  <select class="form-select form-select-sm" 
-							onchange="actualizarFuncion(this, <?php echo $fila_profesores['idProfesoresCurso']; ?>)" 
-							<?php echo $state; ?>>
-						<option value="<?php echo $fila_profesores['idTipoParticipacion']; ?>">
-							<?php echo utf8_encode($fila_profesores['CargoTexto']); ?>
-						</option>
-						<?php 
-						$funcion = "SELECT idTipoParticipacion, CargoTexto 
-									FROM spre_tipoparticipacion 
-									WHERE idTipoParticipacion NOT IN ('1','2','3','10')";
-						$funcion_query = mysqli_query($conexion3,$funcion);
-						while($fila_funcion = mysqli_fetch_assoc($funcion_query)) {
-						?>
-							<option value="<?php echo $fila_funcion['idTipoParticipacion']; ?>">
-								<?php echo utf8_encode($fila_funcion['CargoTexto']); ?>
-							</option>
-						<?php } ?>
-					</select>
+        onchange="actualizarFuncion(this, <?php echo $fila_profesores['idProfesoresCurso']; ?>)" 
+        <?php echo $state; ?>>
+    <!-- Primero mostramos la opción actual del profesor -->
+    <option value="<?php echo $fila_profesores['idTipoParticipacion']; ?>" selected>
+        <?php echo utf8_encode($fila_profesores['CargoTexto']); ?>
+    </option>
+    
+    <?php 
+    // Solo si el select no está deshabilitado, mostramos las demás opciones
+    if ($state != 'disabled') {
+        $funcion = "SELECT idTipoParticipacion, CargoTexto 
+                    FROM spre_tipoparticipacion 
+                    WHERE idTipoParticipacion NOT IN ('1','2','3','10')
+                    AND idTipoParticipacion != '{$fila_profesores['idTipoParticipacion']}'";
+        $funcion_query = mysqli_query($conexion3, $funcion);
+        while($fila_funcion = mysqli_fetch_assoc($funcion_query)) {
+        ?>
+            <option value="<?php echo $fila_funcion['idTipoParticipacion']; ?>">
+                <?php echo utf8_encode($fila_funcion['CargoTexto']); ?>
+            </option>
+        <?php 
+        }
+    }
+    ?>
+</select>
 			  </td>
                                 </td>
 								 <td class="text-center">
