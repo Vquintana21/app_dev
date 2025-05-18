@@ -182,7 +182,6 @@ $conn->close();
   <link href="assets/css/style.css" rel="stylesheet">
   <!-- CSS personalizado -->
   <link href="estilo.css" rel="stylesheet">
-  <link href="estilo2.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
     
 </head>
@@ -238,7 +237,7 @@ $conn->close();
         </a>
       </li>
 	   <li class="nav-item">
-        <a class="nav-link " href="index.php?curso=<?php echo $idCurso; ?>">+
+        <a class="nav-link " href="index.php?curso=<?php echo $idCurso; ?>">
 		
 		
 		
@@ -622,7 +621,7 @@ function createActivityButton(activity) {
 		const fecha = new Date(activity.pcl_Fecha);
 const day = fecha.getDate().toString().padStart(2, '0');
 const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
-const fechaFormateada = `${day} - ${month}`;
+const fechaFormateada = `${day}-${month}`;
         
         let content = '';
         if (activity.pcl_tituloActividad) {
@@ -1744,26 +1743,26 @@ window.actualizarFuncion = function(selectElement, idProfesoresCurso) {
 <!-- FUNCIONAES DE SALAS -->
 <script>
 async function solicitarSala(idPlanClase) {
+    console.log('ID Plan Clase:', idPlanClase);
+    
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
     document.getElementById('action').value = 'solicitar';
     document.getElementById('salaModalTitle').textContent = 'Solicitar Sala';
     
-    // Obtener el número de alumnos y salas del elemento de la tabla
+    // Obtener el número de alumnos del elemento de la tabla
     const tr = document.querySelector(`tr[data-id="${idPlanClase}"]`);
+    console.log('TR encontrado:', tr);
+    
     if (tr) {
-        // Obtener alumnos totales
         const alumnosTotales = tr.dataset.alumnos;
-        document.getElementById('alumnosTotales').value = alumnosTotales;
-        document.getElementById('alumnosTotales').readOnly = true;
+        console.log('Alumnos del dataset:', alumnosTotales);
+        console.log('Tipo de dato:', typeof alumnosTotales);
         
-        // Obtener número de salas
-        const nSalasCell = tr.querySelector('td:nth-child(7)'); // Columna N° Salas
-        const nSalas = nSalasCell ? nSalasCell.textContent.trim() : "1";
-        document.getElementById('nSalas').value = nSalas;
-        
-        // Calcular alumnos por sala
+        document.getElementById('alumnosTotales').value = alumnosTotales || 0;
         calcularAlumnosPorSala();
+    } else {
+        console.error('No se encontró el TR con id:', idPlanClase);
     }
     
     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
@@ -1773,9 +1772,10 @@ async function solicitarSala(idPlanClase) {
 
 async function modificarSala(idPlanClase) {
     document.getElementById('salaForm').reset();
-    const form = document.getElementById('salaForm');
+    document.getElementById('idplanclases').value = idPlanClase;
+    document.getElementById('salaModalTitle').textContent = 'Modificar Solicitud de Sala';
     
-    // Obtener el estado actual de la sala
+    // Obtener el elemento de la tabla
     const tr = document.querySelector(`tr[data-id="${idPlanClase}"]`);
     if (!tr) {
         console.error('No se encontró la fila');
@@ -1792,14 +1792,6 @@ async function modificarSala(idPlanClase) {
     // Determinar si está asignada (estado 3)
     const esAsignada = estadoTexto === 'Asignada';
 
-    // Establecer valores del formulario
-    document.getElementById('idplanclases').value = idPlanClase;
-    document.getElementById('action').value = esAsignada ? 'modificar_asignada' : 'modificar';
-
-    console.log('Action seleccionado:', document.getElementById('action').value); // Debug
-
-    // ... resto del código ...
-
     try {
         const response = await fetch('salas2.php', {
             method: 'POST',
@@ -1814,16 +1806,15 @@ async function modificarSala(idPlanClase) {
 
         const datos = await response.json();
         if (datos.success) {
-            // También verificamos aquí el estado
-            if (datos.estado === 3) {
-                document.getElementById('action').value = 'modificar_asignada';
-            }
-            
+            // Establecer valores del formulario
+            document.getElementById('action').value = esAsignada || datos.estado === 3 ? 'modificar_asignada' : 'modificar';
             document.getElementById('campus').value = datos.pcl_campus || 'Norte';
             document.getElementById('nSalas').value = datos.pcl_nSalas || '1';
             document.getElementById('alumnosTotales').value = tr.dataset.alumnos;
             document.getElementById('alumnosTotales').readOnly = true;
-            calcularAlumnosPorSala();
+            
+            // Configurar listeners después de establecer valores
+            setupModalListeners();
         }
     } catch (error) {
         console.error('Error:', error);
@@ -1965,15 +1956,14 @@ async function guardarSala() {
         return;
     }
 
-    // Debug para ver qué datos estamos enviando
-    console.log('Form Data:', {
-        action: form.querySelector('[name="action"]').value,
-        nSalas: form.querySelector('[name="nSalas"]').value,
-        idplanclases: form.querySelector('[name="idplanclases"]').value
-    });
-    
     const formData = new FormData(form);
     const datos = Object.fromEntries(formData.entries());
+    
+    // Agregar campos adicionales
+    datos.requiereSala = document.getElementById('requiereSala').value;
+    datos.observaciones = document.getElementById('observaciones').value;
+    datos.movilidadReducida = document.getElementById('movilidadReducida').value;
+    datos.alumnosPorSala = document.getElementById('alumnosPorSala').value;
     
     try {
         const response = await fetch('salas2.php', {

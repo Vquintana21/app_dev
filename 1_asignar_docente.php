@@ -175,8 +175,8 @@ if($rut!='' && $control_profe > 0){
 					onclick="eliminarDocente(<?php echo $fila_profesores['idProfesoresCurso']; ?>)" 
 					class="btn btn-outline-danger btn-sm"
 					title="Remover docente del curso">
-					<i class="bi bi-trash"></i>
-				</button>
+					<i class="bi bi-trash"  ></i>
+				 </button>
 				<?php } ?>
                                 </td>
                             </tr>

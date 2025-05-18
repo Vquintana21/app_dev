@@ -7,42 +7,119 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($data['action'])) {
         switch ($data['action']) {
             case 'solicitar':
-                try {
-                    $conn->begin_transaction();
-                    
-                    // Actualizar planclases
-                    $stmt = $conn->prepare("UPDATE planclases SET pcl_nSalas = ?, pcl_campus = ? WHERE idplanclases = ?");
-                    $stmt->bind_param("isi", $data['nSalas'], $data['campus'], $data['idplanclases']);
-                    $stmt->execute();
-                    
-                    // Actualizar asignaciones
-                    if ($data['action'] === 'solicitar') {
-                        // Eliminar asignaciones existentes si las hay
-                        $stmt = $conn->prepare("DELETE FROM asignacion_piloto WHERE idplanclases = ?");
-                        $stmt->bind_param("i", $data['idplanclases']);
-                        $stmt->execute();
-                        
-                        // Crear nuevas asignaciones
-                        $stmt = $conn->prepare("INSERT INTO asignacion_piloto (idplanclases, idEstado) VALUES (?, 0)");
-                        for ($i = 0; $i < $data['nSalas']; $i++) {
-                            $stmt->bind_param("i", $data['idplanclases']);
-                            $stmt->execute();
-                        }
-                    }
-                    
-                    $conn->commit();
-                    echo json_encode(['success' => true]);
-                    
-                } catch (Exception $e) {
-                    $conn->rollback();
-                    http_response_code(500);
-                    echo json_encode(['error' => $e->getMessage()]);
-                }
-                break;
-				
-				case 'modificar':
     try {
         $conn->begin_transaction();
+        
+		 // Verificar si requiere sala
+        $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
+        
+        // Actualizar planclases primero con pcl_DeseaSala
+        $stmt = $conn->prepare("UPDATE planclases SET pcl_nSalas = ?, pcl_campus = ?, pcl_DeseaSala = ? WHERE idplanclases = ?");
+        $stmt->bind_param("isii", $data['nSalas'], $data['campus'], $requiereSala, $data['idplanclases']);
+        $stmt->execute();
+        
+        if ($requiereSala == 0) {
+            // Si NO requiere sala, liberar todas las asignaciones existentes
+            $stmt = $conn->prepare("UPDATE asignacion_piloto 
+                                   SET idEstado = 4, 
+                                       Comentario = CONCAT(IFNULL(Comentario, ''), '\n\n', ?, ' - NO REQUIERE SALA') 
+                                   WHERE idplanclases = ? AND idEstado != 4");
+            $stmt->bind_param("si", date('Y-m-d H:i:s'), $data['idplanclases']);
+            $stmt->execute();
+            
+            $conn->commit();
+            echo json_encode(['success' => true, 'message' => 'Actividad actualizada. No requiere sala.']);
+            break;
+        }
+		
+        // Actualizar planclases primero
+        $stmt = $conn->prepare("UPDATE planclases SET pcl_nSalas = ?, pcl_campus = ? WHERE idplanclases = ?");
+        $stmt->bind_param("isi", $data['nSalas'], $data['campus'], $data['idplanclases']);
+        $stmt->execute();
+        
+        // Obtener datos necesarios de planclases
+        $queryPlanclases = "SELECT * FROM planclases WHERE idplanclases = ?";
+        $stmtPlanclases = $conn->prepare($queryPlanclases);
+        $stmtPlanclases->bind_param("i", $data['idplanclases']);
+        $stmtPlanclases->execute();
+        $resultPlanclases = $stmtPlanclases->get_result();
+        $dataPlanclases = $resultPlanclases->fetch_assoc();
+        
+        // Preparar observaciones con timestamp
+        $observaciones = "";
+        if (isset($data['observaciones']) && !empty($data['observaciones'])) {
+            $observaciones = date('Y-m-d H:i:s') . " - " . $data['observaciones'];
+        }
+        
+        // Insertar en asignacion_piloto con todos los datos necesarios
+        $queryInsert = "INSERT INTO asignacion_piloto (
+            idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
+            fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
+            NombreCurso, Comentario, cercania, TipoAsignacion, idEstado, Usuario, timestamp
+        ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'M', 0, ?, NOW())";
+        
+        $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
+        
+        $stmtInsert = $conn->prepare($queryInsert);
+        
+        // Crear múltiples registros según el número de salas
+        for ($i = 0; $i < $data['nSalas']; $i++) {
+            $stmtInsert->bind_param(
+                "iisssssisssss",
+                $data['idplanclases'],
+                $dataPlanclases['pcl_alumnos'],
+                $dataPlanclases['pcl_TipoSesion'],
+                $data['campus'],
+                $dataPlanclases['pcl_Fecha'],
+                $dataPlanclases['pcl_Inicio'],
+                $dataPlanclases['pcl_Termino'],
+                $dataPlanclases['cursos_idcursos'],
+                $dataPlanclases['pcl_AsiCodigo'],
+                $dataPlanclases['pcl_Seccion'],
+                $dataPlanclases['pcl_AsiNombre'],
+                $observaciones,
+                $usuario
+            );
+            $stmtInsert->execute();
+        }
+        
+        $conn->commit();
+        echo json_encode(['success' => true]);
+        
+    } catch (Exception $e) {
+        $conn->rollback();
+        http_response_code(500);
+        echo json_encode(['error' => $e->getMessage()]);
+    }
+    break;
+
+case 'modificar':
+    try {
+        $conn->begin_transaction();
+		
+		 // Verificar si requiere sala
+        $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
+        
+        // Actualizar planclases con pcl_DeseaSala
+        $stmt = $conn->prepare("UPDATE planclases 
+                              SET pcl_nSalas = ?, pcl_campus = ?, pcl_DeseaSala = ? 
+                              WHERE idplanclases = ?");
+        $stmt->bind_param("isii", $data['nSalas'], $data['campus'], $requiereSala, $data['idplanclases']);
+        $stmt->execute();
+        
+        if ($requiereSala == 0) {
+            // Si NO requiere sala, liberar todas las asignaciones
+            $stmt = $conn->prepare("UPDATE asignacion_piloto 
+                                   SET idEstado = 4, 
+                                       Comentario = CONCAT(IFNULL(Comentario, ''), '\n\n', ?, ' - NO REQUIERE SALA') 
+                                   WHERE idplanclases = ? AND idEstado != 4");
+            $stmt->bind_param("si", date('Y-m-d H:i:s'), $data['idplanclases']);
+            $stmt->execute();
+            
+            $conn->commit();
+            echo json_encode(['success' => true, 'message' => 'Actividad actualizada. No requiere sala.']);
+            break;
+        }
         
         // Verificar estado actual de las asignaciones
         $stmt = $conn->prepare("SELECT COUNT(*) as count, MAX(idEstado) as maxEstado 
@@ -53,7 +130,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = $stmt->get_result();
         $currentState = $result->fetch_assoc();
         
-        if ($currentState['maxEstado'] == 0) { // Solo modificar si están en estado 0
+        // Solo modificar si están en estado 0 (solicitado)
+        if ($currentState['maxEstado'] == 0) {
+            // Obtener datos de planclases
+            $queryPlanclases = "SELECT * FROM planclases WHERE idplanclases = ?";
+            $stmtPlanclases = $conn->prepare($queryPlanclases);
+            $stmtPlanclases->bind_param("i", $data['idplanclases']);
+            $stmtPlanclases->execute();
+            $resultPlanclases = $stmtPlanclases->get_result();
+            $dataPlanclases = $resultPlanclases->fetch_assoc();
+            
+            // Obtener observaciones existentes
+            $queryObs = "SELECT Comentario FROM asignacion_piloto 
+                         WHERE idplanclases = ? LIMIT 1";
+            $stmtObs = $conn->prepare($queryObs);
+            $stmtObs->bind_param("i", $data['idplanclases']);
+            $stmtObs->execute();
+            $resultObs = $stmtObs->get_result();
+            $obsAnterior = "";
+            
+            if ($resultObs->num_rows > 0) {
+                $obsAnterior = $resultObs->fetch_assoc()['Comentario'];
+            }
+            
+            // Concatenar nueva observación
+            $nuevaObservacion = $obsAnterior;
+            if (isset($data['observaciones']) && !empty($data['observaciones'])) {
+                if (!empty($obsAnterior)) {
+                    $nuevaObservacion .= "\n\n" . date('Y-m-d H:i:s') . " - " . $data['observaciones'];
+                } else {
+                    $nuevaObservacion = date('Y-m-d H:i:s') . " - " . $data['observaciones'];
+                }
+            }
+            
             // Actualizar planclases
             $stmt = $conn->prepare("UPDATE planclases 
                                   SET pcl_nSalas = ?, pcl_campus = ? 
@@ -61,15 +170,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param("isi", $data['nSalas'], $data['campus'], $data['idplanclases']);
             $stmt->execute();
             
-            // Calcular diferencia de asignaciones necesarias
+            // Actualizar asignacion_piloto (solo estado 0)
+            $stmt = $conn->prepare("UPDATE asignacion_piloto 
+                                  SET Comentario = ?,
+                                      nAlumnos = ?,
+                                      campus = ?
+                                  WHERE idplanclases = ? AND idEstado = 0");
+            $stmt->bind_param("sisi", 
+                $nuevaObservacion, 
+                $dataPlanclases['pcl_alumnos'],
+                $data['campus'],
+                $data['idplanclases']
+            );
+            $stmt->execute();
+            
+            // Ajustar número de registros si cambió
             $diff = $data['nSalas'] - $currentState['count'];
             
             if ($diff > 0) {
-                // Agregar nuevas asignaciones
-                $stmt = $conn->prepare("INSERT INTO asignacion_piloto (idplanclases, idEstado) VALUES (?, 0)");
+                // Agregar nuevas asignaciones con todos los campos
+                $queryInsert = "INSERT INTO asignacion_piloto (
+                    idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
+                    fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
+                    NombreCurso, Comentario, cercania, TipoAsignacion, idEstado, Usuario, timestamp
+                ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'M', 0, ?, NOW())";
+                
+                $stmtInsert = $conn->prepare($queryInsert);
+                $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
+                
                 for ($i = 0; $i < $diff; $i++) {
-                    $stmt->bind_param("i", $data['idplanclases']);
-                    $stmt->execute();
+                    $stmtInsert->bind_param(
+                        "iisssssisssss",
+                        $data['idplanclases'],
+                        $dataPlanclases['pcl_alumnos'],
+                        $dataPlanclases['pcl_TipoSesion'],
+                        $data['campus'],
+                        $dataPlanclases['pcl_Fecha'],
+                        $dataPlanclases['pcl_Inicio'],
+                        $dataPlanclases['pcl_Termino'],
+                        $dataPlanclases['cursos_idcursos'],
+                        $dataPlanclases['pcl_AsiCodigo'],
+                        $dataPlanclases['pcl_Seccion'],
+                        $dataPlanclases['pcl_AsiNombre'],
+                        $nuevaObservacion,
+                        $usuario
+                    );
+                    $stmtInsert->execute();
                 }
             } elseif ($diff < 0) {
                 // Eliminar asignaciones sobrantes
@@ -91,16 +237,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['error' => $e->getMessage()]);
     }
     break;
-	
-	case 'modificar_asignada':
+
+case 'modificar_asignada':
     try {
         $conn->begin_transaction();
-
-        // Debug
-        error_log("Iniciando modificar_asignada");
-        error_log("Data recibida: " . json_encode($data));
         
-        // 1. Obtener cantidad actual de salas asignadas
+        // Obtener datos de planclases primero
+        $queryPlanclases = "SELECT * FROM planclases WHERE idplanclases = ?";
+        $stmtPlanclases = $conn->prepare($queryPlanclases);
+        $stmtPlanclases->bind_param("i", $data['idplanclases']);
+        $stmtPlanclases->execute();
+        $resultPlanclases = $stmtPlanclases->get_result();
+        $dataPlanclases = $resultPlanclases->fetch_assoc();
+        
+        // 1. Contar cuántas salas están actualmente asignadas (estado 3)
         $stmt = $conn->prepare("SELECT COUNT(*) as count 
                                FROM asignacion_piloto 
                                WHERE idplanclases = ? AND idEstado = 3");
@@ -109,53 +259,104 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $result = $stmt->get_result();
         $currentAssigned = $result->fetch_assoc()['count'];
         
-        error_log("Salas actualmente asignadas: " . $currentAssigned);
-
-        // 2. Actualizar planclases primero
+        // 2. Actualizar planclases con el nuevo número de salas
         $stmt = $conn->prepare("UPDATE planclases 
-                              SET pcl_nSalas = ? 
+                              SET pcl_nSalas = ?, pcl_campus = ? 
                               WHERE idplanclases = ?");
-        $stmt->bind_param("ii", $data['nSalas'], $data['idplanclases']);
+        $stmt->bind_param("isi", $data['nSalas'], $data['campus'], $data['idplanclases']);
         $stmt->execute();
-        error_log("planclases actualizado");
-
-        // 3. Cambiar todas las asignaciones existentes a estado 1
+        
+        // 3. Preparar observaciones
+        $observacionModificacion = "";
+        if (isset($data['observaciones']) && !empty($data['observaciones'])) {
+            $observacionModificacion = date('Y-m-d H:i:s') . " - MODIFICACIÓN: " . $data['observaciones'];
+        }
+        
+        // 4. Cambiar TODAS las asignaciones de estado 3 a estado 1
         $stmt = $conn->prepare("UPDATE asignacion_piloto 
-                              SET idEstado = 1
+                              SET idEstado = 1,
+                                  Comentario = CASE 
+                                      WHEN COALESCE(Comentario, '') = '' THEN ?
+                                      ELSE CONCAT(Comentario, '\n\n', ?)
+                                  END,
+                                  nAlumnos = ?,
+                                  campus = ?
                               WHERE idplanclases = ? AND idEstado = 3");
-        $stmt->bind_param("i", $data['idplanclases']);
+        $stmt->bind_param("ssisi", 
+            $observacionModificacion,
+            $observacionModificacion,
+            $dataPlanclases['pcl_alumnos'],
+            $data['campus'],
+            $data['idplanclases']
+        );
         $stmt->execute();
-        error_log("asignaciones pasadas a estado 1");
-
-        // 4. Calcular diferencia
+        
+        // 5. Calcular la diferencia
         $diff = intval($data['nSalas']) - $currentAssigned;
-        error_log("Diferencia calculada: " . $diff);
-
+        
         if ($diff > 0) {
-            // Agregar nuevas asignaciones
-            $stmt = $conn->prepare("INSERT INTO asignacion_piloto 
-                                  (idplanclases, idEstado) VALUES (?, 1)");
+            // Necesitamos MÁS salas: agregar nuevas asignaciones en estado 1
+            $queryInsert = "INSERT INTO asignacion_piloto (
+                idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
+                fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
+                NombreCurso, Comentario, cercania, TipoAsignacion, idEstado, Usuario, timestamp
+            ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'M', 1, ?, NOW())";
+            
+            $stmtInsert = $conn->prepare($queryInsert);
+            $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
+            $comentarioNuevo = date('Y-m-d H:i:s') . " - NUEVA SALA AGREGADA EN MODIFICACIÓN";
+            
             for ($i = 0; $i < $diff; $i++) {
-                $stmt->bind_param("i", $data['idplanclases']);
-                $stmt->execute();
+                $stmtInsert->bind_param(
+                    "iisssssisssss",
+                    $data['idplanclases'],
+                    $dataPlanclases['pcl_alumnos'],
+                    $dataPlanclases['pcl_TipoSesion'],
+                    $data['campus'],
+                    $dataPlanclases['pcl_Fecha'],
+                    $dataPlanclases['pcl_Inicio'],
+                    $dataPlanclases['pcl_Termino'],
+                    $dataPlanclases['cursos_idcursos'],
+                    $dataPlanclases['pcl_AsiCodigo'],
+                    $dataPlanclases['pcl_Seccion'],
+                    $dataPlanclases['pcl_AsiNombre'],
+                    $comentarioNuevo,
+                    $usuario
+                );
+                $stmtInsert->execute();
             }
-            error_log("Agregadas " . $diff . " nuevas asignaciones");
+            
         } elseif ($diff < 0) {
-            // Eliminar asignaciones sobrantes
+            // Necesitamos MENOS salas: eliminar las sobrantes
             $limit = abs($diff);
             $stmt = $conn->prepare("DELETE FROM asignacion_piloto 
                                   WHERE idplanclases = ? AND idEstado = 1 
                                   ORDER BY idAsignacion DESC LIMIT ?");
             $stmt->bind_param("ii", $data['idplanclases'], $limit);
             $stmt->execute();
-            error_log("Eliminadas " . abs($diff) . " asignaciones");
         }
-
+        
         $conn->commit();
-        error_log("Transacción completada con éxito");
-
-        echo json_encode(['success' => true]);
-
+        
+        // Mensaje descriptivo para el usuario
+        $mensaje = "Solicitud de modificación creada. ";
+        if ($diff > 0) {
+            $mensaje .= "Se han agregado $diff salas adicionales.";
+        } elseif ($diff < 0) {
+            $absNum = abs($diff);
+            $mensaje .= "Se han reducido $absNum salas.";
+        } else {
+            $mensaje .= "Se mantiene el mismo número de salas.";
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'message' => $mensaje,
+            'previousCount' => $currentAssigned,
+            'newCount' => $data['nSalas'],
+            'difference' => $diff
+        ]);
+        
     } catch (Exception $e) {
         $conn->rollback();
         error_log("Error en modificar_asignada: " . $e->getMessage());
@@ -163,14 +364,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['error' => $e->getMessage()]);
     }
     break;
-				
-				case 'obtener_datos_solicitud':
+
+case 'obtener_datos_solicitud':
     try {
-        // Primero obtenemos los datos básicos
+        // Obtener datos básicos y observaciones
         $stmt = $conn->prepare("SELECT p.pcl_campus, p.pcl_nSalas,
                                (SELECT COUNT(*) FROM asignacion_piloto 
                                 WHERE idplanclases = p.idplanclases 
-                                AND idEstado = 3) as salas_asignadas
+                                AND idEstado = 3) as salas_asignadas,
+                               (SELECT Comentario FROM asignacion_piloto 
+                                WHERE idplanclases = p.idplanclases 
+                                ORDER BY idAsignacion DESC LIMIT 1) as observaciones
                                FROM planclases p 
                                WHERE p.idplanclases = ?");
         
@@ -184,6 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'success' => true,
                 'pcl_campus' => $datos['pcl_campus'],
                 'pcl_nSalas' => $datos['pcl_nSalas'],
+                'observaciones' => $datos['observaciones'],
                 'estado' => $datos['salas_asignadas'] > 0 ? 3 : 0
             ]);
         } else {
@@ -194,8 +399,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['error' => $e->getMessage()]);
     }
     break;
-                
-            case 'obtener_salas_asignadas':
+
+case 'obtener_salas_asignadas':
     try {
         $stmt = $conn->prepare("SELECT idAsignacion, idSala 
                                FROM asignacion_piloto 
@@ -222,25 +427,27 @@ case 'liberar':
     try {
         $conn->begin_transaction();
         
-        // Obtener el idplanclases antes de liberar la sala
-        $stmt = $conn->prepare("SELECT idplanclases FROM asignacion_piloto WHERE idAsignacion = ?");
-        $stmt->bind_param("i", $data['idAsignacion']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $idplanclases = $result->fetch_assoc()['idplanclases'];
-        
-        // Liberar la sala
+        // Actualizar estado a 4 (liberada) en lugar de eliminar
         $stmt = $conn->prepare("UPDATE asignacion_piloto 
                                SET idSala = NULL, idEstado = 4 
                                WHERE idAsignacion = ?");
         $stmt->bind_param("i", $data['idAsignacion']);
         $stmt->execute();
         
-        // Actualizar el número de salas en planclases
-        $stmt = $conn->prepare("UPDATE planclases 
-                              SET pcl_nSalas = pcl_nSalas - 1 
-                              WHERE idplanclases = ? AND pcl_nSalas > 0");
-        $stmt->bind_param("i", $idplanclases);
+        // Actualizar contador en planclases
+        $stmt = $conn->prepare("UPDATE planclases p
+                              SET pcl_nSalas = (
+                                  SELECT COUNT(*) 
+                                  FROM asignacion_piloto 
+                                  WHERE idplanclases = p.idplanclases 
+                                  AND idEstado IN (0,1,3)
+                              )
+                              WHERE p.idplanclases = (
+                                  SELECT idplanclases 
+                                  FROM asignacion_piloto 
+                                  WHERE idAsignacion = ?
+                              )");
+        $stmt->bind_param("i", $data['idAsignacion']);
         $stmt->execute();
         
         $conn->commit();
@@ -270,6 +477,7 @@ $query = "SELECT
     p.pcl_campus,
 	pcl_alumnos,
     p.pcl_nSalas,
+	p.pcl_DeseaSala,
     t.pedir_sala,
     (SELECT GROUP_CONCAT(DISTINCT idSala)
      FROM asignacion_piloto
@@ -364,54 +572,105 @@ $result = $stmt->get_result();
                         <td><?php echo $row['pcl_campus']; ?></td>
 						<!-- mostrar cero salas si es activi distinta a clase en la pimera insercion de una actividad, tomar el # de asignacion-->
                         <td><?php echo $row['pcl_nSalas']; ?></td>
-                        <td>
-							<?php if($tieneAsignaciones): ?>
-								<ul class="list-unstyled m-0">
-									<?php 
-									$salas = explode(',', $row['salas_asignadas']);
-									foreach($salas as $sala): 
-									?>
-										<li><span class="badge bg-success"><?php echo $sala; ?></span></li>
-									<?php endforeach; ?>
-								</ul>
-							<?php else: ?>
-								<span class="badge bg-secondary">Sin sala</span>
-							<?php endif; ?>
-						</td>
-                        <td>
-							<?php if($tieneAsignaciones): ?>
-								<?php if($todasConfirmadas): ?>
-									<span class="badge bg-success">Asignada</span>
-								<?php else: ?>
-									<span class="badge bg-warning">Parcialmente asignada</span>
-								<?php endif; ?>
-							<?php elseif($tieneSolicitudes): ?>
-								<span class="badge bg-info">Solicitada</span>
-							<?php else: ?>
-								<span class="badge bg-warning">Pendiente</span>
-							<?php endif; ?>
-						</td>
-					<td>
-						  <div class="btn-group">
-							<?php if($tieneAsignaciones || $tieneSolicitudes): ?>
-							  <button type="button" class="btn btn-sm btn-warning" 
-									  onclick="modificarSala(<?php echo $row['idplanclases']; ?>)">
-								<i class="bi bi-pencil"></i> Modificar
-							  </button>
-							  <?php if($tieneAsignaciones): ?>
-								<button type="button" class="btn btn-sm btn-danger" 
-									  onclick="mostrarModalLiberarSalas(<?php echo $row['idplanclases']; ?>)">
-								  <i class="bi bi-x-circle"></i> Liberar
-								</button>
-							  <?php endif; ?>
-							<?php else: ?>
-							  <button type="button" class="btn btn-sm btn-primary" 
-									  onclick="solicitarSala(<?php echo $row['idplanclases']; ?>)">
-								<i class="bi bi-plus-circle"></i> Solicitar
-							  </button>
-							<?php endif; ?>
-						  </div>
-					</td>
+                       <?php 
+// Primero, obtener todos los estados de las asignaciones para este idplanclases
+$queryEstados = "SELECT idEstado, COUNT(*) as cantidad, GROUP_CONCAT(idSala) as salas 
+                 FROM asignacion_piloto 
+                 WHERE idplanclases = ? 
+                 GROUP BY idEstado";
+$stmtEstados = $conn->prepare($queryEstados);
+$stmtEstados->bind_param("i", $row['idplanclases']);
+$stmtEstados->execute();
+$resultEstados = $stmtEstados->get_result();
+
+$estados = [];
+$salasAsignadas = [];
+while($est = $resultEstados->fetch_assoc()) {
+    $estados[$est['idEstado']] = $est['cantidad'];
+    if($est['idEstado'] == 3 && $est['salas']) {
+        $salasTemp = explode(',', $est['salas']);
+        $salasAsignadas = array_merge($salasAsignadas, array_filter($salasTemp));
+    }
+}
+
+// Determinar cantidades por estado
+$estado0 = isset($estados[0]) ? $estados[0] : 0;
+$estado1 = isset($estados[1]) ? $estados[1] : 0;
+$estado3 = isset($estados[3]) ? $estados[3] : 0;
+$estado4 = isset($estados[4]) ? $estados[4] : 0;
+
+// Total de asignaciones (todos los estados)
+$totalAsignaciones = array_sum($estados);
+
+// Total de asignaciones ACTIVAS (excluyendo las liberadas)
+$totalActivas = $totalAsignaciones - $estado4;
+
+// Lógica de estados
+$todasLiberadas = ($totalAsignaciones > 0 && $estado4 == $totalAsignaciones);
+$todasAsignadas = ($totalActivas > 0 && $estado3 == $totalActivas);
+$parcialmenteAsignadas = ($estado3 > 0 && ($estado0 > 0 || $estado1 > 0));
+$enModificacion = ($estado1 > 0 && $estado3 == 0);
+$solicitadas = ($estado0 == $totalActivas && $totalActivas > 0);
+$pendiente = ($totalActivas == 0);
+
+?>
+
+<!-- Columna Sala -->
+<td>
+    <?php if(!empty($salasAsignadas)): ?>
+        <ul class="list-unstyled m-0">
+            <?php foreach($salasAsignadas as $sala): ?>
+                <li><span class="badge bg-success"><?php echo $sala; ?></span></li>
+            <?php endforeach; ?>
+        </ul>
+    <?php else: ?>
+        <span class="badge bg-secondary">Sin sala</span>
+    <?php endif; ?>
+</td>
+
+<!-- Columna Estado -->
+<td>
+    <?php if($todasLiberadas): ?>
+        <span class="badge bg-dark">Liberada</span>
+    <?php elseif($todasAsignadas): ?>
+        <span class="badge bg-success">Asignada</span>
+    <?php elseif($parcialmenteAsignadas): ?>
+        <span class="badge bg-warning">Parcialmente asignada</span>
+    <?php elseif($enModificacion): ?>
+        <span class="badge bg-primary">En modificación</span>
+    <?php elseif($solicitadas): ?>
+        <span class="badge bg-info">Solicitada</span>
+    <?php else: ?>
+        <span class="badge bg-secondary">Pendiente</span>
+    <?php endif; ?>
+</td>
+
+<!-- Columna Acciones -->
+<td>
+    <div class="btn-group">
+        <?php if($todasLiberadas || $pendiente): ?>
+            <!-- Si está liberada o pendiente, permitir nueva solicitud -->
+            <button type="button" class="btn btn-sm btn-primary" 
+                    onclick="solicitarSala(<?php echo $row['idplanclases']; ?>)">
+                <i class="bi bi-plus-circle"></i> Solicitar
+            </button>
+        <?php else: ?>
+            <!-- Si tiene cualquier otra asignación, permitir modificar -->
+            <button type="button" class="btn btn-sm btn-warning" 
+                    onclick="modificarSala(<?php echo $row['idplanclases']; ?>)">
+                <i class="bi bi-pencil"></i> Modificar
+            </button>
+            
+            <?php if($estado3 > 0): ?>
+                <!-- Solo permitir liberar si hay salas asignadas (estado 3) -->
+                <button type="button" class="btn btn-sm btn-danger" 
+                        onclick="mostrarModalLiberarSalas(<?php echo $row['idplanclases']; ?>)">
+                    <i class="bi bi-x-circle"></i> Liberar
+                </button>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</td>
                     </tr>
                     <?php endwhile; ?>
                 </tbody>
@@ -441,8 +700,8 @@ $result = $stmt->get_result();
                     <div class="mb-3">
                         <label class="form-label">¿Requiere sala para esta actividad?</label>
                         <select class="form-select" id="requiereSala" name="requiereSala" required>
-                            <option value="Si">Si</option>
-                            <option value="No">No</option>
+                            <option value="1">Si</option>
+                            <option value="0">No</option>
                         </select>
                     </div>
 
@@ -454,14 +713,23 @@ $result = $stmt->get_result();
                             <option value="Centro">Centro</option>
                         </select>
                     </div>
+<hr>
+                 <div class="mb-3">
+    <div class="d-flex justify-content-between align-items-center">
+        <label class="form-label fw-bold text-primary mb-0">
+            <i class="bi bi-building me-1"></i>
+            Información de salas
+        </label>
+        <a href="https://dpi.med.uchile.cl/CALENDARIO/salas.php" target="_blank" 
+           class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-box-arrow-up-right me-1"></i>
+            Ver salas
+        </a>
+    </div>
+</div>
 
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <label class="form-label">Información de salas</label>
-                            <a href="#" onclick="verSalas()">Ver salas <i class="bi bi-box-arrow-up-right"></i></a>
-                        </div>
-                    </div>
 
+<hr>
                     <div class="mb-3">
                         <label class="form-label">N° de salas requeridas para la actividad</label>
                         <select class="form-select" id="nSalas" name="nSalas" required>
@@ -495,7 +763,7 @@ $result = $stmt->get_result();
 
                     <div class="mb-3">
                         <label class="form-label">Observaciones</label>
-                        <textarea class="form-control" id="observaciones" name="observaciones" rows="3" 
+							<textarea class="form-control" id="observaciones" name="observaciones" rows="3" 
                                 placeholder="Por favor, describa su requerimiento con el mayor nivel de detalle posible. Incluya información específica y relevante para asegurar que podamos entender y satisfacer completamente sus necesidades." required></textarea>
                     </div>
                 </form>
