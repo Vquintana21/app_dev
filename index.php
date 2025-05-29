@@ -183,6 +183,8 @@ $conn->close();
   <!-- CSS personalizado -->
   <link href="estilo.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+  
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     
 </head>
 <body class="toggle-sidebar">
@@ -326,7 +328,7 @@ $conn->close();
 </div>
 
         <!-- Modal actividades -->
-        <div class="modal fade" id="activityModal" tabindex="-1">
+        <div class="modal fade" id="activityModal" data-bs-backdrop="true" tabindex="-1">
             <div class="modal-dialog modal-xl">
                 <div class="modal-content">
                      <div class="modal-header">
@@ -343,6 +345,8 @@ $conn->close();
                                     <div class="col-8">
                                         <form id="activityForm">
                                             <input type="hidden" id="idplanclases" name="idplanclases">
+											<input type="hidden" id="tipo-anterior" name="tipo_anterior">
+<span id="modal-tipo-actividad" style="display: none;"></span>
 												</br>
                                             <div class="row mb-3">
                                                 <label class="col-sm-2 col-form-label">Título de la actividad</label>
@@ -689,9 +693,35 @@ function loadAutoActivityData(activity) {
            if (horasMatch) {
                document.getElementById('auto-hours').value = parseInt(horasMatch[1]);
                document.getElementById('auto-minutes').value = parseInt(horasMatch[2]);
+           } else {
+               // Si no hay horas asignadas, precargar con los valores máximos permitidos
+               const horasMax = <?php echo $horasData['horas']; ?>;
+               const minutosMax = <?php echo $horasData['minutos']; ?>;
+               document.getElementById('auto-hours').value = horasMax;
+               document.getElementById('auto-minutes').value = minutosMax;
            }
+       } else {
+           // Si no hay horas asignadas, precargar con los valores máximos permitidos
+           const horasMax = <?php echo $horasData['horas']; ?>;
+           const minutosMax = <?php echo $horasData['minutos']; ?>;
+           document.getElementById('auto-hours').value = horasMax;
+           document.getElementById('auto-minutes').value = minutosMax;
        }
    }
+   
+   // Añadir validación para el título
+   const saveButton = document.getElementById('save-auto-btn');
+   const titleField = document.getElementById('auto-activity-title');
+   
+   // Verificar el estado inicial del título
+   if (titleField.value.trim() === '') {
+       saveButton.disabled = true;
+   }
+   
+   // Agregar event listener para validar el título en tiempo real
+   titleField.addEventListener('input', function() {
+       saveButton.disabled = this.value.trim() === '';
+   });
 }
 	
 	 // Modificar la función loadActivityData existente
@@ -709,6 +739,9 @@ function loadActivityData(activity) {
     document.getElementById('modal-idplanclases').textContent = activity.idplanclases;
     document.getElementById('idplanclases').value = activity.idplanclases;
     
+	 document.getElementById('tipo-anterior').value = activity.pcl_TipoSesion;
+	 document.getElementById('modal-tipo-actividad').textContent = activity.pcl_TipoSesion;
+	
 	 // Formatear y mostrar fecha y hora
     const fecha = new Date(activity.pcl_Fecha);
     const fechaFormateada = fecha.toLocaleDateString('es-ES', { 
@@ -996,146 +1029,231 @@ function reordenarDocentes() {
          
 
   function saveActivity() {
-	  
-	    // Validar título
+    // Validar título
     const activityTitle = document.getElementById('activity-title').value.trim();
     if (activityTitle === '') {
         mostrarToast('El título de la actividad no puede estar vacío', 'danger');
         return;
     }
     
-    // Mostrar toast de carga
-    mostrarToastCarga('Guardando cambios...');
+    // Obtener datos necesarios para verificación
+    const idplanclases = document.getElementById('idplanclases').value;
+    const tipoNuevo = document.getElementById('activity-type').value;
+    const tipoActual = document.querySelector('#modal-tipo-actividad').textContent || '';
     
-    // Deshabilitar el botón de guardar para evitar múltiples clicks
-    const saveButton = document.querySelector('button[onclick="saveActivity()"]');
-    saveButton.disabled = true;
-	  
-    const form = document.getElementById('activityForm');
-    const formData = new FormData();
-    
-    // Agregar campos al formData...
-    formData.append('idplanclases', document.getElementById('idplanclases').value);
-    formData.append('activity-title', document.getElementById('activity-title').value);
-    formData.append('type', document.getElementById('activity-type').value);
-    
-    // Manejar el subtipo para Clase
-    const tipoActividad = document.getElementById('activity-type').value;
-    if (tipoActividad === 'Clase') {
-        formData.append('subtype', 'Clase teórica o expositiva');
+    // Verificar si hay cambio de tipo que pueda afectar salas
+    if (tipoActual && tipoActual !== tipoNuevo) {
+        // Preparar datos para verificación
+        const verificacionData = new FormData();
+        verificacionData.append('action', 'verificar_cambio');
+        verificacionData.append('idplanclases', idplanclases);
+        verificacionData.append('tipo_nuevo', tipoNuevo);
+        verificacionData.append('tipo_actual', tipoActual);
+        
+        // Mostrar toast de verificación
+        mostrarToastCarga('Verificando cambios...');
+        
+        // Realizar consulta para verificar impacto del cambio
+        fetch('verificar_sala.php', {
+            method: 'POST',
+            body: verificacionData
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Ocultar toast de verificación
+            document.querySelector('.toast-container').innerHTML = '';
+            
+            if (data.necesita_confirmacion) {
+                // Mostrar SweetAlert de confirmación
+                Swal.fire({
+                    title: '¿Estás seguro?',
+                    html: data.mensaje_confirmacion,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sí, continuar',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Si confirma, proceder con el guardado
+                        procesarGuardado();
+                    }
+                });
+            } else {
+                // Si no requiere confirmación, proceder directamente
+                procesarGuardado();
+            }
+        })
+        .catch(error => {
+            console.error('Error al verificar cambios:', error);
+            // Mostrar advertencia y permitir continuar
+            Swal.fire({
+                title: 'Advertencia',
+                text: 'No se pudo verificar el impacto en las salas. El cambio podría afectar asignaciones existentes. ¿Desea continuar?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sí, continuar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    procesarGuardado();
+                }
+            });
+        });
     } else {
-        formData.append('subtype', document.getElementById('activity-subtype').value);
+        // Si no hay cambio de tipo, proceder directamente
+        procesarGuardado();
     }
     
-    formData.append('start_time', document.getElementById('start-time').value);
-    formData.append('end_time', document.getElementById('end-time').value);
-    formData.append('mandatory', document.getElementById('mandatory').checked);
-    formData.append('is_evaluation', document.getElementById('is-evaluation').checked);
-
-    // Verificar si la actividad requiere docentes
-    const tipoInfo = tiposSesion.find(t => t.tipo_sesion === tipoActividad);
-    const requiereDocentes = tipoInfo && tipoInfo.docentes === "1";
-
-    // Calcular las horas de la actividad
-    const startTime = document.getElementById('start-time').value;
-    const endTime = document.getElementById('end-time').value;
-    const start = new Date(`2000-01-01 ${startTime}`);
-    const end = new Date(`2000-01-01 ${endTime}`);
-    const horasActividad = (end - start) / (1000 * 60 * 60);
-
-    // Obtener docentes seleccionados
-    const docentesSeleccionados = [];
-    document.querySelectorAll('.docente-check:checked').forEach(checkbox => {
-        docentesSeleccionados.push(checkbox.dataset.rut);
-    });
-
-    // Primero guardar la actividad
-    fetch('guardar_actividad.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.success) {
-            throw new Error('Error al guardar la actividad');
-        }
-
-        // Solo guardar docentes si la actividad los requiere
-        if (requiereDocentes && docentesSeleccionados.length > 0) {
-            const docentesData = new FormData();
-            const idplanclases = document.getElementById('idplanclases').value;
-            const idcurso = new URLSearchParams(window.location.search).get('curso');
-            
-            docentesData.append('idplanclases', idplanclases);
-            docentesData.append('idcurso', idcurso);
-            docentesData.append('horas', horasActividad);
-            docentesData.append('docentes', JSON.stringify(docentesSeleccionados));
-
-            // Guardar los docentes
-            return fetch('guardar_docentes.php', {
-                method: 'POST',
-                body: docentesData
-            });
+    // Función interna para procesar el guardado
+    function procesarGuardado() {
+        // Mostrar toast de carga
+        mostrarToastCarga('Guardando cambios...');
+        
+        // Deshabilitar el botón de guardar para evitar múltiples clicks
+        const saveButton = document.querySelector('button[onclick="saveActivity()"]');
+        saveButton.disabled = true;
+        
+        const form = document.getElementById('activityForm');
+        const formData = new FormData();
+        
+        // Agregar campos al formData...
+        formData.append('idplanclases', document.getElementById('idplanclases').value);
+        formData.append('activity-title', document.getElementById('activity-title').value);
+        formData.append('type', document.getElementById('activity-type').value);
+        
+        // Manejar el subtipo para Clase
+        const tipoActividad = document.getElementById('activity-type').value;
+        if (tipoActividad === 'Clase') {
+            formData.append('subtype', 'Clase teórica o expositiva');
         } else {
-            // Si no requiere docentes o no hay docentes seleccionados, 
-            // devolver una respuesta exitosa simulada
-            return Promise.resolve({ 
-                json: () => Promise.resolve({ 
-                    success: true, 
-                    message: requiereDocentes ? 'No se seleccionaron docentes' : 'Actividad guardada sin docentes'
-                }) 
-            });
+            formData.append('subtype', document.getElementById('activity-subtype').value);
         }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Cerrar modal
-            const modalElement = document.getElementById('activityModal');
-            const modal = bootstrap.Modal.getInstance(modalElement);
-            if (modal) modal.hide();
+        
+        formData.append('start_time', document.getElementById('start-time').value);
+        formData.append('end_time', document.getElementById('end-time').value);
+        formData.append('mandatory', document.getElementById('mandatory').checked);
+        formData.append('is_evaluation', document.getElementById('is-evaluation').checked);
+        
+        // Si teníamos el tipo anterior, incluirlo para referencia
+        if (tipoActual) {
+            formData.append('tipo_anterior', tipoActual);
+        }
+
+        // Verificar si la actividad requiere docentes
+        const tipoInfo = tiposSesion.find(t => t.tipo_sesion === tipoActividad);
+        const requiereDocentes = tipoInfo && tipoInfo.docentes === "1";
+
+        // Calcular las horas de la actividad
+        const startTime = document.getElementById('start-time').value;
+        const endTime = document.getElementById('end-time').value;
+        const start = new Date(`2000-01-01 ${startTime}`);
+        const end = new Date(`2000-01-01 ${endTime}`);
+        const horasActividad = (end - start) / (1000 * 60 * 60);
+
+        // Obtener docentes seleccionados
+        const docentesSeleccionados = [];
+        document.querySelectorAll('.docente-check:checked').forEach(checkbox => {
+            docentesSeleccionados.push(checkbox.dataset.rut);
+        });
+
+        // Primero guardar la actividad
+        fetch('guardar_actividad.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Error al guardar la actividad');
+            }
             
-            // Crear contenedor de toast si no existe
-            let toastContainer = document.querySelector('.toast-container');
-            if (!toastContainer) {
-                toastContainer = document.createElement('div');
-                toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-                document.body.appendChild(toastContainer);
+            // Mostrar mensaje específico sobre salas si existe
+            if (data.mensaje_sala) {
+                mostrarToast(data.mensaje_sala, 'info');
             }
 
-            // Limpiar toasts anteriores
-            toastContainer.innerHTML = '';
-            
-            // Crear y mostrar el toast
-            const toastHTML = `
-                <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="d-flex">
-                        <div class="toast-body">
-                            <i class="bi bi-check-circle me-2"></i>
-                            Actividad guardada correctamente
+            // Solo guardar docentes si la actividad los requiere
+            if (requiereDocentes && docentesSeleccionados.length > 0) {
+                const docentesData = new FormData();
+                const idplanclases = document.getElementById('idplanclases').value;
+                const idcurso = new URLSearchParams(window.location.search).get('curso');
+                
+                docentesData.append('idplanclases', idplanclases);
+                docentesData.append('idcurso', idcurso);
+                docentesData.append('horas', horasActividad);
+                docentesData.append('docentes', JSON.stringify(docentesSeleccionados));
+
+                // Guardar los docentes
+                return fetch('guardar_docentes.php', {
+                    method: 'POST',
+                    body: docentesData
+                });
+            } else {
+                // Si no requiere docentes o no hay docentes seleccionados, 
+                // devolver una respuesta exitosa simulada
+                return Promise.resolve({ 
+                    json: () => Promise.resolve({ 
+                        success: true, 
+                        message: requiereDocentes ? 'No se seleccionaron docentes' : 'Actividad guardada sin docentes'
+                    }) 
+                });
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Cerrar modal
+                const modalElement = document.getElementById('activityModal');
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) modal.hide();
+                
+                // Crear contenedor de toast si no existe
+                let toastContainer = document.querySelector('.toast-container');
+                if (!toastContainer) {
+                    toastContainer = document.createElement('div');
+                    toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                    document.body.appendChild(toastContainer);
+                }
+
+                // Limpiar toasts anteriores
+                toastContainer.innerHTML = '';
+                
+                // Crear y mostrar el toast
+                const toastHTML = `
+                    <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Actividad guardada correctamente
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
                         </div>
-                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
                     </div>
-                </div>
-            `;
+                `;
+                
+                toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+                const toastElement = new bootstrap.Toast(toastContainer.lastElementChild, {
+                    autohide: true,
+                    delay: 3000
+                });
+                toastElement.show();
+                
+                // Recargar página después de mostrar el toast
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                throw new Error(data.message || 'Error al guardar los cambios');
+            }
+        })
+        .catch(error => {
+            console.error('Error completo:', error);
+            mostrarToast('Error al guardar los cambios: ' + error.message, 'danger');
             
-            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-            const toastElement = new bootstrap.Toast(toastContainer.lastElementChild, {
-                autohide: true,
-                delay: 3000
-            });
-            toastElement.show();
-            
-            // Recargar página después de mostrar el toast
-            setTimeout(() => location.reload(), 1000);
-        } else {
-            throw new Error(data.message || 'Error al guardar los cambios');
-        }
-    })
-    .catch(error => {
-        console.error('Error completo:', error);
-        mostrarToast('Error al guardar los cambios: ' + error.message, 'danger');
-    });
+            // Rehabilitar el botón de guardar
+            if (saveButton) saveButton.disabled = false;
+        });
+    }
 }
 
 function mostrarToastCarga(mensaje) {
@@ -1480,6 +1598,18 @@ document.getElementById('docente-masivo-tab').addEventListener('click', function
     
     hoursInput.addEventListener('input', validateInputs);
     minutesInput.addEventListener('input', validateInputs);
+	
+	$('#autoaprendizajeModal').on('shown.bs.modal', function() {
+        const saveButton = document.getElementById('save-auto-btn');
+        const titleField = document.getElementById('auto-activity-title');
+        
+        // Verificar si el título está vacío
+        saveButton.disabled = titleField.value.trim() === '';
+        
+        // Foco en el campo del título
+        titleField.focus();
+    });
+	
 });
 </script>
 
@@ -2047,7 +2177,14 @@ function saveAutoActivity() {
     
     // Obtener los datos del formulario
     const idplanclases = document.getElementById('auto-idplanclases').value;
-    const activityTitle = document.getElementById('auto-activity-title').value;
+    const activityTitle = document.getElementById('auto-activity-title').value.trim();
+    
+    // Validar título
+    if (activityTitle === '') {
+        mostrarToast('Debe ingresar un título para la actividad de autoaprendizaje', 'danger');
+        return;
+    }
+    
     const hours = parseInt(document.getElementById('auto-hours').value) || 0;
     const minutes = parseInt(document.getElementById('auto-minutes').value) || 0;
     
