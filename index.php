@@ -1,4 +1,5 @@
 <?php
+
 //index.php 99677 ultimo profesor
 header('Content-type: text/html; charset=utf-8');
 include("conexion.php");
@@ -592,6 +593,27 @@ function createActivityButton(activity) {
         button.className = 'btn btn-lg activity-button btn-light feriado';
         button.innerHTML = `<div class="activity-title">Feriado</div>`;
         // No agregamos data-bs-toggle ni onclick para que no sea clickeable
+        return button;
+    }
+	
+	// NUEVA CONDICIÓN: Verificar si es un Bloque Protegido
+    if (activity.pcl_TipoSesion === 'Bloque Protegido') {
+        button.className = 'btn btn-lg activity-button btn-info bloque-protegido';
+        
+        // Formatear la fecha
+        const fecha = new Date(activity.pcl_Fecha);
+        const day = fecha.getDate().toString().padStart(2, '0');
+        const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
+        const fechaFormateada = `${day}-${month}`;
+        
+        let content = `
+            <div class="class-date"><i class="fas fa-calendar-days me-1"></i>${fechaFormateada}</div>
+            <div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
+            <div class="activity-title"><i class="fas fa-shield-alt me-1"></i>Bloque Protegido</div>
+        `;
+        
+        button.innerHTML = content;
+        // NO agregamos onclick ni data-bs-toggle para que no sea clickeable
         return button;
     }
     
@@ -1880,19 +1902,41 @@ async function solicitarSala(idPlanClase) {
     document.getElementById('action').value = 'solicitar';
     document.getElementById('salaModalTitle').textContent = 'Solicitar Sala';
     
+    // Obtener datos para prellenar el formulario
+    try {
+        const response = await fetch('salas2.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'obtener_datos_solicitud',
+                idPlanClase: idPlanClase
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            // Prellenar campos con datos existentes
+            document.getElementById('campus').value = data.pcl_campus || 'Norte';
+            document.getElementById('nSalas').value = data.pcl_nSalas || 1;
+            document.getElementById('requiereSala').value = data.pcl_DeseaSala || 1;  // ESTA LÍNEA ES CLAVE
+            document.getElementById('observaciones').value = data.observaciones || '';
+        }
+    } catch (error) {
+        console.error('Error al obtener datos:', error);
+        // Valores por defecto si falla la carga
+        document.getElementById('campus').value = 'Norte';
+        document.getElementById('nSalas').value = 1;
+        document.getElementById('requiereSala').value = 1;  // VALOR POR DEFECTO
+    }
+    
     // Obtener el número de alumnos del elemento de la tabla
     const tr = document.querySelector(`tr[data-id="${idPlanClase}"]`);
-    console.log('TR encontrado:', tr);
-    
     if (tr) {
         const alumnosTotales = tr.dataset.alumnos;
-        console.log('Alumnos del dataset:', alumnosTotales);
-        console.log('Tipo de dato:', typeof alumnosTotales);
-        
         document.getElementById('alumnosTotales').value = alumnosTotales || 0;
         calcularAlumnosPorSala();
-    } else {
-        console.error('No se encontró el TR con id:', idPlanClase);
     }
     
     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
@@ -1940,6 +1984,16 @@ async function modificarSala(idPlanClase) {
             document.getElementById('action').value = esAsignada || datos.estado === 3 ? 'modificar_asignada' : 'modificar';
             document.getElementById('campus').value = datos.pcl_campus || 'Norte';
             document.getElementById('nSalas').value = datos.pcl_nSalas || '1';
+			document.getElementById('requiereSala').value = datos.pcl_DeseaSala || 1;
+			
+			 // Mostrar mensajes anteriores en el campo observaciones
+    if (datos.mensajeAnterior) {
+        document.getElementById('observaciones').value = datos.mensajeAnterior;
+        document.getElementById('observaciones').placeholder = 'Escriba aquí su nuevo mensaje...';
+    } else {
+        document.getElementById('observaciones').value = '';
+        document.getElementById('observaciones').placeholder = 'Por favor, describa su requerimiento con el mayor nivel de detalle posible...';
+    }
             document.getElementById('alumnosTotales').value = tr.dataset.alumnos;
             document.getElementById('alumnosTotales').readOnly = true;
             

@@ -1,4 +1,5 @@
 /* Estilos base */
+
 .auto-expand {
     height: auto;
     overflow: hidden;
@@ -289,7 +290,7 @@
 
 /* CSS específico para el asignador masivo */
 .toast-container-masivo {
-    z-index: 1055 !important;
+    z-index: 1060 !important;
     position: fixed !important;
     bottom: 20px !important;
     right: 20px !important;
@@ -307,4 +308,77 @@
 .toast-container-masivo .spinner-border-sm {
     width: 1rem;
     height: 1rem;
+}
+
+
+ .toast, .toast-container {
+        z-index: 1060 !important; /* Mayor que el modal y el backdrop */
+    }
+	
+/* CSS para estados visuales de las horas directas */
+
+
+
+.hours-input {
+    text-align: center;
+    font-weight: 500;
+}
+
+.hours-input.hours-zero {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #6c757d;
+}
+
+.hours-input.hours-positive {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.hours-input.hours-saving {
+    background-color: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
+    position: relative;
+}
+
+.hours-input.hours-saving::after {
+    content: "💾";
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+}
+
+.hours-input.hours-error {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+
+.hours-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Animación sutil para cambios de estado */
+.hours-input {
+    transition: all 0.3s ease;
+}
+
+/* Estilos específicos para Bloque Protegido */
+.activity-button.bloque-protegido {
+    background-color: #17a2b8 !important; /* Color info de Bootstrap */
+    border-color: #17a2b8 !important;
+    cursor: default; /* Cursor normal en lugar de pointer */
+}
+
+.activity-button.bloque-protegido:hover {
+    background-color: #138496 !important; /* Color más oscuro al hover */
+    transform: none; /* Sin efecto de escala al hover */
+}
+
+.activity-button.bloque-protegido .fa-shield-alt {
+    color: #ffffff !important;
 }

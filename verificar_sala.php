@@ -1,4 +1,5 @@
 <?php
+
 include("conexion.php");
 header('Content-Type: application/json');
 
@@ -50,32 +51,44 @@ try {
         exit;
     }
     
-    // Obtener si requieren sala, tanto el tipo actual como el nuevo
-    $queryTiposSala = "SELECT tipo_sesion, pedir_sala FROM pcl_TipoSesion WHERE tipo_sesion IN (?, ?)";
-    $stmtTiposSala = $conn->prepare($queryTiposSala);
-    $stmtTiposSala->bind_param("ss", $tipoActual, $tipoNuevo);
-    $stmtTiposSala->execute();
-    $resultTiposSala = $stmtTiposSala->get_result();
-    
-    $tiposSala = [];
-    while ($row = $resultTiposSala->fetch_assoc()) {
-        $tiposSala[$row['tipo_sesion']] = $row['pedir_sala'];
+    // Función para verificar si un tipo requiere sala
+    function requiereSala($conn, $tipoSesion) {
+        $queryTipoSala = "SELECT pedir_sala FROM pcl_TipoSesion WHERE tipo_sesion = ? LIMIT 1";
+        $stmtTipoSala = $conn->prepare($queryTipoSala);
+        $stmtTipoSala->bind_param("s", $tipoSesion);
+        $stmtTipoSala->execute();
+        $resultTipoSala = $stmtTipoSala->get_result();
+        
+        if ($row = $resultTipoSala->fetch_assoc()) {
+            $requiere = ($row['pedir_sala'] == 1);
+        } else {
+            $requiere = false;
+        }
+        
+        $stmtTipoSala->close();
+        return $requiere;
     }
-    $stmtTiposSala->close();
     
-    // Verificar si hay asignaciones existentes
+    // Verificar si cada tipo requiere sala
+    $tipoActualRequiereSala = requiereSala($conn, $tipoActual);
+    $tipoNuevoRequiereSala = requiereSala($conn, $tipoNuevo);
+    
+    // Verificar si hay asignaciones existentes (cualquier estado excepto liberadas)
     $queryAsignaciones = "SELECT idEstado, COUNT(*) as cantidad 
                          FROM asignacion_piloto 
-                         WHERE idplanclases = ? 
+                         WHERE idplanclases = ? AND idEstado != 4
                          GROUP BY idEstado";
     $stmtAsignaciones = $conn->prepare($queryAsignaciones);
     $stmtAsignaciones->bind_param("i", $idplanclases);
     $stmtAsignaciones->execute();
     $resultAsignaciones = $stmtAsignaciones->get_result();
     
-    $estados = [0 => 0, 1 => 0, 3 => 0, 4 => 0]; // Inicializar contadores
+    $estados = [0 => 0, 1 => 0, 3 => 0]; // Inicializar contadores (sin incluir liberadas)
+    $totalAsignacionesActivas = 0;
+    
     while ($estado = $resultAsignaciones->fetch_assoc()) {
         $estados[$estado['idEstado']] = $estado['cantidad'];
+        $totalAsignacionesActivas += $estado['cantidad'];
     }
     $stmtAsignaciones->close();
     
@@ -83,61 +96,74 @@ try {
     $necesitaConfirmacion = false;
     $mensajeConfirmacion = '';
     
-    // Clasificar el cambio según la tabla de flujo
-    if ($tipoActual === 'Clase') {
+    // REGLA GENERAL: Si pasa de actividad que requiere sala a actividad que NO requiere sala
+    // Y tiene asignaciones activas, debe alertar
+    if ($tipoActualRequiereSala && !$tipoNuevoRequiereSala && $totalAsignacionesActivas > 0) {
+        $necesitaConfirmacion = true;
+        
+        // Personalizar mensaje según el estado de las asignaciones
+        if ($estados[3] > 0) { // Hay salas asignadas/reservadas
+            $mensajeConfirmacion = "Al cambiar a un tipo de actividad que <b>no requiere sala</b>, se eliminarán todas las asignaciones existentes, incluyendo <b>" . $estados[3] . " sala(s) ya asignada(s)</b>.";
+        } else if ($estados[1] > 0) { // Hay modificaciones pendientes
+            $mensajeConfirmacion = "Al cambiar a un tipo de actividad que <b>no requiere sala</b>, se eliminarán todas las solicitudes de sala existentes, incluyendo <b>" . $estados[1] . " modificación(es) pendiente(s)</b>.";
+        } else if ($estados[0] > 0) { // Solo hay solicitudes pendientes
+            $mensajeConfirmacion = "Al cambiar a un tipo de actividad que <b>no requiere sala</b>, se eliminarán todas las solicitudes de sala pendientes (" . $estados[0] . " solicitud(es)).";
+        }
+    }
+    // CASOS ESPECÍFICOS ADICIONALES
+    else if ($tipoActual === 'Clase') {
         if ($tipoNuevo === 'Clase') {
             // Caso 1: De Clase a Clase - Solo confirmar si hay asignaciones confirmadas
             if ($estados[3] > 0) {
                 $necesitaConfirmacion = true;
                 $mensajeConfirmacion = "Este cambio solicitará una modificación de la sala asignada. La reserva actual será cancelada hasta que se asigne una nueva sala.";
             }
-        } else if (isset($tiposSala[$tipoNuevo]) && $tiposSala[$tipoNuevo] == 1) {
-            // Caso 2: De Clase a AG/TP/EV/EX - Siempre confirmar
+        } else if ($tipoNuevoRequiereSala) {
+            // Caso 2: De Clase a otra actividad que requiere sala
+            if ($totalAsignacionesActivas > 0) {
+                $necesitaConfirmacion = true;
+                $mensajeConfirmacion = "Al cambiar de 'Clase' a este tipo de actividad, se eliminarán las asignaciones automáticas y <b>deberá solicitar sala manualmente</b> desde la pestaña 'Salas'.";
+            }
+        }
+        // Caso 3: De Clase a actividad sin sala ya se maneja arriba en la regla general
+    }
+    else if ($tipoActualRequiereSala && $tipoNuevo === 'Clase') {
+        // Caso 4: De actividad con sala a Clase
+        if ($totalAsignacionesActivas > 0) {
             $necesitaConfirmacion = true;
-            $mensajeConfirmacion = "Al cambiar de 'Clase' a este tipo de actividad, se eliminarán las asignaciones automáticas y <b>deberá solicitar sala manualmente</b> desde la pestaña 'Salas'.";
-        } else {
-            // Caso 3: De Clase a VT/SA/TA - Confirmar si hay asignaciones
-            if ($estados[0] > 0 || $estados[1] > 0 || $estados[3] > 0) {
-                $necesitaConfirmacion = true;
-                $mensajeConfirmacion = "Al cambiar a un tipo de actividad que <b>no requiere sala</b>, se eliminarán todas las asignaciones existentes.";
+            if ($estados[3] > 0) {
+                $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se liberarán las <b>" . $estados[3] . " sala(s) asignada(s)</b> y se creará una asignación automática.";
+            } else {
+                $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se eliminarán las solicitudes de sala existentes y se creará una asignación automática.";
             }
-        }
-    } else if (isset($tiposSala[$tipoActual]) && $tiposSala[$tipoActual] == 1) {
-        if ($tipoNuevo === 'Clase') {
-            // Caso 4: De AG/TP/EV/EX a Clase - Confirmar si hay asignaciones
-            if ($estados[0] > 0 || $estados[1] > 0 || $estados[3] > 0) {
-                $necesitaConfirmacion = true;
-                $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se liberarán las salas actuales y se creará una asignación automática.";
-            }
-        } else if (isset($tiposSala[$tipoNuevo]) && $tiposSala[$tipoNuevo] == 1) {
-            // Caso 5: De AG/TP/EV/EX a AG/TP/EV/EX - No necesita confirmación
-            $necesitaConfirmacion = false;
-        } else {
-            // Caso 6: De AG/TP/EV/EX a VT/SA/TA - Confirmar si hay asignaciones
-            if ($estados[0] > 0 || $estados[1] > 0 || $estados[3] > 0) {
-                $necesitaConfirmacion = true;
-                $mensajeConfirmacion = "Al cambiar a un tipo sin sala, se eliminarán todas las asignaciones existentes.";
-            }
-        }
-    } else {
-        if ($tipoNuevo === 'Clase') {
-            // Caso 7: De VT/SA/TA a Clase - No necesita confirmación
-            $necesitaConfirmacion = false;
-        } else if (isset($tiposSala[$tipoNuevo]) && $tiposSala[$tipoNuevo] == 1) {
-            // Caso 8: De VT/SA/TA a AG/TP/EV/EX - No necesita confirmación
-            $necesitaConfirmacion = false;
-        } else {
-            // Caso 9: De VT/SA/TA a VT/SA/TA - No necesita confirmación
-            $necesitaConfirmacion = false;
         }
     }
+    else if ($tipoActualRequiereSala && $tipoNuevoRequiereSala) {
+        // Caso 5: De actividad con sala a otra actividad con sala
+        // Generalmente no necesita confirmación, pero puede alertar sobre cambios de contexto
+        if ($estados[3] > 0) {
+            $necesitaConfirmacion = true;
+            $mensajeConfirmacion = "Al cambiar el tipo de actividad, las salas asignadas mantendrán su estado actual, pero puede ser necesario revisar si son apropiadas para el nuevo tipo de actividad.";
+        }
+    }
+    
+    // Debug info (opcional, remover en producción)
+    $debugInfo = [
+        'tipo_actual' => $tipoActual,
+        'tipo_nuevo' => $tipoNuevo,
+        'tipo_actual_requiere_sala' => $tipoActualRequiereSala,
+        'tipo_nuevo_requiere_sala' => $tipoNuevoRequiereSala,
+        'total_asignaciones_activas' => $totalAsignacionesActivas,
+        'estados' => $estados
+    ];
     
     echo json_encode([
         'success' => true,
         'necesita_confirmacion' => $necesitaConfirmacion,
         'mensaje_confirmacion' => $mensajeConfirmacion,
         'tipo_actual' => $tipoActual,
-        'tipo_nuevo' => $tipoNuevo
+        'tipo_nuevo' => $tipoNuevo,
+        'debug' => $debugInfo // Remover en producción
     ]);
     
 } catch (Exception $e) {

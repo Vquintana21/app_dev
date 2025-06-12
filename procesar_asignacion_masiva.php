@@ -32,20 +32,20 @@ try {
     
     if ($accion === 'asignar') {
         // PASO 1: Primero poner vigencia=0 a TODOS los docentes de las actividades seleccionadas
-        foreach ($actividades as $idplanclases) {
-            $idplanclases = (int)$idplanclases;
-            
-            $queryDesactivar = "UPDATE docenteclases 
-                               SET vigencia = 0,
-                                   fechaModificacion = NOW(),
-                                   usuarioModificacion = 'asignacion_masiva'
-                               WHERE idPlanClases = $idplanclases
-                               AND idCurso = $idCurso";
-            
-            if (!mysqli_query($conn, $queryDesactivar)) {
-                throw new Exception("Error al desactivar docentes existentes: " . mysqli_error($conn));
-            }
-        }
+       // foreach ($actividades as $idplanclases) {
+       //     $idplanclases = (int)$idplanclases;
+       //     
+       //     $queryDesactivar = "UPDATE docenteclases 
+       //                        SET vigencia = 0,
+       //                            fechaModificacion = NOW(),
+       //                            usuarioModificacion = 'asignacion_masiva'
+       //                        WHERE idPlanClases = $idplanclases
+       //                        AND idCurso = $idCurso";
+       //     
+       //     if (!mysqli_query($conn, $queryDesactivar)) {
+       //         throw new Exception("Error al desactivar docentes existentes: " . mysqli_error($conn));
+       //     }
+       // }
         
         // PASO 2: Ahora asignar SOLO los docentes seleccionados
         foreach ($actividades as $idplanclases) {

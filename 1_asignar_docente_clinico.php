@@ -1,4 +1,5 @@
-<?php 
+<?php
+
 //asignar docentes clinico.php
 header ('Content-type: text/html; charset=utf-8');
 session_start(); 
@@ -49,7 +50,7 @@ if($rut!='' && $control_profe > 0){
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     
     <!-- CSS personalizado -->
-    <link href="estilo2.css" rel="stylesheet">
+    <link href="estilo.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     
@@ -271,7 +272,9 @@ if($rut!='' && $control_profe > 0){
         reloadDocentesTable();
     });
 
-  function reloadDocentesTable() {
+// Reemplaza la función reloadDocentesTable en 1_asignar_docente_clinico.php
+
+function reloadDocentesTable() {
     // Asegurarse de que estamos actualizando el elemento correcto
     const tablaDocentesBody = document.querySelector('#bordered-justified-docente #docentes-table-body');
     
@@ -281,7 +284,7 @@ if($rut!='' && $control_profe > 0){
     }
 
     $.ajax({
-        url: 'get_docentes_table_clinico.php',
+        url: 'get_docentes_table_clinico.php', // ✅ CAMBIO AQUÍ
         type: 'GET',
         data: {
             idcurso: <?php echo $_GET['idcurso']; ?>
@@ -289,6 +292,13 @@ if($rut!='' && $control_profe > 0){
         success: function(html) {
             // Actualizar la tabla en la pestaña correcta
             $(tablaDocentesBody).html(html);
+            
+            // ✅ AGREGAR: Reinicializar las horas después de recargar
+            setTimeout(() => {
+                if (typeof setupHorasDirectasClinico === 'function') {
+                    setupHorasDirectasClinico();
+                }
+            }, 200);
         },
         error: function() {
             $(tablaDocentesBody).html('<tr><td colspan="6" class="text-center text-danger">Error al cargar los datos</td></tr>');

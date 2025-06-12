@@ -317,7 +317,7 @@ $foto_docente = InfoDocenteUcampus($rut);
                    
 				   <h5 class="card-title">¿Necesitas ayuda?</h5>
 				    
-					Queremos responderte lo más rápido posible. Te invitamos a leer las <a href="https://dpi.med.uchile.cl/calendario/pages-faq.html"> <b>preguntas frecuentes</b></a>
+					Queremos responderte lo más rápido posible. Te invitamos a leer las <a href="pages-faq.php" target='_blank'> <b>preguntas frecuentes</b></a>
 				   
 					<h5 class="card-title">¿No encontraste lo que buscabas?</h5>
 					

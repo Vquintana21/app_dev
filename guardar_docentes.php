@@ -20,13 +20,13 @@ try {
     }
 
     // Primero desactivar todos los docentes existentes
-    $queryDesactivar = "UPDATE docenteclases SET vigencia = 0 WHERE idPlanClases = ?";
-    $stmtDesactivar = $conn->prepare($queryDesactivar);
-    if (!$stmtDesactivar) {
-        throw new Exception('Error preparando query de desactivación: ' . $conn->error);
-    }
-    $stmtDesactivar->bind_param("i", $idplanclases);
-    $stmtDesactivar->execute();
+     $queryDesactivar = "UPDATE docenteclases SET vigencia = 0 WHERE idPlanClases = ?";
+     $stmtDesactivar = $conn->prepare($queryDesactivar);
+     if (!$stmtDesactivar) {
+         throw new Exception('Error preparando query de desactivación: ' . $conn->error);
+     }
+     $stmtDesactivar->bind_param("i", $idplanclases);
+     $stmtDesactivar->execute();
 
     // Procesar cada docente
     foreach ($docentesSeleccionados as $rutDocente) {
