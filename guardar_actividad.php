@@ -48,9 +48,9 @@ try {
     * CÁLCULO DINÁMICO DE pcl_nSalas SEGÚN TIPO DE ACTIVIDAD
     * 
     * Reglas específicas para el campo pcl_nSalas según el tipo de actividad:
-    * - CLASE: siempre nsalas = 1
-    * - Actividades que requieren sala (AG/TP/EV/EX): mantener si > 1, sino = 1
-    * - Actividades que NO requieren sala (PC/SA/TA/VT): nsalas = 0
+    * - CLASE: siempre pcl_nSalas = 1, pcl_DeseaSala=1
+    * - Actividades que requieren sala (AG/TP/EV/EX): mantener si > 1, sino = 1, pcl_DeseaSala=1
+    * - Actividades que NO requieren sala (PC/SA/TA/VT): nsalas = 0, pcl_DeseaSala=0
     */
    
    $nsalasCalculado = 1;
@@ -134,31 +134,43 @@ try {
    }
 
    // Verificar si necesitamos actualizar vigencia de docentes
-   if ($tipoAnterior != $tipo) {
-       $queryPermiteDocentes = "SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1";
-       $stmtPermiteDocentes = $conn->prepare($queryPermiteDocentes);
-       $stmtPermiteDocentes->bind_param("s", $tipo);
-       $stmtPermiteDocentes->execute();
-       $resultPermiteDocentes = $stmtPermiteDocentes->get_result();
-       $permiteDocentes = $resultPermiteDocentes->fetch_assoc()['docentes'];
-       $stmtPermiteDocentes->close();
+   if ($tipoAnterior !== $tipo) {
+    // Obtener si tipo anterior permitía docentes
+    $permiteDocentesAnterior = 1;
+    $stmtDocentesAnt = $conn->prepare("SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1");
+    $stmtDocentesAnt->bind_param("s", $tipoAnterior);
+    $stmtDocentesAnt->execute();
+    $resAnt = $stmtDocentesAnt->get_result();
+    if ($rowAnt = $resAnt->fetch_assoc()) {
+        $permiteDocentesAnterior = (int)$rowAnt['docentes'];
+    }
+    $stmtDocentesAnt->close();
 
-       // Si cambiamos a un tipo que NO permite docentes
-       if ($permiteDocentes == 0) {
-           $queryUpdateVigencia = "UPDATE docenteclases 
-                                  SET vigencia = 0, 
-                                      fechaModificacion = NOW(),
-                                      usuarioModificacion = 'sistema'
-                                  WHERE idPlanClases = ? AND vigencia = 1";
-           $stmtUpdateVigencia = $conn->prepare($queryUpdateVigencia);
-           $stmtUpdateVigencia->bind_param("i", $idplanclases);
+    // Obtener si tipo nuevo permite docentes
+    $permiteDocentesNuevo = 1;
+    $stmtDocentesNuevo = $conn->prepare("SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1");
+    $stmtDocentesNuevo->bind_param("s", $tipo);
+    $stmtDocentesNuevo->execute();
+    $resNuevo = $stmtDocentesNuevo->get_result();
+    if ($rowNuevo = $resNuevo->fetch_assoc()) {
+        $permiteDocentesNuevo = (int)$rowNuevo['docentes'];
+    }
+    $stmtDocentesNuevo->close();
 
-           if (!$stmtUpdateVigencia->execute()) {
-               // Error silencioso para no interrumpir el flujo
-           }
-           $stmtUpdateVigencia->close();
-       }
-   }
+    // Solo si el tipo anterior permitía docentes y el nuevo NO
+    if ($permiteDocentesAnterior === 1 && $permiteDocentesNuevo === 0) {
+        $queryUpdateVigencia = "UPDATE docenteclases 
+                                SET vigencia = 0, 
+                                    fechaModificacion = NOW(),
+                                    usuarioModificacion = 'sistema'
+                                WHERE idPlanClases = ? AND vigencia = 1";
+        $stmtUpdateVigencia = $conn->prepare($queryUpdateVigencia);
+        $stmtUpdateVigencia->bind_param("i", $idplanclases);
+        $stmtUpdateVigencia->execute();
+        $stmtUpdateVigencia->close();
+    }
+}
+
    
    /* 
     * GESTIÓN DE SALAS SEGÚN TIPO DE ACTIVIDAD

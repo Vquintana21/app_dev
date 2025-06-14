@@ -2,17 +2,51 @@
 
 include("conexion.php");
 
+function estaDisponibleFinal($conn, $idSala, $fecha, $horaInicio, $horaFin) {
+    $queryReserva = "SELECT * FROM reserva 
+                     WHERE re_idSala = ?
+                     AND re_FechaReserva = ?
+                     AND ((re_HoraReserva <= ? AND re_HoraTermino > ?) 
+                          OR (re_HoraReserva < ? AND re_HoraTermino >= ?) 
+                          OR (? <= re_HoraReserva AND ? >= re_HoraTermino))";
+    
+    $stmtReserva = $conn->prepare($queryReserva);
+    $stmtReserva->bind_param("ssssssss", 
+        $idSala, $fecha, 
+        $horaInicio, $horaFin,
+        $horaInicio, $horaFin,
+        $horaInicio, $horaFin
+    );
+    $stmtReserva->execute();
+    $resultReserva = $stmtReserva->get_result();
+    
+    $disponible = $resultReserva->num_rows === 0;
+    $stmtReserva->close();
+    
+    return $disponible;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     
     if (isset($data['action'])) {
         switch ($data['action']) {
-            case 'solicitar':
+ case 'solicitar':
     try {
         $conn->begin_transaction();
         
         // Verificar si requiere sala
         $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
+        
+        // NUEVA LÓGICA: Procesar movilidad reducida y cercanía
+        $movilidadReducida = isset($data['movilidadReducida']) ? $data['movilidadReducida'] : 'No';
+        if ($movilidadReducida === 'Si') {
+            $pcl_movilidadReducida = 'S';
+            $pcl_Cercania = 1;  // Salas deben estar cerca
+        } else {
+            $pcl_movilidadReducida = 'N';
+            $pcl_Cercania = 0;  // Sin restricción de cercanía
+        }
         
         // Preparar observaciones para planclases
         $observacionesPlanclases = "";
@@ -20,20 +54,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $observacionesPlanclases = date('Y-m-d H:i:s') . " - " . $data['observaciones'];
         }
         
-        // SIEMPRE actualizar planclases con todos los datos
+        // ACTUALIZADA: Incluir pcl_movilidadReducida y pcl_Cercania
         $stmt = $conn->prepare("UPDATE planclases 
                               SET pcl_nSalas = ?, 
                                   pcl_campus = ?, 
                                   pcl_DeseaSala = ?,
+                                  pcl_movilidadReducida = ?,
+                                  pcl_Cercania = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isissi", 
+        $stmt->bind_param("isissisi", 
             $data['nSalas'], 
             $data['campus'], 
-            $requiereSala, 
+            $requiereSala,
+            $pcl_movilidadReducida,  // 'S' o 'N'
+            $pcl_Cercania,           // 1 o 0
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -68,12 +106,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $observacionesAsignacion = date('Y-m-d H:i:s') . " - " . $data['observaciones'];
         }
         
-        // Insertar en asignacion_piloto con todos los datos necesarios
+        // ACTUALIZADA: Usar valor dinámico de cercanía en lugar de 0
         $queryInsert = "INSERT INTO asignacion_piloto (
             idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
             fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
             NombreCurso, Comentario, cercania, TipoAsignacion, idEstado, Usuario, timestamp
-        ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'M', 0, ?, NOW())";
+        ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'M', 0, ?, NOW())";
         
         $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
         
@@ -82,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Crear múltiples registros según el número de salas
         for ($i = 0; $i < $data['nSalas']; $i++) {
             $stmtInsert->bind_param(
-                "iisssssisssss",
+                "iisssssissssis",
                 $data['idplanclases'],
                 $dataPlanclases['pcl_alumnos'],
                 $dataPlanclases['pcl_TipoSesion'],
@@ -95,6 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $dataPlanclases['pcl_Seccion'],
                 $dataPlanclases['pcl_AsiNombre'],
                 $observacionesAsignacion,
+                $pcl_Cercania,  // USAR VALOR DINÁMICO EN LUGAR DE 0
                 $usuario
             );
             $stmtInsert->execute();
@@ -108,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(500);
         echo json_encode(['error' => $e->getMessage()]);
     }
-    break;
+    break;          
 
 case 'modificar':
     try {
@@ -117,26 +156,40 @@ case 'modificar':
         // Verificar si requiere sala
         $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
         
+        // NUEVA LÓGICA: Procesar movilidad reducida y cercanía
+        $movilidadReducida = isset($data['movilidadReducida']) ? $data['movilidadReducida'] : 'No';
+        if ($movilidadReducida === 'Si') {
+            $pcl_movilidadReducida = 'S';
+            $pcl_Cercania = 1;  // Salas deben estar cerca
+        } else {
+            $pcl_movilidadReducida = 'N';
+            $pcl_Cercania = 0;  // Sin restricción de cercanía
+        }
+        
         // Preparar observaciones para planclases
         $observacionesPlanclases = "";
         if (isset($data['observaciones']) && !empty($data['observaciones'])) {
             $observacionesPlanclases = date('Y-m-d H:i:s') . " - MODIFICACIÓN: " . $data['observaciones'];
         }
         
-        // SIEMPRE actualizar planclases con todos los datos
+        // ACTUALIZADA: Incluir pcl_movilidadReducida y pcl_Cercania
         $stmt = $conn->prepare("UPDATE planclases 
                               SET pcl_nSalas = ?, 
                                   pcl_campus = ?, 
                                   pcl_DeseaSala = ?,
+                                  pcl_movilidadReducida = ?,
+                                  pcl_Cercania = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isissi", 
+        $stmt->bind_param("isissisi", 
             $data['nSalas'], 
             $data['campus'], 
-            $requiereSala, 
+            $requiereSala,
+            $pcl_movilidadReducida,  // 'S' o 'N'
+            $pcl_Cercania,           // 1 o 0
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -199,16 +252,18 @@ case 'modificar':
                 }
             }
             
-            // Actualizar asignacion_piloto (solo estado 0)
+            // ACTUALIZADA: Incluir cercanía en la actualización de asignacion_piloto
             $stmt = $conn->prepare("UPDATE asignacion_piloto 
                                   SET Comentario = ?,
                                       nAlumnos = ?,
-                                      campus = ?
+                                      campus = ?,
+                                      cercania = ?
                                   WHERE idplanclases = ? AND idEstado = 0");
-            $stmt->bind_param("sisi", 
+            $stmt->bind_param("ssiii", 
                 $nuevaObservacionAsignacion, 
                 $dataPlanclases['pcl_alumnos'],
                 $data['campus'],
+                $pcl_Cercania,  // ACTUALIZAR CERCANÍA
                 $data['idplanclases']
             );
             $stmt->execute();
@@ -217,19 +272,19 @@ case 'modificar':
             $diff = $data['nSalas'] - $currentState['count'];
             
             if ($diff > 0) {
-                // Agregar nuevas asignaciones con todos los campos
+                // ACTUALIZADA: Usar valor dinámico de cercanía en nuevas asignaciones
                 $queryInsert = "INSERT INTO asignacion_piloto (
                     idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
                     fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
                     NombreCurso, Comentario, cercania, TipoAsignacion, idEstado, Usuario, timestamp
-                ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'M', 0, ?, NOW())";
+                ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'M', 0, ?, NOW())";
                 
                 $stmtInsert = $conn->prepare($queryInsert);
                 $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
                 
                 for ($i = 0; $i < $diff; $i++) {
                     $stmtInsert->bind_param(
-                        "iisssssisssss",
+                        "iisssssissssis",
                         $data['idplanclases'],
                         $dataPlanclases['pcl_alumnos'],
                         $dataPlanclases['pcl_TipoSesion'],
@@ -242,6 +297,7 @@ case 'modificar':
                         $dataPlanclases['pcl_Seccion'],
                         $dataPlanclases['pcl_AsiNombre'],
                         $nuevaObservacionAsignacion,
+                        $pcl_Cercania,  // USAR VALOR DINÁMICO
                         $usuario
                     );
                     $stmtInsert->execute();
@@ -271,24 +327,38 @@ case 'modificar_asignada':
     try {
         $conn->begin_transaction();
         
+        // NUEVA LÓGICA: Procesar movilidad reducida y cercanía
+        $movilidadReducida = isset($data['movilidadReducida']) ? $data['movilidadReducida'] : 'No';
+        if ($movilidadReducida === 'Si') {
+            $pcl_movilidadReducida = 'S';
+            $pcl_Cercania = 1;  // Salas deben estar cerca
+        } else {
+            $pcl_movilidadReducida = 'N';
+            $pcl_Cercania = 0;  // Sin restricción de cercanía
+        }
+        
         // Preparar observaciones para planclases
         $observacionesPlanclases = "";
         if (isset($data['observaciones']) && !empty($data['observaciones'])) {
             $observacionesPlanclases = date('Y-m-d H:i:s') . " - MODIFICACIÓN DE ASIGNADA: " . $data['observaciones'];
         }
         
-        // SIEMPRE actualizar planclases con todos los datos
+        // ACTUALIZADA: Incluir pcl_movilidadReducida y pcl_Cercania
         $stmt = $conn->prepare("UPDATE planclases 
                               SET pcl_nSalas = ?, 
                                   pcl_campus = ?,
+                                  pcl_movilidadReducida = ?,
+                                  pcl_Cercania = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isssi", 
+        $stmt->bind_param("isssssi", 
             $data['nSalas'], 
-            $data['campus'], 
+            $data['campus'],
+            $pcl_movilidadReducida,  // 'S' o 'N'
+            $pcl_Cercania,           // 1 o 0
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -318,7 +388,7 @@ case 'modificar_asignada':
             $observacionModificacion = date('Y-m-d H:i:s') . " - MODIFICACIÓN DE ASIGNADA: " . $data['observaciones'];
         }
         
-        // 4. Cambiar TODAS las asignaciones de estado 3 a estado 1
+        // ACTUALIZADA: Cambiar TODAS las asignaciones de estado 3 a estado 1 e incluir cercanía
         $stmt = $conn->prepare("UPDATE asignacion_piloto 
                               SET idEstado = 1,
                                   Comentario = CASE 
@@ -326,13 +396,15 @@ case 'modificar_asignada':
                                       ELSE CONCAT(Comentario, '\n\n', ?)
                                   END,
                                   nAlumnos = ?,
-                                  campus = ?
+                                  campus = ?,
+                                  cercania = ?
                               WHERE idplanclases = ? AND idEstado = 3");
-        $stmt->bind_param("ssisi", 
+        $stmt->bind_param("sssisi", 
             $observacionModificacion,
             $observacionModificacion,
             $dataPlanclases['pcl_alumnos'],
             $data['campus'],
+            $pcl_Cercania,  // ACTUALIZAR CERCANÍA
             $data['idplanclases']
         );
         $stmt->execute();
@@ -341,12 +413,12 @@ case 'modificar_asignada':
         $diff = intval($data['nSalas']) - $currentAssigned;
         
         if ($diff > 0) {
-            // Necesitamos MÁS salas: agregar nuevas asignaciones en estado 1
+            // ACTUALIZADA: Usar valor dinámico de cercanía en nuevas asignaciones
             $queryInsert = "INSERT INTO asignacion_piloto (
                 idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
                 fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
                 NombreCurso, Comentario, cercania, TipoAsignacion, idEstado, Usuario, timestamp
-            ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'M', 1, ?, NOW())";
+            ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'M', 1, ?, NOW())";
             
             $stmtInsert = $conn->prepare($queryInsert);
             $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
@@ -357,7 +429,7 @@ case 'modificar_asignada':
             
             for ($i = 0; $i < $diff; $i++) {
                 $stmtInsert->bind_param(
-                    "iisssssisssss",
+                    "iisssssissssis",
                     $data['idplanclases'],
                     $dataPlanclases['pcl_alumnos'],
                     $dataPlanclases['pcl_TipoSesion'],
@@ -370,6 +442,7 @@ case 'modificar_asignada':
                     $dataPlanclases['pcl_Seccion'],
                     $dataPlanclases['pcl_AsiNombre'],
                     $comentarioNuevo,
+                    $pcl_Cercania,  // USAR VALOR DINÁMICO
                     $usuario
                 );
                 $stmtInsert->execute();
@@ -416,8 +489,9 @@ case 'modificar_asignada':
 
 case 'obtener_datos_solicitud':
     try {
-        // Obtener datos básicos y observaciones
-        $stmt = $conn->prepare("SELECT p.pcl_campus, p.pcl_nSalas, p.pcl_DeseaSala, p.pcl_observaciones,
+        // ACTUALIZADA: Incluir pcl_movilidadReducida en la consulta
+        $stmt = $conn->prepare("SELECT p.pcl_campus, p.pcl_nSalas, p.pcl_DeseaSala, 
+                               p.pcl_observaciones, p.pcl_movilidadReducida,
                                (SELECT COUNT(*) FROM asignacion_piloto 
                                 WHERE idplanclases = p.idplanclases 
                                 AND idEstado = 3) as salas_asignadas
@@ -436,11 +510,15 @@ case 'obtener_datos_solicitud':
                 $mensajeAnterior = "=== MENSAJES ANTERIORES ===\n" . $datos['pcl_observaciones'] . "\n\n=== NUEVO MENSAJE ===\n";
             }
             
+            // NUEVA LÓGICA: Convertir S/N a Si/No para el frontend
+            $movilidadReducidaFrontend = ($datos['pcl_movilidadReducida'] === 'S') ? 'Si' : 'No';
+            
             echo json_encode([
                 'success' => true,
                 'pcl_campus' => $datos['pcl_campus'],
                 'pcl_nSalas' => $datos['pcl_nSalas'],
                 'pcl_DeseaSala' => $datos['pcl_DeseaSala'],
+                'pcl_movilidadReducida' => $movilidadReducidaFrontend,  // NUEVO CAMPO
                 'observaciones' => $datos['pcl_observaciones'],
                 'mensajeAnterior' => $mensajeAnterior,
                 'estado' => $datos['salas_asignadas'] > 0 ? 3 : 0
@@ -513,9 +591,302 @@ case 'liberar':
         echo json_encode(['error' => $e->getMessage()]);
     }
     break;
+	
+	// salas computacion
+	
+	case 'guardar_con_computacion':
+    try {
+        $conn->begin_transaction();
+        
+        // Validar parámetros
+        if (!isset($data['idplanclases']) || !isset($data['salas_computacion'])) {
+            throw new Exception('Parámetros faltantes para reserva de computación');
         }
+        
+        $idplanclases = (int)$data['idplanclases'];
+        $salasComputacion = $data['salas_computacion'];
+        $observaciones = isset($data['observaciones']) ? $data['observaciones'] : '';
+        $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
+        $nSalasTotales = (int)$data['nSalas'];
+        $campus = $data['campus'];
+        
+        // NUEVA LÓGICA: Procesar movilidad reducida (viene del frontend)
+        $movilidadReducida = isset($data['movilidadReducida']) ? $data['movilidadReducida'] : 'No';
+        if ($movilidadReducida === 'Si') {
+            $pcl_movilidadReducida = 'S';
+            $pcl_Cercania = 1;  // Salas deben estar cerca
+        } else {
+            $pcl_movilidadReducida = 'N';
+            $pcl_Cercania = 0;  // Sin restricción de cercanía
+        }
+        
+        // Obtener datos de planclases
+        $queryPlanclases = "SELECT * FROM planclases WHERE idplanclases = ?";
+        $stmtPlanclases = $conn->prepare($queryPlanclases);
+        $stmtPlanclases->bind_param("i", $idplanclases);
+        $stmtPlanclases->execute();
+        $resultPlanclases = $stmtPlanclases->get_result();
+        $dataPlanclases = $resultPlanclases->fetch_assoc();
+        
+        if (!$dataPlanclases) {
+            throw new Exception('No se encontró la actividad');
+        }
+        
+        // Validar disponibilidad nuevamente antes de guardar
+        $salasNoDisponibles = [];
+        foreach ($salasComputacion as $idSala) {
+            if (!estaDisponibleFinal($conn, $idSala, $dataPlanclases['pcl_Fecha'], 
+                                    $dataPlanclases['pcl_Inicio'], $dataPlanclases['pcl_Termino'])) {
+                $salasNoDisponibles[] = $idSala;
+            }
+        }
+        
+        if (!empty($salasNoDisponibles)) {
+            throw new Exception('Las siguientes salas ya no están disponibles: ' . implode(', ', $salasNoDisponibles));
+        }
+        
+        // ACTUALIZADA: Incluir pcl_movilidadReducida y pcl_Cercania en planclases
+        $observacionesPlanclases = "";
+        if (!empty($observaciones)) {
+            $observacionesPlanclases = date('Y-m-d H:i:s') . " - " . $observaciones;
+        }
+        
+        $stmt = $conn->prepare("UPDATE planclases 
+                              SET pcl_nSalas = ?, 
+                                  pcl_campus = ?, 
+                                  pcl_DeseaSala = ?,
+                                  pcl_movilidadReducida = ?,
+                                  pcl_Cercania = ?,
+                                  pcl_observaciones = CASE 
+                                      WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
+                                      ELSE CONCAT(pcl_observaciones, '\n\n', ?)
+                                  END
+                              WHERE idplanclases = ?");
+        $stmt->bind_param("isissisi", 
+            $nSalasTotales, 
+            $campus, 
+            $requiereSala,
+            $pcl_movilidadReducida,  // 'S' o 'N'
+            $pcl_Cercania,           // 1 o 0
+            $observacionesPlanclases,
+            $observacionesPlanclases,
+            $idplanclases
+        );
+        $stmt->execute();
+        
+        // Crear comentario automático
+        $nombresSalas = array_map('ucfirst', $salasComputacion);
+        $comentarioAuto = date('Y-m-d H:i:s') . " - SISTEMA: Reserva automática de sala(s) de computación: " . implode(', ', $nombresSalas);
+        
+        if (!empty($observaciones)) {
+            $comentarioCompleto = $observaciones . "\n\n" . $comentarioAuto;
+        } else {
+            $comentarioCompleto = $comentarioAuto;
+        }
+        
+        // Usuario para el registro (usar sesión o valor por defecto)
+        $usuario = isset($_SESSION['Rut']) ? $_SESSION['Rut'] : '016784781K';
+        
+        // ACTUALIZADA: Usar valor dinámico de cercanía en asignacion_piloto
+        $queryInsert = "INSERT INTO asignacion_piloto (
+            idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
+            fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
+            NombreCurso, Comentario, cercania, TipoAsignacion, idEstado, Usuario, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'C', 3, ?, NOW())";
+        
+        $stmtInsert = $conn->prepare($queryInsert);
+        
+        if (!$stmtInsert) {
+            throw new Exception('Error preparando query asignacion_piloto: ' . $conn->error);
+        }
+        
+        foreach ($salasComputacion as $idSala) {
+            // Obtener capacidad de la sala
+            $queryCapacidad = "SELECT sa_Capacidad FROM sala_reserva WHERE idSala = ?";
+            $stmtCapacidad = $conn->prepare($queryCapacidad);
+            
+            if (!$stmtCapacidad) {
+                throw new Exception('Error preparando query capacidad: ' . $conn->error);
+            }
+            
+            $stmtCapacidad->bind_param("s", $idSala);
+            $stmtCapacidad->execute();
+            $resultCapacidad = $stmtCapacidad->get_result();
+            $rowCapacidad = $resultCapacidad->fetch_assoc();
+            
+            if (!$rowCapacidad) {
+                throw new Exception('No se encontró la sala de computación: ' . $idSala);
+            }
+            
+            $capacidadSala = $rowCapacidad['sa_Capacidad'];
+            $stmtCapacidad->close();
+            
+            // ACTUALIZADA: Insertar en asignacion_piloto con cercanía dinámica
+            $stmtInsert->bind_param(
+                "isiisssssissssis",
+                $idplanclases,
+                $idSala,
+                $capacidadSala,
+                $dataPlanclases['pcl_alumnos'],
+                $dataPlanclases['pcl_TipoSesion'],
+                $campus,
+                $dataPlanclases['pcl_Fecha'],
+                $dataPlanclases['pcl_Inicio'],
+                $dataPlanclases['pcl_Termino'],
+                $dataPlanclases['cursos_idcursos'],
+                $dataPlanclases['pcl_AsiCodigo'],
+                $dataPlanclases['pcl_Seccion'],
+                $dataPlanclases['pcl_AsiNombre'],
+                $comentarioCompleto,
+                $pcl_Cercania,  // USAR VALOR DINÁMICO EN LUGAR DE 0
+                $usuario
+            );
+            
+            if (!$stmtInsert->execute()) {
+                throw new Exception('Error insertando en asignacion_piloto: ' . $stmtInsert->error);
+            }
+            
+            // Insertar en tabla reserva_2 para bloquear la sala (sin cambios aquí)
+            $queryReserva = "INSERT INTO reserva_2 (
+                re_idSala, 
+                re_FechaReserva, 
+                re_HoraReserva, 
+                re_HoraTermino, 
+                re_idCurso,
+                re_labelCurso,
+                re_Observacion,
+                re_FechaRealizacion,
+                re_idRepeticion,
+                re_idResponsable,
+                re_RegUsu, 
+                re_RegFecha
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?, NOW())";
+            
+            $stmtReserva = $conn->prepare($queryReserva);
+            
+            if (!$stmtReserva) {
+                throw new Exception('Error preparando query reserva_2: ' . $conn->error);
+            }
+            
+            // Preparar datos específicos para la reserva
+            $labelCurso = $dataPlanclases['pcl_AsiCodigo'] . "-" . $dataPlanclases['pcl_Seccion'];
+            $observacionReserva = "RESERVA AUTOMÁTICA COMPUTACIÓN - " . $dataPlanclases['pcl_AsiNombre'] . " - " . $dataPlanclases['pcl_tituloActividad'];
+            
+            // Obtener RUT de sesión para responsable
+            $rutResponsable = isset($_SESSION['Rut']) ? $_SESSION['Rut'] : $usuario;
+            
+            $stmtReserva->bind_param("ssssssssss", 
+                $idSala, 
+                $dataPlanclases['pcl_Fecha'],
+                $dataPlanclases['pcl_Inicio'],
+                $dataPlanclases['pcl_Termino'],
+                $dataPlanclases['cursos_idcursos'],
+                $labelCurso,
+                $observacionReserva,
+                $idplanclases,  // re_idRepeticion
+                $rutResponsable, // re_idResponsable
+                $usuario        // re_RegUsu
+            );
+            
+            if (!$stmtReserva->execute()) {
+                throw new Exception('Error insertando en reserva_2: ' . $stmtReserva->error);
+            }
+            
+            $stmtReserva->close();
+        }
+        
+        // Si pidió más salas que las de computación reservadas, crear solicitudes normales
+        $salasComputacionReservadas = count($salasComputacion);
+        $salasRestantes = $nSalasTotales - $salasComputacionReservadas;
+        
+        if ($salasRestantes > 0) {
+            $comentarioSalasNormales = $observaciones . "\n\n" . 
+                                     date('Y-m-d H:i:s') . " - SISTEMA: Solicitud de {$salasRestantes} sala(s) adicional(es) - Ya reservadas {$salasComputacionReservadas} sala(s) de computación";
+            
+            // ACTUALIZADA: Usar valor dinámico de cercanía para salas adicionales
+            for ($i = 0; $i < $salasRestantes; $i++) {
+                $stmtInsert->bind_param(
+                    "isiisssssissssis",
+                    $idplanclases,
+                    '', // Sin sala específica
+                    0,  // Sin capacidad específica
+                    $dataPlanclases['pcl_alumnos'],
+                    $dataPlanclases['pcl_TipoSesion'],
+                    $campus,
+                    $dataPlanclases['pcl_Fecha'],
+                    $dataPlanclases['pcl_Inicio'],
+                    $dataPlanclases['pcl_Termino'],
+                    $dataPlanclases['cursos_idcursos'],
+                    $dataPlanclases['pcl_AsiCodigo'],
+                    $dataPlanclases['pcl_Seccion'],
+                    $dataPlanclases['pcl_AsiNombre'],
+                    $comentarioSalasNormales,
+                    $pcl_Cercania,  // USAR VALOR DINÁMICO
+                    $usuario
+                );
+                
+                if (!$stmtInsert->execute()) {
+                    throw new Exception('Error insertando sala adicional en asignacion_piloto: ' . $stmtInsert->error);
+                }
+            }
+        }
+        
+        // Cerrar statement de insert
+        $stmtInsert->close();
+        
+        $conn->commit();
+        
+        $mensajeExito = "Reserva exitosa: " . implode(', ', $nombresSalas);
+        if ($salasRestantes > 0) {
+            $mensajeExito .= " + {$salasRestantes} sala(s) adicional(es) solicitada(s)";
+        }
+        
+        // Agregar información de movilidad reducida al mensaje
+        if ($movilidadReducida === 'Si') {
+            $mensajeExito .= " (Configurado para movilidad reducida - salas cercanas)";
+        }
+        
+        echo json_encode([
+            'success' => true,
+            'message' => $mensajeExito,
+            'salas_computacion_reservadas' => $salasComputacion,
+            'salas_normales_solicitadas' => $salasRestantes,
+            'movilidad_reducida' => $movilidadReducida,
+            'cercania' => $pcl_Cercania
+        ]);
+        
+    } catch (Exception $e) {
+        if ($conn && $conn->ping()) {
+            $conn->rollback();
+        }
+        
+        // Log del error completo
+        error_log("Error en guardar_con_computacion: " . $e->getMessage());
+        error_log("Línea: " . $e->getLine());
+        error_log("Archivo: " . $e->getFile());
+        
+        http_response_code(500);
+        echo json_encode([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'debug_info' => [
+                'line' => $e->getLine(),
+                'file' => basename($e->getFile())
+            ]
+        ]);
+    }
+    break;
+	
+	// fin salas compu
+	
+        }
+		
+		
         exit;
     }
+	
+	
+
 }
 
 // Resto del código HTML permanece igual...
@@ -799,7 +1170,7 @@ echo '</td>';
                         <select class="form-select" id="campus" name="campus" required>
                             <option value="Norte">Norte</option>
                             <option value="Sur">Sur</option>
-                            <option value="Centro">Centro</option>
+                            <option value="Occidente">Occidente </option>
                         </select>
                     </div>
 <hr>
@@ -835,12 +1206,66 @@ echo '</td>';
 							<small class="text-muted">Este valor viene predefinido del curso</small>
 						</div>
 
-                    <div class="mb-3">
-							<label class="form-label">N° de alumnos por sala</label>
-							<input type="number" class="form-control" id="alumnosPorSala" name="alumnosPorSala" readonly>
-							<small class="text-muted">Este valor se calcula automáticamente redondeando hacia arriba</small>
-						
+                   <div class="mb-3">
+						<label for="alumnosPorSala" class="form-label">N° de alumnos por sala</label>
+						<div class="input-group">
+							<input type="number" class="form-control" id="alumnosPorSala" name="alumnosPorSala" 
+								   placeholder="Ingrese cantidad" min="1" onchange="actualizarSalasDisponibles()">
+							<button class="btn btn-outline-success" type="button" id="btnSalasDisponibles" 
+									onclick="mostrarSalasDisponibles()" style="display: none;">
+								<i class="bi bi-building"></i> 
+								<span id="numeroSalasDisponibles">0</span> disponibles
+							</button>
+						</div>
+						<div class="form-text">
+							<small class="text-muted">Este valor se calcula automáticamente según el número total de alumnos y salas requeridas.</small>
+						</div>
+					</div>
+					
+					<div id="seccion-computacion" style="display: none;">
+    <hr>
+    <div class="mb-3">
+        <h6 class="text-primary">
+            <i class="bi bi-pc-display me-2"></i>
+            Salas de Computación Disponibles
+        </h6>
+        
+        <div class="alert alert-info alert-sm">
+            <i class="bi bi-info-circle me-1"></i>
+            <small>
+                Las salas de computación son recursos limitados. Solo se asignan si toda la sección puede usar el recurso de manera efectiva.
+            </small>
+        </div>
+        
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="deseaComputacion">
+            <label class="form-check-label fw-bold" for="deseaComputacion">
+                ¿Desea reservar sala(s) de computación para esta actividad?
+            </label>
+        </div>
+        
+        <div id="opciones-computacion" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-title text-success">
+                        <i class="bi bi-check-circle me-1"></i>
+                        Opciones Disponibles
+                    </h6>
+                    <div id="lista-opciones-computacion">
+                        <!-- Se llenará dinámicamente con JavaScript -->
                     </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="mensaje-sin-opciones" style="display: none;">
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <span id="texto-mensaje-sin-opciones"></span>
+            </div>
+        </div>
+    </div>
+</div>
 
                     <div class="mb-3">
                         <label class="form-label">Movilidad reducida</label>
@@ -860,6 +1285,59 @@ echo '</td>';
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
                 <button type="button" class="btn btn-primary" onclick="guardarSala()">Guardar cambios</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para mostrar salas disponibles  -->
+<div class="modal fade" id="modalSalasDisponibles" tabindex="-1" aria-labelledby="modalSalasDisponiblesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title" id="modalSalasDisponiblesLabel">
+                    <i class="bi bi-building"></i> Salas Disponibles
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div id="info-consulta-salas" class="mb-2">
+                    <small class="text-muted">
+                        <strong>Criterios:</strong> <span id="criterios-busqueda"></span>
+                    </small>
+                </div>
+                
+                <!-- BOTÓN CERRAR SUPERIOR -->
+                <div class="d-grid mb-3">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>
+                        Cerrar listado
+                    </button>
+                </div>
+                
+                <div id="lista-salas-disponibles">
+                    <!-- Se carga dinámicamente -->
+                </div>
+                
+                <div id="loading-salas" class="text-center" style="display: none;">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <small class="text-muted ms-2">Consultando salas...</small>
+                </div>
+                
+                <div id="error-salas" class="alert alert-warning" style="display: none;">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span id="mensaje-error-salas"></span>
+                </div>
+                
+                <!-- BOTÓN CERRAR INFERIOR -->
+                <div class="d-grid mt-3">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>
+                        Cerrar listado
+                    </button>
+                </div>
             </div>
         </div>
     </div>

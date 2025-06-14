@@ -382,3 +382,85 @@
 .activity-button.bloque-protegido .fa-shield-alt {
     color: #ffffff !important;
 }
+
+<style>
+#btnSalasDisponibles {
+    white-space: nowrap;
+    border-left: none;
+}
+
+#btnSalasDisponibles:hover {
+    z-index: 3;
+}
+
+.input-group #alumnosPorSala {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+#modalSalasDisponibles .modal-sm {
+    max-width: 400px;
+}
+
+#modalSalasDisponibles .list-group-item {
+    border-left: none;
+    border-right: none;
+}
+
+#modalSalasDisponibles .list-group-item:first-child {
+    border-top: none;
+}
+
+#modalSalasDisponibles .list-group-item:last-child {
+    border-bottom: none;
+}
+
+
+
+/* Toast especial para casos importantes */
+.toast-importante {
+    border-left: 4px solid #0d6efd !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+
+.toast-importante .toast-body {
+    font-weight: 500 !important;
+    padding: 1rem !important;
+}
+
+.swal-wide {
+    width: 650px !important;
+    max-width: 90vw !important;
+}
+
+.swal2-html-container {
+    font-size: 14px !important;
+    text-align: left !important;
+}
+
+.swal2-title {
+    font-size: 1.5rem !important;
+}
+
+.swal2-confirm {
+    font-weight: 500 !important;
+}
+
+.swal2-cancel {
+    font-weight: 500 !important;
+}
+
+.swal2-container {
+    z-index: 9999 !important;
+}
+
+body:not(.modal-open) {
+    overflow: auto !important;
+    padding-right: 0 !important;
+}
+
+.swal2-container {
+    z-index: 10000 !important;
+}
+
+</style>

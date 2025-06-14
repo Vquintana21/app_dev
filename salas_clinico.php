@@ -540,10 +540,7 @@ $result = $stmt->get_result();
                             <option value="">Seleccione un campus</option>
                             <option value="Norte">Norte</option>
                             <option value="Sur">Sur</option>
-                            <option value="Centro">Centro</option>
-                            <option value="Oriente">Oriente</option>
                             <option value="Occidente">Occidente</option>
-                            <option value="Otro">Otro</option>
                         </select>
                     </div>
 

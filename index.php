@@ -1129,153 +1129,232 @@ function reordenarDocentes() {
     }
     
     // Función interna para procesar el guardado
-    function procesarGuardado() {
-        // Mostrar toast de carga
-        mostrarToastCarga('Guardando cambios...');
-        
-        // Deshabilitar el botón de guardar para evitar múltiples clicks
-        const saveButton = document.querySelector('button[onclick="saveActivity()"]');
-        saveButton.disabled = true;
-        
-        const form = document.getElementById('activityForm');
-        const formData = new FormData();
-        
-        // Agregar campos al formData...
-        formData.append('idplanclases', document.getElementById('idplanclases').value);
-        formData.append('activity-title', document.getElementById('activity-title').value);
-        formData.append('type', document.getElementById('activity-type').value);
-        
-        // Manejar el subtipo para Clase
-        const tipoActividad = document.getElementById('activity-type').value;
-        if (tipoActividad === 'Clase') {
-            formData.append('subtype', 'Clase teórica o expositiva');
-        } else {
-            formData.append('subtype', document.getElementById('activity-subtype').value);
-        }
-        
-        formData.append('start_time', document.getElementById('start-time').value);
-        formData.append('end_time', document.getElementById('end-time').value);
-        formData.append('mandatory', document.getElementById('mandatory').checked);
-        formData.append('is_evaluation', document.getElementById('is-evaluation').checked);
-        
-        // Si teníamos el tipo anterior, incluirlo para referencia
-        if (tipoActual) {
-            formData.append('tipo_anterior', tipoActual);
-        }
+    
+	// REEMPLAZAR TODA la función procesarGuardado() en index.php:
 
-        // Verificar si la actividad requiere docentes
-        const tipoInfo = tiposSesion.find(t => t.tipo_sesion === tipoActividad);
-        const requiereDocentes = tipoInfo && tipoInfo.docentes === "1";
-
-        // Calcular las horas de la actividad
-        const startTime = document.getElementById('start-time').value;
-        const endTime = document.getElementById('end-time').value;
-        const start = new Date(`2000-01-01 ${startTime}`);
-        const end = new Date(`2000-01-01 ${endTime}`);
-        const horasActividad = (end - start) / (1000 * 60 * 60);
-
-        // Obtener docentes seleccionados
-        const docentesSeleccionados = [];
-        document.querySelectorAll('.docente-check:checked').forEach(checkbox => {
-            docentesSeleccionados.push(checkbox.dataset.rut);
-        });
-
-        // Primero guardar la actividad
-        fetch('guardar_actividad.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (!data.success) {
-                throw new Error(data.message || 'Error al guardar la actividad');
-            }
-            
-            // Mostrar mensaje específico sobre salas si existe
-            if (data.mensaje_sala) {
-                mostrarToast(data.mensaje_sala, 'info');
-            }
-
-            // Solo guardar docentes si la actividad los requiere
-            if (requiereDocentes && docentesSeleccionados.length > 0) {
-                const docentesData = new FormData();
-                const idplanclases = document.getElementById('idplanclases').value;
-                const idcurso = new URLSearchParams(window.location.search).get('curso');
-                
-                docentesData.append('idplanclases', idplanclases);
-                docentesData.append('idcurso', idcurso);
-                docentesData.append('horas', horasActividad);
-                docentesData.append('docentes', JSON.stringify(docentesSeleccionados));
-
-                // Guardar los docentes
-                return fetch('guardar_docentes.php', {
-                    method: 'POST',
-                    body: docentesData
-                });
-            } else {
-                // Si no requiere docentes o no hay docentes seleccionados, 
-                // devolver una respuesta exitosa simulada
-                return Promise.resolve({ 
-                    json: () => Promise.resolve({ 
-                        success: true, 
-                        message: requiereDocentes ? 'No se seleccionaron docentes' : 'Actividad guardada sin docentes'
-                    }) 
-                });
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Cerrar modal
-                const modalElement = document.getElementById('activityModal');
-                const modal = bootstrap.Modal.getInstance(modalElement);
-                if (modal) modal.hide();
-                
-                // Crear contenedor de toast si no existe
-                let toastContainer = document.querySelector('.toast-container');
-                if (!toastContainer) {
-                    toastContainer = document.createElement('div');
-                    toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-                    document.body.appendChild(toastContainer);
-                }
-
-                // Limpiar toasts anteriores
-                toastContainer.innerHTML = '';
-                
-                // Crear y mostrar el toast
-                const toastHTML = `
-                    <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                        <div class="d-flex">
-                            <div class="toast-body">
-                                <i class="bi bi-check-circle me-2"></i>
-                                Actividad guardada correctamente
-                            </div>
-                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                        </div>
-                    </div>
-                `;
-                
-                toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-                const toastElement = new bootstrap.Toast(toastContainer.lastElementChild, {
-                    autohide: true,
-                    delay: 3000
-                });
-                toastElement.show();
-                
-                // Recargar página después de mostrar el toast
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                throw new Error(data.message || 'Error al guardar los cambios');
-            }
-        })
-        .catch(error => {
-            console.error('Error completo:', error);
-            mostrarToast('Error al guardar los cambios: ' + error.message, 'danger');
-            
-            // Rehabilitar el botón de guardar
-            if (saveButton) saveButton.disabled = false;
-        });
+function procesarGuardado() {
+    // Mostrar toast de carga
+    mostrarToastCarga('Guardando cambios...');
+    
+    // Deshabilitar el botón de guardar para evitar múltiples clicks
+    const saveButton = document.querySelector('button[onclick="saveActivity()"]');
+    saveButton.disabled = true;
+    
+    const form = document.getElementById('activityForm');
+    const formData = new FormData();
+    
+    // Agregar campos al formData...
+    formData.append('idplanclases', document.getElementById('idplanclases').value);
+    formData.append('activity-title', document.getElementById('activity-title').value);
+    formData.append('type', document.getElementById('activity-type').value);
+    
+    // Manejar el subtipo para Clase
+    const tipoActividad = document.getElementById('activity-type').value;
+    if (tipoActividad === 'Clase') {
+        formData.append('subtype', 'Clase teórica o expositiva');
+    } else {
+        formData.append('subtype', document.getElementById('activity-subtype').value);
     }
+    
+    formData.append('start_time', document.getElementById('start-time').value);
+    formData.append('end_time', document.getElementById('end-time').value);
+    formData.append('mandatory', document.getElementById('mandatory').checked);
+    formData.append('is_evaluation', document.getElementById('is-evaluation').checked);
+    
+    // Si teníamos el tipo anterior, incluirlo para referencia
+    const tipoActual = document.querySelector('#modal-tipo-actividad').textContent || '';
+    if (tipoActual) {
+        formData.append('tipo_anterior', tipoActual);
+    }
+
+    // Verificar si la actividad requiere docentes
+    const tipoInfo = tiposSesion.find(t => t.tipo_sesion === tipoActividad);
+    const requiereDocentes = tipoInfo && tipoInfo.docentes === "1";
+
+    // Calcular las horas de la actividad
+    const startTime = document.getElementById('start-time').value;
+    const endTime = document.getElementById('end-time').value;
+    const start = new Date(`2000-01-01 ${startTime}`);
+    const end = new Date(`2000-01-01 ${endTime}`);
+    const horasActividad = (end - start) / (1000 * 60 * 60);
+
+    // Obtener docentes seleccionados
+    const docentesSeleccionados = [];
+    document.querySelectorAll('.docente-check:checked').forEach(checkbox => {
+        docentesSeleccionados.push(checkbox.dataset.rut);
+    });
+
+    // Primero guardar la actividad
+    fetch('guardar_actividad.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (!data.success) {
+            throw new Error(data.message || 'Error al guardar la actividad');
+        }
+        
+        // ===== LÓGICA ESPECIAL PARA CASO "DEBE SOLICITAR SALA" =====
+        const esCasoSolicitudSala = data.mensaje_sala && 
+                                    data.mensaje_sala.includes('Debe solicitar sala desde pestaña Salas');
+        
+        if (esCasoSolicitudSala) {
+            // CERRAR MODAL PRIMERO
+            const modalElement = document.getElementById('activityModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+            
+            // OCULTAR TOAST DE CARGA
+            document.querySelector('.toast-container').innerHTML = '';
+            
+            // CASO ESPECIAL: SweetAlert sin recarga automática
+            Swal.fire({
+                icon: 'info',
+                title: '¡Actividad actualizada!',
+                html: `
+                    <div class="text-start">
+                        <p class="mb-3">
+                            <i class="bi bi-check-circle text-success me-2"></i>
+                            <strong>Su actividad ha sido actualizada exitosamente.</strong>
+                        </p>
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Este tipo de actividad requiere gestión manual de sala.
+                        </div>
+                        <p class="text-primary mb-0">
+                            <i class="bi bi-arrow-right me-2"></i>
+                            <strong>Próximo paso:</strong> Solicite una sala desde la pestaña "Salas".
+                        </p>
+                    </div>
+                `,
+                showConfirmButton: true,
+                confirmButtonText: '<i class="bi bi-building me-2"></i>Ir a Salas ahora',
+                showCancelButton: true,
+                cancelButtonText: '<i class="bi bi-check me-2"></i>Entendido',
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#198754',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                customClass: {
+                    popup: 'swal-wide'
+                }
+            }).then((result) => {
+    if (result.isConfirmed) {
+        // Limpiar cualquier overlay residual
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        
+        // Cambiar a pestaña salas
+        const salasTab = document.getElementById('salas-tab');
+        salasTab.click();
+        
+        // Forzar carga del contenido de salas
+        setTimeout(() => {
+            const cursoId = new URLSearchParams(window.location.search).get('curso');
+            const salasList = document.getElementById('salas-list');
+            
+            salasList.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando salas...</p></div>';
+            
+            fetch('salas2.php?curso=' + cursoId)
+                .then(response => response.text())
+                .then(html => {
+                    salasList.innerHTML = html;
+                    mostrarToast('💡 Ahora puede solicitar una sala para su actividad', 'info', 5000);
+                })
+                .catch(error => {
+                    salasList.innerHTML = '<div class="alert alert-danger">Error al cargar salas</div>';
+                });
+        }, 500);
+        
+    } else {
+        location.reload();
+    }
+});
+            
+            // ⚠️ CRÍTICO: Rehabilitar botón y NO continuar con el resto del código
+            if (saveButton) saveButton.disabled = false;
+            return Promise.resolve({ 
+                json: () => Promise.resolve({ 
+                    success: true, 
+                    skipDocentes: true // Flag para saltar guardado de docentes
+                }) 
+            });
+        }
+        
+        // ===== CASOS NORMALES: Mostrar mensaje si existe =====
+        if (data.mensaje_sala) {
+            mostrarToast(data.mensaje_sala, 'info', 5000);
+        }
+
+        // Continuar con docentes para casos normales
+        if (requiereDocentes && docentesSeleccionados.length > 0) {
+            const docentesData = new FormData();
+            const idplanclases = document.getElementById('idplanclases').value;
+            const idcurso = new URLSearchParams(window.location.search).get('curso');
+            
+            docentesData.append('idplanclases', idplanclases);
+            docentesData.append('idcurso', idcurso);
+            docentesData.append('horas', horasActividad);
+            docentesData.append('docentes', JSON.stringify(docentesSeleccionados));
+
+            return fetch('guardar_docentes.php', {
+                method: 'POST',
+                body: docentesData
+            });
+        } else {
+            return Promise.resolve({ 
+                json: () => Promise.resolve({ 
+                    success: true, 
+                    message: requiereDocentes ? 'No se seleccionaron docentes' : 'Actividad guardada sin docentes'
+                }) 
+            });
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Si es el caso especial, no ejecutar este bloque
+        if (data.skipDocentes) {
+            return;
+        }
+        
+        if (data.success) {
+            // Cerrar modal
+            const modalElement = document.getElementById('activityModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+            
+            // Ocultar toast de carga
+            document.querySelector('.toast-container').innerHTML = '';
+            
+            // Toast de éxito
+            mostrarToast('Actividad guardada correctamente', 'success');
+            
+            // Recargar página después de un breve retraso
+            setTimeout(() => location.reload(), 2000);
+            
+        } else {
+            throw new Error(data.message || 'Error al guardar los cambios');
+        }
+    })
+    .catch(error => {
+        console.error('Error completo:', error);
+        
+        // Ocultar toast de carga
+        const loadingContainer = document.querySelector('.toast-container');
+        if (loadingContainer) {
+            loadingContainer.innerHTML = '';
+        }
+        
+        // Mostrar error
+        mostrarToast('Error al guardar los cambios: ' + error.message, 'danger');
+        
+        // Rehabilitar el botón de guardar
+        if (saveButton) saveButton.disabled = false;
+    });
+}
+	
 }
 
 function mostrarToastCarga(mensaje) {
@@ -1537,6 +1616,49 @@ function generateFullCalendar() {
     });
 }
 
+function debugTablaSalas() {
+    console.log('🔍 Debug - Estado de la tabla de salas:');
+    
+    var filas = document.querySelectorAll('#salas-list table tbody tr');
+    console.log('Total de filas encontradas:', filas.length);
+    
+    filas.forEach(function(fila, index) {
+        var celdas = fila.cells;
+        if (celdas.length > 1) {
+            console.log('Fila ' + index + ':', {
+                id: fila.dataset.id,
+                fecha: celdas[1] ? celdas[1].textContent.trim() : 'N/A',
+                horario: celdas[2] ? celdas[2].textContent.trim() : 'N/A',
+                tipo: celdas[3] ? celdas[3].textContent.trim() : 'N/A'
+            });
+        }
+    });
+}
+
+function verificarDependencias() {
+    var dependencias = [
+        'verificarBloquesMismoDia',
+        'procesarBloquesMismoDia',
+        'mostrarAlertaBloquesRelacionados',
+        'parsearFechaParaConsulta'
+    ];
+    
+    var faltantes = [];
+    
+    dependencias.forEach(function(func) {
+        if (typeof window[func] !== 'function') {
+            faltantes.push(func);
+        }
+    });
+    
+    if (faltantes.length > 0) {
+        console.error('❌ Faltan las siguientes funciones:', faltantes);
+        return false;
+    } else {
+        console.log('✅ Todas las dependencias están disponibles');
+        return true;
+    }
+}
 
     document.addEventListener('DOMContentLoaded', () => {
         generateFullCalendar();
@@ -1564,6 +1686,42 @@ function generateFullCalendar() {
                 document.getElementById('salas-list').innerHTML = '<div class="alert alert-danger">Error al cargar la información de salas</div>';
             });
     });
+	
+	 // Nuevo: Limpiar alertas al cerrar modal de salas
+    var salaModal = document.getElementById('salaModal');
+    if (salaModal) {
+        salaModal.addEventListener('hidden.bs.modal', function() {
+            limpiarAlertasBloques();
+        });
+    }
+	
+	 setTimeout(function() {
+        verificarDependencias();
+    }, 1000);
+	
+	 var alumnosPorSala = document.getElementById('alumnosPorSala');
+    if (alumnosPorSala) {
+        alumnosPorSala.addEventListener('input', function() {
+            // Delay para evitar múltiples consultas
+            clearTimeout(window.timeoutSalas);
+            window.timeoutSalas = setTimeout(actualizarSalasDisponibles, 500);
+        });
+    }
+    
+    // Actualizar salas cuando cambie el campus
+    var campus = document.getElementById('campus');
+    if (campus) {
+        campus.addEventListener('change', actualizarSalasDisponibles);
+    }
+    
+    // Actualizar salas cuando se cargue el modal (si es necesario)
+    var modalSalas = document.getElementById('salaModal');
+    if (modalSalas) {
+        modalSalas.addEventListener('shown.bs.modal', function() {
+            // Delay para asegurar que todos los campos estén cargados
+            setTimeout(actualizarSalasDisponibles, 1000);
+        });
+    }
 	
 	
 	 // Agregar evento para cargar docente
@@ -1895,6 +2053,7 @@ window.actualizarFuncion = function(selectElement, idProfesoresCurso) {
 <!-- FUNCIONAES DE SALAS -->
 <script>
 async function solicitarSala(idPlanClase) {
+    console.log('=== INICIANDO SOLICITAR SALA ===');
     console.log('ID Plan Clase:', idPlanClase);
     
     document.getElementById('salaForm').reset();
@@ -1920,31 +2079,81 @@ async function solicitarSala(idPlanClase) {
             // Prellenar campos con datos existentes
             document.getElementById('campus').value = data.pcl_campus || 'Norte';
             document.getElementById('nSalas').value = data.pcl_nSalas || 1;
-            document.getElementById('requiereSala').value = data.pcl_DeseaSala || 1;  // ESTA LÍNEA ES CLAVE
+            document.getElementById('requiereSala').value = data.pcl_DeseaSala || 1;
             document.getElementById('observaciones').value = data.observaciones || '';
+            
+            // NUEVA LÍNEA: Prellenar movilidad reducida
+            document.getElementById('movilidadReducida').value = data.pcl_movilidadReducida || 'No';
+            
+            console.log('Datos precargados:', {
+                campus: data.pcl_campus || 'Norte',
+                nSalas: data.pcl_nSalas || 1,
+                requiereSala: data.pcl_DeseaSala || 1,
+                movilidadReducida: data.pcl_movilidadReducida || 'No'
+            });
         }
     } catch (error) {
         console.error('Error al obtener datos:', error);
         // Valores por defecto si falla la carga
         document.getElementById('campus').value = 'Norte';
         document.getElementById('nSalas').value = 1;
-        document.getElementById('requiereSala').value = 1;  // VALOR POR DEFECTO
+        document.getElementById('requiereSala').value = 1;
+        document.getElementById('movilidadReducida').value = 'No';  // NUEVO VALOR POR DEFECTO
     }
     
-    // Obtener el número de alumnos del elemento de la tabla
+// Obtener el número de alumnos del elemento de la tabla
     const tr = document.querySelector(`tr[data-id="${idPlanClase}"]`);
     if (tr) {
-        const alumnosTotales = tr.dataset.alumnos;
-        document.getElementById('alumnosTotales').value = alumnosTotales || 0;
-        calcularAlumnosPorSala();
+    const alumnosTotales = tr.dataset.alumnos;
+    document.getElementById('alumnosTotales').value = alumnosTotales || 0;
+    console.log('👥 Alumnos totales configurados:', alumnosTotales);
+    
+    // NUEVO: Verificar bloques relacionados del mismo día
+    const fechaCell = tr.cells[1] ? tr.cells[1].textContent.trim() : '';
+    if (fechaCell) {
+        const fechaParsed = parsearFechaParaConsulta(fechaCell);
+        if (fechaParsed) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const idCurso = urlParams.get('curso');
+            
+            console.log('🔍 Iniciando verificación de bloques relacionados:', {
+                idCurso: idCurso,
+                fecha: fechaParsed,
+                idPlanClase: idPlanClase,
+                fechaOriginal: fechaCell
+            });
+            
+            // Verificar bloques relacionados después de un breve delay
+            setTimeout(function() {
+                verificarBloquesMismoDia(parseInt(idCurso), fechaParsed, parseInt(idPlanClase));
+            }, 300);
+        } else {
+            console.warn('⚠️ No se pudo parsear la fecha:', fechaCell);
+        }
+    } else {
+        console.warn('⚠️ No se encontró la celda de fecha');
     }
+    
+    // Calcular alumnos por sala (código existente)
+    setTimeout(() => {
+        console.log('⚡ Ejecutando cálculo inmediato en solicitarSala');
+        calcularAlumnosPorSala();
+    }, 50);
+}
     
     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
     modal.show();
+    
+    // Configurar listeners Y ejecutar verificación inicial
     setupModalListeners();
+    
+    console.log('=== SOLICITAR SALA COMPLETADO ===');
 }
 
 async function modificarSala(idPlanClase) {
+    console.log('=== INICIANDO MODIFICAR SALA ===');
+    console.log('ID Plan Clase:', idPlanClase);
+    
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
     document.getElementById('salaModalTitle').textContent = 'Modificar Solicitud de Sala';
@@ -1957,11 +2166,11 @@ async function modificarSala(idPlanClase) {
     }
 
     // Verificar el estado directamente desde la columna de estado
-    const estadoCell = tr.querySelector('td:nth-child(9)'); // Columna de Estado
+    const estadoCell = tr.querySelector('td:nth-child(9)');
     const estadoBadge = estadoCell.querySelector('.badge');
     const estadoTexto = estadoBadge ? estadoBadge.textContent.trim() : '';
 
-    console.log('Estado detectado:', estadoTexto); // Debug
+    console.log('Estado detectado:', estadoTexto);
 
     // Determinar si está asignada (estado 3)
     const esAsignada = estadoTexto === 'Asignada';
@@ -1984,22 +2193,62 @@ async function modificarSala(idPlanClase) {
             document.getElementById('action').value = esAsignada || datos.estado === 3 ? 'modificar_asignada' : 'modificar';
             document.getElementById('campus').value = datos.pcl_campus || 'Norte';
             document.getElementById('nSalas').value = datos.pcl_nSalas || '1';
-			document.getElementById('requiereSala').value = datos.pcl_DeseaSala || 1;
-			
-			 // Mostrar mensajes anteriores en el campo observaciones
-    if (datos.mensajeAnterior) {
-        document.getElementById('observaciones').value = datos.mensajeAnterior;
-        document.getElementById('observaciones').placeholder = 'Escriba aquí su nuevo mensaje...';
-    } else {
-        document.getElementById('observaciones').value = '';
-        document.getElementById('observaciones').placeholder = 'Por favor, describa su requerimiento con el mayor nivel de detalle posible...';
-    }
-            document.getElementById('alumnosTotales').value = tr.dataset.alumnos;
+            document.getElementById('requiereSala').value = datos.pcl_DeseaSala || 1;
+            
+            // NUEVA LÍNEA: Precargar movilidad reducida
+            document.getElementById('movilidadReducida').value = datos.pcl_movilidadReducida || 'No';
+            
+            console.log('Datos modificación precargados:', {
+                campus: datos.pcl_campus || 'Norte',
+                nSalas: datos.pcl_nSalas || '1',
+                requiereSala: datos.pcl_DeseaSala || 1,
+                movilidadReducida: datos.pcl_movilidadReducida || 'No'
+            });
+            
+            // Mostrar mensajes anteriores en el campo observaciones
+            if (datos.mensajeAnterior) {
+                document.getElementById('observaciones').value = datos.mensajeAnterior;
+                document.getElementById('observaciones').placeholder = 'Escriba aquí su nuevo mensaje...';
+            } else {
+                document.getElementById('observaciones').value = '';
+                document.getElementById('observaciones').placeholder = 'Por favor, describa su requerimiento con el mayor nivel de detalle posible...';
+            }
+            
+             document.getElementById('alumnosTotales').value = tr.dataset.alumnos;
             document.getElementById('alumnosTotales').readOnly = true;
             
-            // Configurar listeners después de establecer valores
-            setupModalListeners();
+            console.log('👥 Alumnos totales configurados:', tr.dataset.alumnos);
+            
+            // CRÍTICO: Calcular inmediatamente alumnos por sala
+            setTimeout(() => {
+                console.log('⚡ Ejecutando cálculo inmediato en modificarSala');
+                calcularAlumnosPorSala();
+            }, 50);
+         // NUEVO: Verificar bloques relacionados del mismo día
+		const fechaCell = tr.cells[1] ? tr.cells[1].textContent.trim() : '';
+        if (fechaCell) {
+            const fechaParsed = parsearFechaParaConsulta(fechaCell);
+            if (fechaParsed) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const idCurso = urlParams.get('curso');
+                
+                console.log('🔍 Iniciando verificación de bloques relacionados (modificar):', {
+                    idCurso: idCurso,
+                    fecha: fechaParsed,
+                    idPlanClase: idPlanClase,
+                    fechaOriginal: fechaCell
+                });
+                
+                // Verificar bloques relacionados después de un breve delay
+                setTimeout(function() {
+                    verificarBloquesMismoDia(parseInt(idCurso), fechaParsed, parseInt(idPlanClase));
+                }, 300);
+            } else {
+                console.warn('⚠️ No se pudo parsear la fecha:', fechaCell);
+            }
         }
+		
+		}
     } catch (error) {
         console.error('Error:', error);
         mostrarToastSalas('Error al cargar los datos de la sala', 'danger');
@@ -2007,7 +2256,22 @@ async function modificarSala(idPlanClase) {
 
     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
     modal.show();
+    
+    // Configurar listeners Y ejecutar verificación inicial
+    setupModalListeners();
+    
+    console.log('=== MODIFICAR SALA COMPLETADO ===');
 }
+
+function limpiarAlertasBloques() {
+    var alertaExistente = document.getElementById('alerta-bloques');
+    if (alertaExistente) {
+        alertaExistente.remove();
+        console.log('🧹 Alerta de bloques eliminada');
+    }
+}
+
+var calculoAlumnosTimeout;
 
 function calcularAlumnosPorSala() {
     const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
@@ -2018,27 +2282,712 @@ function calcularAlumnosPorSala() {
     const alumnosPorSalaInput = document.getElementById('alumnosPorSala');
     if (alumnosPorSalaInput) {
         alumnosPorSalaInput.value = alumnosPorSala;
+        console.log('✅ Campo alumnos por sala actualizado:', {
+            totalAlumnos: totalAlumnos,
+            nSalas: nSalas,
+            alumnosPorSala: alumnosPorSala,
+            campoEncontrado: true
+        });
+    } else {
+        console.error('❌ Campo alumnosPorSala NO encontrado en el DOM');
+        // Debug adicional
+        console.log('Campos disponibles:', {
+            alumnosTotales: !!document.getElementById('alumnosTotales'),
+            nSalas: !!document.getElementById('nSalas'),
+            alumnosPorSala: !!document.getElementById('alumnosPorSala')
+        });
+    }
+}
+
+// 2. NUEVA FUNCIÓN: Consultar disponibilidad de salas de computación
+function consultarSalasComputacion(campus, nSalas, totalAlumnos) {
+    const seccionComputacion = document.getElementById('seccion-computacion');
+    if (!seccionComputacion) return;
+    
+    console.log('🔍 Consultando salas de computación (con validación previa):', {
+        campus: campus,
+        nSalas: nSalas,
+        totalAlumnos: totalAlumnos
+    });
+    
+    // Validaciones básicas - ocultar si no cumple criterios
+    if (campus !== 'Norte' || nSalas > 2 || totalAlumnos <= 0) {
+        console.log('❌ No cumple condiciones básicas, ocultando sección');
+        ocultarSeccionComputacion();
+        return;
     }
     
-    // Debug para verificar los valores
-    console.log('Cálculos:', {
-        totalAlumnos,
-        nSalas,
-        alumnosPorSala
+    // Obtener datos de la actividad actual
+    const idplanclases = document.getElementById('idplanclases').value;
+    
+    // Buscar la fila correspondiente en la tabla para obtener fecha y horarios
+    const fila = document.querySelector(`tr[data-id="${idplanclases}"]`);
+    if (!fila) {
+        console.error('No se encontró la fila de la actividad');
+        ocultarSeccionComputacion();
+        return;
+    }
+    
+    // Extraer fecha y horarios de la fila
+    const fechaCell = fila.cells[1].textContent.trim(); // Columna de fecha
+    const horarioCell = fila.cells[2].textContent.trim(); // Columna de horario
+    
+    // Parsear fecha y horarios
+    const fecha = parsearFecha(fechaCell);
+    const horarios = parsearHorarios(horarioCell);
+    
+    if (!fecha || !horarios.inicio || !horarios.fin) {
+        console.error('Error al parsear fecha u horarios:', {fecha, horarios});
+        ocultarSeccionComputacion();
+        return;
+    }
+    
+    // Mostrar loading
+    mostrarLoadingComputacion();
+    
+    console.log('🚀 Consultando disponibilidad real en servidor...');
+    
+    // Realizar consulta AJAX
+    fetch('consultar_computacion.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            action: 'consultar_disponibilidad',
+            campus: campus,
+            fecha: fecha,
+            hora_inicio: horarios.inicio,
+            hora_fin: horarios.fin,
+            n_salas: nSalas,
+            total_alumnos: totalAlumnos
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('📋 Respuesta de disponibilidad:', data);
+        if (data.success) {
+            mostrarSeccionComputacion(data);
+        } else {
+            console.error('Error en consulta:', data.message);
+            ocultarSeccionComputacion();
+        }
+    })
+    .catch(error => {
+        console.error('Error de red:', error);
+        ocultarSeccionComputacion();
     });
+}
+
+// 3. FUNCIÓN: Mostrar loading mientras consulta
+function mostrarLoadingComputacion() {
+    const seccionComputacion = document.getElementById('seccion-computacion');
+    seccionComputacion.style.display = 'block';
+    seccionComputacion.innerHTML = `
+        <hr>
+        <div class="mb-3 text-center">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <small class="text-muted">Consultando disponibilidad de salas de computación...</small>
+        </div>
+    `;
+}
+
+// 4. FUNCIÓN: Mostrar u ocultar sección según resultado
+function mostrarSeccionComputacion(data) {
+    const seccionComputacion = document.getElementById('seccion-computacion');
+    console.log('🟢 Mostrando sección de computación', data);
+    
+    if (data.mostrar_seccion) {
+        // Restaurar HTML original de la sección
+        restaurarHTMLSeccionComputacion();
+        seccionComputacion.style.display = 'block';
+        
+        // NUEVA LÓGICA: Solo mostrar pregunta si HAY opciones disponibles
+        if (data.opciones_disponibles && data.opciones.length > 0) {
+            console.log('✅ Opciones disponibles:', data.opciones.length);
+            
+            // Mostrar la pregunta y las opciones
+            mostrarPreguntaConOpciones(data.opciones);
+            
+        } else {
+            console.log('⚠️ Sin opciones disponibles:', data.mensaje);
+            
+            // NO mostrar pregunta, solo mensaje informativo
+            mostrarMensajeSinDisponibilidad(data.mensaje || 'Las salas de computación no están disponibles para este horario');
+        }
+    } else {
+        console.log('❌ No mostrar sección:', data.mensaje);
+        ocultarSeccionComputacion();
+    }
+}
+
+// NUEVA FUNCIÓN: Mostrar pregunta CON opciones disponibles
+function mostrarPreguntaConOpciones(opciones) {
+    // Mostrar la pregunta
+    const preguntaContainer = document.querySelector('.form-check');
+    const opcionesContainer = document.getElementById('opciones-computacion');
+    const mensajeSinOpciones = document.getElementById('mensaje-sin-opciones');
+    
+    if (preguntaContainer) preguntaContainer.style.display = 'block';
+    if (mensajeSinOpciones) mensajeSinOpciones.style.display = 'none';
+    
+    // Solo mostrar opciones si hace clic en "Sí"
+    setupEventListenersComputacion();
+    
+    // Llenar las opciones disponibles
+    mostrarOpcionesComputacion(opciones);
+}
+
+// NUEVA FUNCIÓN: Mostrar mensaje SIN pregunta cuando no hay disponibilidad
+function mostrarMensajeSinDisponibilidad(mensaje) {
+    // Ocultar la pregunta
+    const preguntaContainer = document.querySelector('.form-check');
+    const opcionesContainer = document.getElementById('opciones-computacion');
+    const mensajeSinOpciones = document.getElementById('mensaje-sin-opciones');
+    const textoMensaje = document.getElementById('texto-mensaje-sin-opciones');
+    
+    if (preguntaContainer) preguntaContainer.style.display = 'none';
+    if (opcionesContainer) opcionesContainer.style.display = 'none';
+    
+    // Mostrar mensaje informativo mejorado
+    if (mensajeSinOpciones && textoMensaje) {
+        mensajeSinOpciones.style.display = 'block';
+        
+        // Crear mensaje más amigable
+        const mensajeAmigable = `
+            <strong>Salas de computación no disponibles</strong><br>
+            <small>${mensaje}</small><br>
+            <small class="text-muted">Las salas podrían estar ocupadas por otras actividades en este horario.</small>
+        `;
+        
+        textoMensaje.innerHTML = mensajeAmigable;
+    }
+}
+
+// NUEVA FUNCIÓN: Manejar cambio en checkbox de computación
+function handleComputacionCheckboxChange() {
+    const checkbox = document.getElementById('deseaComputacion');
+    const opcionesContainer = document.getElementById('opciones-computacion');
+    
+    if (checkbox.checked) {
+        console.log('✅ Usuario seleccionó reservar salas de computación');
+        opcionesContainer.style.display = 'block';
+    } else {
+        console.log('❌ Usuario deseleccionó salas de computación');
+        opcionesContainer.style.display = 'none';
+        // Limpiar selecciones
+        const radios = opcionesContainer.querySelectorAll('input[type="radio"]');
+        radios.forEach(radio => radio.checked = false);
+    }
+}
+
+// 5. FUNCIÓN: Ocultar sección de computación
+function ocultarSeccionComputacion() {
+    const seccionComputacion = document.getElementById('seccion-computacion');
+    console.log('🔴 Ocultando sección de computación');
+    
+    if (seccionComputacion) {
+        seccionComputacion.style.display = 'none';
+        
+        // Limpiar selección si existe
+        const checkbox = document.getElementById('deseaComputacion');
+        if (checkbox) {
+            checkbox.checked = false;
+        }
+        
+        // Limpiar opciones si existen
+        const opcionesContainer = document.getElementById('opciones-computacion');
+        if (opcionesContainer) {
+            opcionesContainer.style.display = 'none';
+        }
+        
+        // Limpiar radios si existen
+        const radios = document.querySelectorAll('input[name="opcion_computacion"]');
+        radios.forEach(radio => radio.checked = false);
+    }
+}
+
+// 6. FUNCIÓN: Restaurar HTML original de la sección
+function restaurarHTMLSeccionComputacion() {
+    const seccionComputacion = document.getElementById('seccion-computacion');
+    seccionComputacion.innerHTML = `
+        <hr>
+        <div class="mb-3">
+            <h6 class="text-primary">
+                <i class="bi bi-pc-display me-2"></i>
+                Salas de Computación
+            </h6>
+            
+            <div class="alert alert-info alert-sm">
+                <i class="bi bi-info-circle me-1"></i>
+                <small>
+                    Las salas de computación son recursos limitados. Solo se asignan si toda la sección puede usar el recurso de manera efectiva.
+                </small>
+            </div>
+            
+            <!-- PREGUNTA - Se mostrará/ocultará dinámicamente -->
+            <div class="form-check mb-3" style="display: none;">
+                <input class="form-check-input" type="checkbox" id="deseaComputacion">
+                <label class="form-check-label fw-bold text-success" for="deseaComputacion">
+                    <i class="bi bi-check-circle me-1"></i>
+                    ¿Desea reservar sala(s) de computación para esta actividad?
+                </label>
+                <small class="d-block text-success mt-1">
+                    <i class="bi bi-info-circle me-1"></i>
+                    ¡Hay salas de computación disponibles para este horario!
+                </small>
+            </div>
+            
+            <!-- OPCIONES - Solo aparecen si selecciona "Sí" -->
+            <div id="opciones-computacion" style="display: none;">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="card-title text-success">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Opciones Disponibles
+                        </h6>
+                        <div id="lista-opciones-computacion">
+                            <!-- Se llenará dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MENSAJE SIN DISPONIBILIDAD - Solo aparece si no hay salas -->
+            <div id="mensaje-sin-opciones" style="display: none;">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    <span id="texto-mensaje-sin-opciones"></span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 7. FUNCIÓN: Configurar event listeners para la sección de computación
+//function setupEventListenersComputacion() {
+//    const checkbox = document.getElementById('deseaComputacion');
+//    if (checkbox) {
+//        checkbox.addEventListener('change', function() {
+//            const opcionesContainer = document.getElementById('opciones-computacion');
+//            if (this.checked) {
+//                opcionesContainer.style.display = 'block';
+//            } else {
+//                opcionesContainer.style.display = 'none';
+//                // Limpiar selecciones
+//                const radios = opcionesContainer.querySelectorAll('input[type="radio"]');
+//                radios.forEach(radio => radio.checked = false);
+//            }
+//        });
+//    }
+//}
+
+function setupEventListenersComputacion() {
+    const checkbox = document.getElementById('deseaComputacion');
+    if (checkbox) {
+        // Remover listener anterior para evitar duplicados
+        checkbox.removeEventListener('change', handleComputacionCheckboxChange);
+        // Agregar nuevo listener
+        checkbox.addEventListener('change', handleComputacionCheckboxChange);
+    }
+}
+
+// 8. FUNCIÓN: Mostrar opciones disponibles
+function mostrarOpcionesComputacion(opciones) {
+    const contenedorOpciones = document.getElementById('lista-opciones-computacion');
+    const mensajeSinOpciones = document.getElementById('mensaje-sin-opciones');
+    
+    if (!contenedorOpciones) return;
+    
+    contenedorOpciones.innerHTML = '';
+    mensajeSinOpciones.style.display = 'none';
+    
+    opciones.forEach((opcion, index) => {
+        const div = document.createElement('div');
+        div.className = 'form-check mb-2';
+        
+        const input = document.createElement('input');
+        input.className = 'form-check-input';
+        input.type = 'radio';
+        input.name = 'opcion_computacion';
+        input.id = `opcion_computacion_${index}`;
+        input.value = JSON.stringify(opcion);
+        
+        const label = document.createElement('label');
+        label.className = 'form-check-label';
+        label.htmlFor = `opcion_computacion_${index}`;
+        
+        // Crear descripción detallada
+        const descripcion = document.createElement('div');
+        descripcion.innerHTML = `
+            <strong>${opcion.nombre}</strong><br>
+            <small class="text-muted">${opcion.descripcion}</small>
+        `;
+        
+        label.appendChild(descripcion);
+        div.appendChild(input);
+        div.appendChild(label);
+        contenedorOpciones.appendChild(div);
+    });
+    
+    // Configurar event listeners para los radios
+    setupEventListenersComputacion();
+}
+
+// 9. FUNCIÓN: Mostrar mensaje cuando no hay opciones
+function mostrarMensajeSinOpciones(mensaje) {
+    const opcionesContainer = document.getElementById('opciones-computacion');
+    const mensajeSinOpciones = document.getElementById('mensaje-sin-opciones');
+    const textoMensaje = document.getElementById('texto-mensaje-sin-opciones');
+    
+    if (opcionesContainer) opcionesContainer.style.display = 'none';
+    if (mensajeSinOpciones) {
+        mensajeSinOpciones.style.display = 'block';
+        if (textoMensaje) textoMensaje.textContent = mensaje;
+    }
+}
+
+// 10. FUNCIONES AUXILIARES: Parsear fecha y horarios
+function parsearFecha(fechaTexto) {
+    // Formato esperado: "18/06/2025" -> "2025-06-18"
+    try {
+        const partes = fechaTexto.split('/');
+        if (partes.length === 3) {
+            const dia = partes[0].padStart(2, '0');
+            const mes = partes[1].padStart(2, '0');
+            const anio = partes[2];
+            return `${anio}-${mes}-${dia}`;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error al parsear fecha:', error);
+        return null;
+    }
+}
+
+function parsearHorarios(horarioTexto) {
+    // Formato esperado: "12:00 - 13:30" -> {inicio: "12:00:00", fin: "13:30:00"}
+    try {
+        const partes = horarioTexto.split(' - ');
+        if (partes.length === 2) {
+            return {
+                inicio: partes[0].trim() + ':00',
+                fin: partes[1].trim() + ':00'
+            };
+        }
+        return {inicio: null, fin: null};
+    } catch (error) {
+        console.error('Error al parsear horarios:', error);
+        return {inicio: null, fin: null};
+    }
+}
+
+// 11. MODIFICAR LA FUNCIÓN guardarSala EXISTENTE
+// Esta función debe ser modificada en el código existente
+async function guardarSala() {
+    const form = document.getElementById('salaForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const formData = new FormData(form);
+    const datos = Object.fromEntries(formData.entries());
+    
+    // Agregar campos adicionales
+    datos.requiereSala = document.getElementById('requiereSala').value;
+    datos.observaciones = document.getElementById('observaciones').value;
+    datos.movilidadReducida = document.getElementById('movilidadReducida').value;
+    datos.alumnosPorSala = document.getElementById('alumnosPorSala').value;
+    
+    // NUEVA LÓGICA: Verificar si hay selección de computación
+    const deseaComputacion = document.getElementById('deseaComputacion');
+    const tieneComputacion = deseaComputacion && deseaComputacion.checked;
+    
+    if (tieneComputacion) {
+        // Buscar qué opción de computación seleccionó
+        const opcionSeleccionada = document.querySelector('input[name="opcion_computacion"]:checked');
+        
+        if (!opcionSeleccionada) {
+            mostrarToastSalas('Debe seleccionar una opción de sala de computación', 'danger');
+            return;
+        }
+        
+        const opcion = JSON.parse(opcionSeleccionada.value);
+        
+        // Validar disponibilidad antes de guardar
+        const salasAValidar = opcion.tipo === 'individual' ? 
+                             [opcion.id_sala] : 
+                             opcion.id_sala_multiple;
+        
+        // Obtener datos de la actividad para validación
+        const idplanclases = document.getElementById('idplanclases').value;
+        const fila = document.querySelector(`tr[data-id="${idplanclases}"]`);
+        const fecha = parsearFecha(fila.cells[1].textContent.trim());
+        const horarios = parsearHorarios(fila.cells[2].textContent.trim());
+        
+        try {
+            const validacionResponse = await fetch('consultar_computacion.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'validar_antes_guardar',
+                    salas_seleccionadas: salasAValidar,
+                    fecha: fecha,
+                    hora_inicio: horarios.inicio,
+                    hora_fin: horarios.fin
+                })
+            });
+            
+            const validacionData = await validacionResponse.json();
+            
+            if (!validacionData.success) {
+                mostrarToastSalas(validacionData.mensaje, 'danger');
+                // Recargar opciones de computación
+                calcularAlumnosPorSala();
+                return;
+            }
+            
+            // Si la validación es exitosa, proceder con guardado especial
+            await guardarConComputacion(datos, opcion);
+            
+        } catch (error) {
+            console.error('Error en validación:', error);
+            mostrarToastSalas('Error al validar disponibilidad', 'danger');
+            return;
+        }
+        
+    } else {
+        // Guardado normal sin computación
+        await guardarSalaNormal(datos);
+    }
+}
+
+// 12. NUEVA FUNCIÓN: Guardar con computación
+async function guardarConComputacion(datos, opcionComputacion) {
+    try {
+        const salasComputacion = opcionComputacion.tipo === 'individual' ? 
+                                [opcionComputacion.id_sala] : 
+                                opcionComputacion.id_sala_multiple;
+        
+        const response = await fetch('salas2.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'guardar_con_computacion',
+                idplanclases: datos.idplanclases,
+                salas_computacion: salasComputacion,
+                observaciones: datos.observaciones,
+                requiereSala: datos.requiereSala,
+                nSalas: datos.nSalas,
+                campus: datos.campus
+            })
+        });
+
+        const responseData = await response.json();
+        console.log('Server Response:', responseData);
+
+        if (response.ok && responseData.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('salaModal'));
+            modal.hide();
+            
+            mostrarToastSalas(responseData.message || 'Salas de computación reservadas correctamente');
+
+            // Recargar tabla de salas
+            recargarTablaSalas();
+        } else {
+            mostrarToastSalas(responseData.error || 'Error al reservar salas de computación', 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarToastSalas('Error al procesar la reserva de computación', 'danger');
+    }
+}
+
+// 13. FUNCIÓN: Guardar sin computación (lógica normal existente)
+async function guardarSalaNormal(datos) {
+    try {
+        const response = await fetch('salas2.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(datos)
+        });
+
+        const responseData = await response.json();
+
+        if (response.ok && responseData.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('salaModal'));
+            modal.hide();
+            
+            mostrarToastSalas('Sala gestionada correctamente');
+            recargarTablaSalas();
+        } else {
+            mostrarToastSalas(responseData.error || 'Error al guardar los cambios', 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarToastSalas('Error al procesar la solicitud', 'danger');
+    }
+}
+
+// 14. FUNCIÓN: Recargar tabla de salas
+function recargarTablaSalas() {
+    const cursoId = new URLSearchParams(window.location.search).get('curso');
+    fetch('salas2.php?curso=' + cursoId)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('salas-list').innerHTML = html;
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            mostrarToastSalas('Error al actualizar la tabla de salas', 'danger');
+        });
 }
 
 function setupModalListeners() {
     const nSalasSelect = document.getElementById('nSalas');
+    const campusSelect = document.getElementById('campus');
+    const alumnosTotalesInput = document.getElementById('alumnosTotales');
+    
+    // Event listener para número de salas
     if (nSalasSelect) {
-        // Remover listener existente para evitar duplicados
-        nSalasSelect.removeEventListener('change', calcularAlumnosPorSala);
-        // Agregar nuevo listener
-        nSalasSelect.addEventListener('change', calcularAlumnosPorSala);
-        
-        // Trigger inicial para asegurar que se muestran los cálculos
-        calcularAlumnosPorSala();
+        nSalasSelect.removeEventListener('change', manejarCambioSalas);
+        nSalasSelect.addEventListener('change', manejarCambioSalas);
     }
+    
+    // Event listener para campus
+    if (campusSelect) {
+        campusSelect.removeEventListener('change', manejarCambioCampus);
+        campusSelect.addEventListener('change', manejarCambioCampus);
+    }
+    
+    // Event listener para alumnos
+    if (alumnosTotalesInput) {
+        alumnosTotalesInput.removeEventListener('change', manejarCambioAlumnos);
+        alumnosTotalesInput.addEventListener('change', manejarCambioAlumnos);
+    }
+    
+    // CRÍTICO: Ejecutar cálculo inicial Y consulta
+    setTimeout(() => {
+        console.log('⚡ Ejecutando cálculo inicial en setupModalListeners');
+        calcularAlumnosPorSala();
+        verificarCondicionesComputacion();
+        // NUEVA LÍNEA CRÍTICA:
+        actualizarSalasDisponibles();
+    }, 100);
+}
+
+
+function manejarCambioSalas() {
+    console.log('🔄 Cambio en número de salas detectado');
+    calcularAlumnosPorSala();
+    verificarCondicionesComputacion();
+    // NUEVA LÍNEA CRÍTICA:
+    actualizarSalasDisponibles();
+}
+
+function manejarCambioCampus() {
+    console.log('🔄 Cambio de campus detectado');
+    calcularAlumnosPorSala();
+    verificarCondicionesComputacion();
+    // NUEVA LÍNEA CRÍTICA:
+    actualizarSalasDisponibles();
+}
+
+function manejarCambioAlumnos() {
+    console.log('🔄 Cambio en número de alumnos detectado');
+    calcularAlumnosPorSala();
+    verificarCondicionesComputacion();
+    // NUEVA LÍNEA CRÍTICA:
+    actualizarSalasDisponibles();
+}
+
+function verificarCondicionesComputacion() {
+     const alumnosTotalesEl = document.getElementById('alumnosTotales');
+    const nSalasEl = document.getElementById('nSalas');
+    const campusEl = document.getElementById('campus');
+    
+    if (!alumnosTotalesEl || !nSalasEl || !campusEl) {
+        console.warn('⚠️ Elementos del modal no encontrados, saltando verificación de computación');
+        return;
+    }
+    
+    const totalAlumnos = parseInt(alumnosTotalesEl.value) || 0;
+    const nSalas = parseInt(nSalasEl.value) || 1;
+    const campus = campusEl.value;
+    
+    console.log('🔍 Verificando condiciones de computación:', {
+        campus: campus,
+        nSalas: nSalas,
+        totalAlumnos: totalAlumnos,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Validaciones específicas para salas de computación
+    const esNorte = campus === 'Norte';
+    const salasValidas = nSalas >= 1 && nSalas <= 2; // Solo 1 o 2 salas de computación
+    const tieneAlumnos = totalAlumnos > 0;
+    
+    const cumpleCondiciones = esNorte && salasValidas && tieneAlumnos;
+    
+    console.log('📋 Detalle de validaciones:', {
+        esNorte: esNorte,
+        salasValidas: salasValidas,
+        nSalasActual: nSalas,
+        rangoPermitido: '1-2 salas',
+        tieneAlumnos: tieneAlumnos,
+        totalAlumnos: totalAlumnos,
+        cumpleCondiciones: cumpleCondiciones
+    });
+    
+    // Mostrar razón específica por la que no se cumple
+    if (!cumpleCondiciones) {
+        let razon = [];
+        if (!esNorte) razon.push(`Campus ${campus} no es Norte`);
+        if (!salasValidas) razon.push(`${nSalas} salas fuera de rango (1-2)`);
+        if (!tieneAlumnos) razon.push(`Sin alumnos (${totalAlumnos})`);
+        
+        console.log('❌ No cumple condiciones:', razon.join(', '));
+    }
+    
+    if (cumpleCondiciones) {
+        console.log('✅ Cumple condiciones, consultando disponibilidad...');
+        // Proceder con la consulta de disponibilidad
+        consultarSalasComputacion(campus, nSalas, totalAlumnos);
+    } else {
+        console.log('❌ No cumple condiciones, ocultando sección');
+        ocultarSeccionComputacion();
+    }
+}
+
+function manejarCambioCampus() {
+    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
+    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
+    const campus = document.getElementById('campus').value;
+    
+    console.log('Cambio de campus detectado:', {
+        campus: campus,
+        nSalas: nSalas,
+        totalAlumnos: totalAlumnos
+    });
+    
+    // Recalcular alumnos por sala (esto no cambia, pero mantiene consistencia)
+    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
+    const alumnosPorSalaInput = document.getElementById('alumnosPorSala');
+    if (alumnosPorSalaInput) {
+        alumnosPorSalaInput.value = alumnosPorSala;
+    }
+    
+    // CLAVE: Volver a consultar disponibilidad de salas de computación
+    consultarSalasComputacion(campus, nSalas, totalAlumnos);
 }
 
 async function mostrarModalLiberarSalas(idPlanClase) {
@@ -2133,60 +3082,7 @@ async function liberarSala(idAsignacion) {
     }
 }
 
-async function guardarSala() {
-    const form = document.getElementById('salaForm');
-    if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-    }
 
-    const formData = new FormData(form);
-    const datos = Object.fromEntries(formData.entries());
-    
-    // Agregar campos adicionales
-    datos.requiereSala = document.getElementById('requiereSala').value;
-    datos.observaciones = document.getElementById('observaciones').value;
-    datos.movilidadReducida = document.getElementById('movilidadReducida').value;
-    datos.alumnosPorSala = document.getElementById('alumnosPorSala').value;
-    
-    try {
-        const response = await fetch('salas2.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(datos)
-        });
-
-        // Debug para ver la respuesta del servidor
-        const responseData = await response.json();
-        console.log('Server Response:', responseData);
-
-        if (response.ok && responseData.success) {
-            const modal = bootstrap.Modal.getInstance(document.getElementById('salaModal'));
-            modal.hide();
-            
-            mostrarToastSalas('Sala gestionada correctamente');
-
-            // Recargar solo la tabla de salas
-            const cursoId = new URLSearchParams(window.location.search).get('curso');
-            fetch('salas2.php?curso=' + cursoId)
-                .then(response => response.text())
-                .then(html => {
-                    document.getElementById('salas-list').innerHTML = html;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    mostrarToastSalas('Error al actualizar la tabla de salas', 'danger');
-                });
-        } else {
-            mostrarToastSalas(responseData.error || 'Error al guardar los cambios', 'danger');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        mostrarToastSalas('Error al procesar la solicitud', 'danger');
-    }
-}
 
 function mostrarToastSalas(mensaje, tipo = 'success') {
     // Buscar o crear el contenedor de toast para salas
@@ -3065,6 +3961,658 @@ function reordenarDocentesMasivo() {
     selected.forEach(row => container.appendChild(row));
     notSelected.forEach(row => container.appendChild(row));
 }
+
+// funcionalidad para mensaje de bloques el mismo dia
+
+// ==========================================
+// FUNCIONES PARA DETECCIÓN DE BLOQUES RELACIONADOS
+// Compatible con PHP 5.6 (sin async/await)
+// ==========================================
+
+/**
+ * Función principal para verificar bloques del mismo día
+ * @param {number} idCurso - ID del curso
+ * @param {string} fecha - Fecha en formato YYYY-MM-DD
+ * @param {number} idPlanClaseActual - ID de la actividad actual
+ */
+function verificarBloquesMismoDia(idCurso, fecha, idPlanClaseActual) {
+    console.log('🔍 Verificando bloques del mismo día:', {
+        idCurso: idCurso,
+        fecha: fecha,
+        idPlanClaseActual: idPlanClaseActual
+    });
+    
+    // Crear petición AJAX compatible con PHP 5.6
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'consultar_bloques_dia.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    console.log('📋 Respuesta del servidor:', data);
+                    
+                    if (data.success) {
+                        procesarBloquesMismoDia(data.actividades, fecha, data.total_actividades);
+                    } else {
+                        console.error('❌ Error en consulta:', data.error);
+                    }
+                } catch (error) {
+                    console.error('❌ Error al procesar respuesta JSON:', error);
+                }
+            } else {
+                console.error('❌ Error en petición HTTP:', xhr.status, xhr.statusText);
+            }
+        }
+    };
+    
+    // Preparar datos para enviar
+    var requestData = JSON.stringify({
+        idcurso: idCurso,
+        fecha: fecha,
+        idplanclase_actual: idPlanClaseActual
+    });
+    
+    xhr.send(requestData);
+}
+
+/**
+ * Procesar las actividades encontradas del mismo día
+ * @param {Array} actividades - Array de actividades del mismo día
+ * @param {string} fecha - Fecha consultada
+ * @param {number} totalActividades - Total de actividades encontradas
+ */
+function procesarBloquesMismoDia(actividades, fecha, totalActividades) {
+    console.log('🔄 Procesando bloques del mismo día:', {
+        totalActividades: totalActividades,
+        fecha: fecha
+    });
+    
+    // Si no hay otras actividades, no mostrar alerta
+    if (!actividades || actividades.length === 0) {
+        console.log('✅ No hay otras actividades el mismo día');
+        return;
+    }
+    
+    // Analizar estados de las actividades
+    var estadisticas = analizarEstadosActividades(actividades);
+    
+    console.log('📊 Estadísticas de actividades:', estadisticas);
+    
+    // Determinar si debe mostrar la alerta
+    var debeAlertar = determinarSiAlertar(estadisticas, actividades.length);
+    
+    if (debeAlertar) {
+        mostrarAlertaBloquesRelacionados(actividades, fecha);
+    } else {
+        console.log('ℹ️ No se requiere alerta para este escenario');
+    }
+}
+
+/**
+ * Analizar los estados de las actividades
+ * @param {Array} actividades - Array de actividades
+ * @returns {Object} Estadísticas de estados
+ */
+function analizarEstadosActividades(actividades) {
+    var estadisticas = {
+        asignadas: 0,
+        solicitadas: 0,
+        sinSolicitar: 0,
+        liberadas: 0,
+        total: actividades.length,
+        hayMixEstados: false
+    };
+    
+    // Contar estados
+    for (var i = 0; i < actividades.length; i++) {
+        var estado = actividades[i].estado_sala;
+        
+        switch (estado) {
+            case 'Asignado':
+                estadisticas.asignadas++;
+                break;
+            case 'Solicitado':
+                estadisticas.solicitadas++;
+                break;
+            case 'Sin solicitar':
+                estadisticas.sinSolicitar++;
+                break;
+            case 'Liberado':
+                estadisticas.liberadas++;
+                break;
+        }
+    }
+    
+    // Determinar si hay mix de estados (algunos asignados/solicitados y otros no)
+    var tienenSala = estadisticas.asignadas + estadisticas.solicitadas;
+    var noTienenSala = estadisticas.sinSolicitar;
+    
+    estadisticas.hayMixEstados = (tienenSala > 0 && noTienenSala > 0);
+    
+    return estadisticas;
+}
+
+/**
+ * Determinar si debe mostrar la alerta
+ * @param {Object} estadisticas - Estadísticas de estados
+ * @param {number} totalActividades - Total de actividades
+ * @returns {boolean} True si debe alertar
+ */
+function determinarSiAlertar(estadisticas, totalActividades) {
+    // Criterios para alertar:
+    // 1. Hay múltiples actividades el mismo día (2 o más)
+    // 2. Hay mix de estados (algunas con sala, otras sin sala)
+    
+    var hayMultiplesActividades = totalActividades >= 1; // Contando la actividad actual
+    var hayMixEstados = estadisticas.hayMixEstados;
+    
+    console.log('🎯 Criterios de alerta:', {
+        hayMultiplesActividades: hayMultiplesActividades,
+        hayMixEstados: hayMixEstados,
+        totalActividades: totalActividades + 1, // +1 por la actividad actual
+        estadisticas: estadisticas
+    });
+    
+    return hayMultiplesActividades && (hayMixEstados || totalActividades >= 1);
+}
+
+/**
+ * Mostrar la alerta visual de bloques relacionados
+ * @param {Array} actividades - Array de actividades relacionadas
+ * @param {string} fecha - Fecha de las actividades
+ */
+function mostrarAlertaBloquesRelacionados(actividades, fecha) {
+    // Verificar si ya existe una alerta para evitar duplicados
+    var alertaExistente = document.getElementById('alerta-bloques');
+    if (alertaExistente) {
+        alertaExistente.remove();
+    }
+    
+    // Formatear la fecha para mostrar
+    var fechaFormateada = formatearFechaParaMostrar(fecha);
+    
+    // Total de actividades (incluyendo la actual)
+    var totalActividades = actividades.length + 1;
+    
+    // Crear HTML de la alerta
+    var alertaHTML = crearHTMLAlerta(totalActividades, fechaFormateada, actividades);
+    
+    // Insertar la alerta al inicio del modal body
+    var modalBody = document.querySelector('#salaModal .modal-body');
+    if (modalBody) {
+        modalBody.insertAdjacentHTML('afterbegin', alertaHTML);
+        
+        console.log('✅ Alerta de bloques relacionados mostrada');
+        
+        // Log para debugging
+        logEstadoAlerta(actividades, fecha);
+    } else {
+        console.error('❌ No se encontró el modal body para insertar la alerta');
+    }
+}
+
+/**
+ * Crear el HTML de la alerta
+ * @param {number} totalActividades - Total de actividades del día
+ * @param {string} fechaFormateada - Fecha formateada para mostrar
+ * @param {Array} actividades - Array de actividades relacionadas
+ * @returns {string} HTML de la alerta
+ */
+function crearHTMLAlerta(totalActividades, fechaFormateada, actividades) {
+    var alertaHTML = '<div class="alert alert-warning alert-dismissible fade show mb-3" role="alert" id="alerta-bloques">' +
+        '<h6 class="alert-heading mb-2">' +
+            '<i class="bi bi-exclamation-triangle me-2"></i>' +
+            'Actividades relacionadas detectadas' +
+        '</h6>' +
+        '<p class="mb-2">' +
+            'Este curso tiene <strong>' + totalActividades + ' actividades</strong> el mismo día (' + fechaFormateada + ').' +
+        '</p>';
+    
+    // Agregar lista de actividades si hay más de 1
+    if (actividades.length > 0) {
+        alertaHTML += '<div class="mb-2">' +
+            '<small class="text-muted">Otras actividades del día:</small>' +
+            '<ul class="mb-2 mt-1">';
+        
+        for (var i = 0; i < actividades.length; i++) {
+            var act = actividades[i];
+            var icono = obtenerIconoEstado(act.estado_sala);
+            var colorEstado = obtenerColorEstado(act.estado_sala);
+            
+            alertaHTML += '<li class="small">' +
+                '<strong>' + act.bloque_numero + '</strong> ' +
+                '(' + act.pcl_Inicio_formateado + '-' + act.pcl_Termino_formateado + ') - ' +
+                act.pcl_TipoSesion + ' - ' +
+                '<span class="' + colorEstado + '">' +
+                    icono + ' ' + act.estado_sala +
+                '</span>' +
+                '</li>';
+        }
+        
+        alertaHTML += '</ul></div>';
+    }
+    
+    // Mensaje de recomendación
+    alertaHTML += '<p class="mb-0">' +
+        '<strong>💡 Recomendación:</strong> ' +
+        '<span class="text-primary">No olvide solicitar sala para todas las actividades del día para asegurar cercanía en sus actividades.</span>' +
+        '</p>' +
+        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+        '</div>';
+    
+    return alertaHTML;
+}
+
+/**
+ * Obtener ícono según el estado de la sala
+ * @param {string} estado - Estado de la sala
+ * @returns {string} Ícono de Bootstrap
+ */
+function obtenerIconoEstado(estado) {
+    switch (estado) {
+        case 'Asignado':
+            return '<i class="bi bi-check-circle"></i>';
+        case 'Solicitado':
+            return '<i class="bi bi-clock"></i>';
+        case 'Sin solicitar':
+            return '<i class="bi bi-x-circle"></i>';
+        case 'Liberado':
+            return '<i class="bi bi-arrow-counterclockwise"></i>';
+        default:
+            return '<i class="bi bi-question-circle"></i>';
+    }
+}
+
+/**
+ * Obtener color CSS según el estado
+ * @param {string} estado - Estado de la sala
+ * @returns {string} Clase CSS de color
+ */
+function obtenerColorEstado(estado) {
+    switch (estado) {
+        case 'Asignado':
+            return 'text-success';
+        case 'Solicitado':
+            return 'text-info';
+        case 'Sin solicitar':
+            return 'text-danger';
+        case 'Liberado':
+            return 'text-secondary';
+        default:
+            return 'text-muted';
+    }
+}
+
+/**
+ * Formatear fecha para mostrar (YYYY-MM-DD -> DD/MM/YYYY)
+ * @param {string} fecha - Fecha en formato YYYY-MM-DD
+ * @returns {string} Fecha formateada
+ */
+function formatearFechaParaMostrar(fecha) {
+    try {
+        var partes = fecha.split('-');
+        if (partes.length === 3) {
+            return partes[2] + '/' + partes[1] + '/' + partes[0];
+        }
+        return fecha;
+    } catch (error) {
+        return fecha;
+    }
+}
+
+/**
+ * Función auxiliar para parsear fecha de la tabla (DD/MM/YYYY -> YYYY-MM-DD)
+ * @param {string} fechaTexto - Fecha en formato DD/MM/YYYY
+ * @returns {string} Fecha en formato YYYY-MM-DD
+ */
+function parsearFechaParaConsulta(fechaTexto) {
+    try {
+        // Limpiar espacios y caracteres extraños
+        fechaTexto = fechaTexto.trim();
+        
+        // Intentar diferentes formatos de fecha
+        var partes;
+        
+        // Formato DD/MM/YYYY
+        if (fechaTexto.includes('/')) {
+            partes = fechaTexto.split('/');
+            if (partes.length === 3) {
+                var dia = partes[0].padStart(2, '0');
+                var mes = partes[1].padStart(2, '0');
+                var anio = partes[2];
+                return anio + '-' + mes + '-' + dia;
+            }
+        }
+        
+        // Formato DD-MM-YYYY
+        if (fechaTexto.includes('-') && fechaTexto.length === 10) {
+            partes = fechaTexto.split('-');
+            if (partes.length === 3 && partes[0].length === 2) {
+                var dia = partes[0].padStart(2, '0');
+                var mes = partes[1].padStart(2, '0');
+                var anio = partes[2];
+                return anio + '-' + mes + '-' + dia;
+            }
+        }
+        
+        // Si ya está en formato YYYY-MM-DD, devolverlo tal como está
+        if (fechaTexto.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            return fechaTexto;
+        }
+        
+        console.warn('⚠️ Formato de fecha no reconocido:', fechaTexto);
+        return null;
+        
+    } catch (error) {
+        console.error('❌ Error al parsear fecha:', error);
+        return null;
+    }
+}
+
+/**
+ * Log para debugging
+ * @param {Array} actividades - Actividades encontradas
+ * @param {string} fecha - Fecha consultada
+ */
+function logEstadoAlerta(actividades, fecha) {
+    console.log('📝 Alerta mostrada:', {
+        fecha: fecha,
+        totalActividades: actividades.length + 1,
+        actividadesEncontradas: actividades.map(function(act) {
+            return {
+                id: act.idplanclases,
+                bloque: act.bloque_numero,
+                tipo: act.pcl_TipoSesion,
+                estado: act.estado_sala,
+                horario: act.pcl_Inicio_formateado + '-' + act.pcl_Termino_formateado
+            };
+        }),
+        timestamp: new Date().toISOString()
+    });
+}
+
+// para mostrar las salas disponibles como informativo
+function actualizarSalasDisponibles() {
+    console.log('🔄 INICIANDO actualizarSalasDisponibles');
+    
+    // Obtener valores del formulario
+    var alumnosPorSala = parseInt(document.getElementById('alumnosPorSala').value) || 0;
+    var campus = document.getElementById('campus').value || '';
+    
+    // Obtener fecha y horarios de la actividad seleccionada
+    var fecha = obtenerFechaActividad();
+    var horarios = obtenerHorariosActividad();
+    
+    console.log('🔄 Datos para consulta:', {
+        alumnosPorSala: alumnosPorSala,
+        campus: campus,
+        fecha: fecha,
+        horarios: horarios
+    });
+    
+    // Validar que tengamos los datos mínimos
+    if (!alumnosPorSala || !campus || !fecha || !horarios.inicio || !horarios.termino) {
+        console.log('❌ Faltan datos, ocultando badge');
+        ocultarBadgeSalas();
+        return;
+    }
+    
+    // LÍNEA CRÍTICA CORREGIDA:
+    consultarSalasDisponibles(alumnosPorSala, campus, fecha, horarios.inicio, horarios.termino);
+}
+
+/**
+ * Realizar consulta AJAX para obtener salas disponibles
+ */
+function consultarSalasDisponibles(alumnosPorSala, campus, fecha, horaInicio, horaTermino) {
+    console.log('🚀 EJECUTANDO consultarSalasDisponibles:', {
+        alumnosPorSala: alumnosPorSala,
+        campus: campus,
+        fecha: fecha,
+        horaInicio: horaInicio,
+        horaTermino: horaTermino
+    });
+    
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'consultar_salas_disponibles.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            console.log('📡 Respuesta recibida - Status:', xhr.status);
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    console.log('📋 Datos procesados:', data);
+                    if (data.success) {
+                        mostrarBadgeSalas(data.total_salas);
+                        // Guardar datos para el modal
+                        window.salasDisponiblesData = data;
+                    } else {
+                        console.error('❌ Error en consulta:', data.error);
+                        ocultarBadgeSalas();
+                    }
+                } catch (error) {
+                    console.error('❌ Error al procesar JSON:', error);
+                    console.error('❌ Respuesta raw:', xhr.responseText);
+                    ocultarBadgeSalas();
+                }
+            } else {
+                console.error('❌ Error HTTP:', xhr.status, xhr.statusText);
+                ocultarBadgeSalas();
+            }
+        }
+    };
+    
+    var requestData = JSON.stringify({
+        alumnos_por_sala: alumnosPorSala,
+        campus: campus,
+        fecha: fecha,
+        hora_inicio: horaInicio,
+        hora_termino: horaTermino
+    });
+    
+    console.log('📤 Enviando request:', requestData);
+    xhr.send(requestData);
+}
+
+/**
+ * Mostrar el badge con el número de salas disponibles
+ */
+function mostrarBadgeSalas(numeroSalas) {
+    var badge = document.getElementById('btnSalasDisponibles');
+    var numero = document.getElementById('numeroSalasDisponibles');
+    
+    if (badge && numero) {
+        numero.textContent = numeroSalas;
+        badge.style.display = numeroSalas >= 0 ? 'block' : 'none';
+        
+        // Cambiar color según disponibilidad
+        if (numeroSalas > 0) {
+            badge.className = 'btn btn-outline-success';
+        } else {
+            badge.className = 'btn btn-outline-warning';
+            numero.textContent = '0';
+        }
+            
+        console.log('✅ Badge actualizado:', numeroSalas, 'salas disponibles');
+    }
+}
+
+/**
+ * Ocultar el badge de salas disponibles
+ */
+function ocultarBadgeSalas() {
+    var badge = document.getElementById('btnSalasDisponibles');
+    if (badge) {
+        badge.style.display = 'none';
+    }
+}
+
+/**
+ * Mostrar el modal con la lista detallada de salas
+ */
+function mostrarSalasDisponibles() {
+    if (!window.salasDisponiblesData || !window.salasDisponiblesData.salas) {
+        console.warn('⚠️ No hay datos de salas disponibles');
+        return;
+    }
+    
+    var data = window.salasDisponiblesData;
+    
+    // Actualizar criterios de búsqueda
+    actualizarCriteriosBusqueda(data.parametros);
+    
+    // Generar lista de salas
+    generarListaSalas(data.salas);
+    
+    // Mostrar modal
+    var modal = new bootstrap.Modal(document.getElementById('modalSalasDisponibles'));
+    modal.show();
+    
+    console.log('📋 Modal de salas disponibles mostrado');
+}
+
+/**
+ * Actualizar los criterios de búsqueda mostrados en el modal
+ */
+function actualizarCriteriosBusqueda(parametros) {
+    var criterios = document.getElementById('criterios-busqueda');
+    if (criterios) {
+        criterios.innerHTML = 
+            '<strong>Capacidad:</strong> ≥' + parametros.alumnos_por_sala + ' estudiantes | ' +
+            '<strong>Campus:</strong> ' + parametros.campus + ' | ' +
+            '<strong>Horario:</strong> ' + parametros.hora_inicio.substring(0,5) + '-' + parametros.hora_termino.substring(0,5);
+    }
+}
+
+/**
+ * Generar la lista HTML de salas disponibles
+ */
+function generarListaSalas(salas) {
+    var container = document.getElementById('lista-salas-disponibles');
+    
+    if (!container) {
+        console.error('❌ No se encontró el container de salas');
+        return;
+    }
+    
+    if (salas.length === 0) {
+        container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> No hay salas disponibles con estos criterios.</div>';
+        return;
+    }
+    
+    var html = '<div class="list-group list-group-flush">';
+    
+    for (var i = 0; i < salas.length; i++) {
+        var sala = salas[i];
+        html += '<div class="list-group-item d-flex justify-content-between align-items-center py-2">' +
+                    '<div>' +
+                        '<strong>' + sala.nombre + '</strong>' +
+                        '<br><small class="text-muted">' + (sala.idSala) + '</small>' +
+                    '</div>' +
+                    '<span class="badge bg-primary rounded-pill">' + sala.capacidad + '</span>' +
+                '</div>';
+    }
+    
+    html += '</div>';
+    html += '<div class="mt-2"><small class="text-muted"><strong>Total:</strong> ' + salas.length + ' salas disponibles</small></div>';
+    
+    container.innerHTML = html;
+}
+
+/**
+ * Obtener la fecha de la actividad actual
+ * AJUSTADO para salas2.php - obtiene la fecha de la fila seleccionada
+ */
+function obtenerFechaActividad() {
+    // Obtener el ID de la actividad actual del modal
+    var idPlanClase = document.getElementById('idplanclases').value;
+    
+    if (!idPlanClase) {
+        console.warn('⚠️ No hay idplanclases en el modal');
+        return null;
+    }
+    
+    // Buscar la fila en la tabla con este ID
+    var fila = document.querySelector('tr[data-id="' + idPlanClase + '"]');
+    if (!fila) {
+        console.warn('⚠️ No se encontró la fila para idplanclases:', idPlanClase);
+        return null;
+    }
+    
+    // La fecha está en la segunda celda (índice 1)
+    var celdaFecha = fila.cells[1];
+    if (!celdaFecha) {
+        console.warn('⚠️ No se encontró la celda de fecha');
+        return null;
+    }
+    
+    var fechaTexto = celdaFecha.textContent.trim();
+    console.log('📅 Fecha obtenida de la tabla:', fechaTexto);
+    
+    // Convertir DD/MM/YYYY a YYYY-MM-DD
+    return parsearFechaParaConsulta(fechaTexto);
+}
+
+/**
+ * Obtener los horarios de inicio y término de la actividad
+ * AJUSTADO para salas2.php - obtiene los horarios de la fila seleccionada
+ */
+function obtenerHorariosActividad() {
+    // Obtener el ID de la actividad actual del modal
+    var idPlanClase = document.getElementById('idplanclases').value;
+    
+    if (!idPlanClase) {
+        console.warn('⚠️ No hay idplanclases en el modal');
+        return { inicio: null, termino: null };
+    }
+    
+    // Buscar la fila en la tabla con este ID
+    var fila = document.querySelector('tr[data-id="' + idPlanClase + '"]');
+    if (!fila) {
+        console.warn('⚠️ No se encontró la fila para idplanclases:', idPlanClase);
+        return { inicio: null, termino: null };
+    }
+    
+    // El horario está en la tercera celda (índice 2) con formato "HH:MM - HH:MM"
+    var celdaHorario = fila.cells[2];
+    if (!celdaHorario) {
+        console.warn('⚠️ No se encontró la celda de horario');
+        return { inicio: null, termino: null };
+    }
+    
+    var horarioTexto = celdaHorario.textContent.trim();
+    console.log('🕒 Horario obtenido de la tabla:', horarioTexto);
+    
+    // Parsear formato "15:00 - 16:30"
+    var partes = horarioTexto.split(' - ');
+    if (partes.length !== 2) {
+        console.warn('⚠️ Formato de horario no válido:', horarioTexto);
+        return { inicio: null, termino: null };
+    }
+    
+    // Agregar segundos si no los tiene (HH:MM -> HH:MM:00)
+    var inicio = partes[0].includes(':') && partes[0].split(':').length === 2 ? 
+                 partes[0] + ':00' : partes[0];
+    var termino = partes[1].includes(':') && partes[1].split(':').length === 2 ? 
+                  partes[1] + ':00' : partes[1];
+    
+    return {
+        inicio: inicio,
+        termino: termino
+    };
+}
+
+if (typeof calcularAlumnosPorSalaOriginal === 'undefined' && typeof calcularAlumnosPorSala !== 'undefined') {
+    window.calcularAlumnosPorSalaOriginal = calcularAlumnosPorSala;
+}
+
+console.log('✅ Sistema de salas disponibles inicializado correctamente');
+
 </script>
 
 

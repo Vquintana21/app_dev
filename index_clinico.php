@@ -96,11 +96,48 @@ while ($row = $resultBloques->fetch_assoc()) {
 
 }
 
-
-
 // Convertir a JSON para usar en JavaScript
 
 $bloquesJson = json_encode($bloques);
+
+// Consulta para obtener los bloques específicos del curso
+$queryBloquesDelCurso = "SELECT `Bloque` FROM `spre_horarioscurso` WHERE `idCurso` = ?";
+$stmtBloquesDelCurso = $conexion3->prepare($queryBloquesDelCurso);
+$stmtBloquesDelCurso->bind_param("i", $idCurso);
+$stmtBloquesDelCurso->execute();
+$resultBloquesDelCurso = $stmtBloquesDelCurso->get_result();
+
+// Extraer números de bloque Y días en UN SOLO BUCLE
+$numerosBloquesCurso = [];
+$diasCurso = [];
+
+while ($row = $resultBloquesDelCurso->fetch_assoc()) {
+    $bloqueCompleto = $row['Bloque']; // ej: "L4"
+    
+    if (strlen($bloqueCompleto) >= 2) {
+        // Extraer número de bloque (ej: de "L4" extraer "4")
+        $numeroBloque = substr($bloqueCompleto, 1);
+        if (is_numeric($numeroBloque)) {
+            $numerosBloquesCurso[] = (int)$numeroBloque;
+        }
+    }
+    
+    if (strlen($bloqueCompleto) >= 1) {
+        // Extraer día de la semana (ej: de "L4" extraer "L")
+        $letraDia = substr($bloqueCompleto, 0, 1);
+        if (!in_array($letraDia, $diasCurso)) {
+            $diasCurso[] = $letraDia;
+        }
+    }
+}
+
+// Convertir a JSON para JavaScript
+$numerosBloquesCursoJson = json_encode($numerosBloquesCurso);
+$diasCursoJson = json_encode($diasCurso);
+
+$stmtBloquesDelCurso->close();
+
+
 
 function InfoDocenteUcampus($rut){
 	
@@ -571,7 +608,10 @@ $conn->close();
         }
     }
 	
-	function loadBloques(isEditing = false) {
+let numerosBloquesCurso = <?php echo $numerosBloquesCursoJson; ?>;
+
+// MODIFICAR la función loadBloques existente
+function loadBloques(isEditing = false) {
     const bloquesContainer = document.getElementById('bloques-container');
     bloquesContainer.innerHTML = '';
     
@@ -580,6 +620,18 @@ $conn->close();
     const idCurso = document.getElementById('cursos_idcursos').value;
     
     console.log('Cargando bloques para fecha:', dateStr, 'curso:', idCurso, 'modo edición:', isEditing);
+    console.log('Bloques específicos del curso:', numerosBloquesCurso);
+    
+    // Determinar qué bloques mostrar
+    let bloquesAMostrar = bloques; // Por defecto todos los bloques
+    
+    if (numerosBloquesCurso && numerosBloquesCurso.length > 0) {
+        // Filtrar solo los bloques que corresponden al curso
+        bloquesAMostrar = bloques.filter(bloque => {
+            return numerosBloquesCurso.includes(parseInt(bloque.bloque));
+        });
+        console.log('Bloques filtrados para el curso:', bloquesAMostrar);
+    }
     
     // Encontrar qué bloques ya están en uso para esta fecha y curso
     const bloquesUsados = new Map();
@@ -588,23 +640,16 @@ $conn->close();
         const idPrincipal = isEditing ? document.getElementById('idplanclases').value : '0';
         
         planclases.forEach(act => {
-            // Extraer solo la parte de fecha
             const actFecha = act.pcl_Fecha ? act.pcl_Fecha.split(' ')[0] : '';
             
-            console.log(`Evaluando actividad: ID=${act.idplanclases}, Bloque=${act.Bloque}, Fecha=${actFecha}, Curso=${act.cursos_idcursos}`);
-            
-            // Solo considerar actividades del mismo día y curso
             if (actFecha === dateStr && 
                 String(act.cursos_idcursos) === String(idCurso)) {
                 
-                // En modo edición, excluir la actividad actual
                 if (isEditing && String(act.idplanclases) === String(idPrincipal)) {
-                    console.log('↳ Saltando actividad actual en edición');
                     return;
                 }
                 
                 if (act.Bloque) {
-                    console.log('✅ Bloque ocupado encontrado:', act.Bloque, 'por actividad:', act.pcl_tituloActividad);
                     bloquesUsados.set(String(act.Bloque), {
                         id: act.idplanclases,
                         titulo: act.pcl_tituloActividad || 'Sin título'
@@ -613,11 +658,9 @@ $conn->close();
             }
         });
     }
-    
-    console.log('Bloques ocupados encontrados:', Array.from(bloquesUsados.entries()));
 
     if (isEditing) {
-        // MODO EDICIÓN: Radio buttons (código existente)
+        // MODO EDICIÓN: Radio buttons
         const titleDiv = document.createElement('div');
         titleDiv.className = 'mb-2 fw-bold';
         titleDiv.textContent = 'Seleccione un bloque horario:';
@@ -626,7 +669,7 @@ $conn->close();
         const idPrincipal = document.getElementById('idplanclases').value;
         const bloqueActual = Array.from(actividadesPorBloque.keys())[0];
         
-        bloques.forEach((bloque, index) => {
+        bloquesAMostrar.forEach((bloque, index) => {
             const id = `bloque-${bloque.bloque}`;
             const radioDiv = document.createElement('div');
             radioDiv.className = 'form-check mb-2';
@@ -663,13 +706,19 @@ $conn->close();
         });
         
     } else {
-        // MODO INSERCIÓN: Checkboxes con verificación de bloques ocupados
+        // MODO INSERCIÓN: Checkboxes
         const titleDiv = document.createElement('div');
         titleDiv.className = 'mb-2 fw-bold';
-        titleDiv.textContent = 'Seleccione uno o más bloques horarios:';
+        
+        // Texto dinámico según si hay bloques específicos o no
+        if (numerosBloquesCurso && numerosBloquesCurso.length > 0) {
+            titleDiv.textContent = 'Seleccione uno o más bloques horarios del curso:';
+        } else {
+            titleDiv.textContent = 'Seleccione uno o más bloques horarios:';
+        }
         bloquesContainer.appendChild(titleDiv);
         
-        bloques.forEach((bloque, index) => {
+        bloquesAMostrar.forEach((bloque, index) => {
             const id = `bloque-${bloque.bloque}`;
             const checkboxDiv = document.createElement('div');
             checkboxDiv.className = 'form-check mb-2';
@@ -703,12 +752,18 @@ $conn->close();
         });
     }
     
-    // Agregar nota explicativa en ambos modos
+    // Agregar nota explicativa
     const noteDiv = document.createElement('div');
     noteDiv.className = 'small text-muted mt-2';
-    noteDiv.innerHTML = 'Nota: Los bloques marcados como "En uso" ya están asignados a otras actividades para este curso en este día.';
+    
+    if (numerosBloquesCurso && numerosBloquesCurso.length > 0) {
+        noteDiv.innerHTML = 'Nota: Solo se muestran los bloques correspondientes al horario oficial de este curso. Los bloques marcados como "En uso" ya están asignados a otras actividades.';
+    } else {
+        noteDiv.innerHTML = 'Nota: Los bloques marcados como "En uso" ya están asignados a otras actividades para este curso en este día.';
+    }
     bloquesContainer.appendChild(noteDiv);
 }
+
 
 function updateBloquesOnDateChange() {
     const isEditing = document.getElementById('idplanclases').value !== '0';
@@ -881,19 +936,21 @@ function validarFormularioActividad() {
         }
     }
     
-   // Validar que la fecha no sea de días anteriores
-if (fecha) {
-    const fechaSeleccionada = new Date(fecha);
-    const hoy = new Date();
-    
-    // Resetear horas para comparar solo fechas (día completo)
-    fechaSeleccionada.setHours(0, 0, 0, 0);
-    hoy.setHours(0, 0, 0, 0);
-    
-    if (fechaSeleccionada < hoy) {
-        errores.push('La fecha no puede ser de días anteriores');
+    // VALIDACIÓN CORREGIDA - Validar que la fecha no sea de días anteriores
+    if (fecha) {
+        // Obtener fecha de hoy en formato YYYY-MM-DD (mismo formato que el input)
+        const hoy = new Date();
+        const hoyStr = hoy.getFullYear() + '-' + 
+                      String(hoy.getMonth() + 1).padStart(2, '0') + '-' + 
+                      String(hoy.getDate()).padStart(2, '0');
+        
+        console.log('Comparando fechas:', { fechaSeleccionada: fecha, fechaHoy: hoyStr });
+        
+        // Comparar como strings en formato YYYY-MM-DD
+        if (fecha < hoyStr) {
+            errores.push('La fecha no puede ser de días anteriores');
+        }
     }
-}
     
     return errores;
 }
@@ -1104,21 +1161,43 @@ function configurarValidacionTiempoReal() {
                 return;
             }
             
-            // Validar que no sea de días anteriores (permite el día actual)
-            const fechaSeleccionada = new Date(fecha);
+            const dateInput = document.getElementById('activity-date');
+    if (!dateInput.hasAttribute('data-validation-configured')) {
+        dateInput.addEventListener('change', function() {
+            // Limpiar cualquier estado de error previo INMEDIATAMENTE
+            this.classList.remove('is-invalid');
+            ocultarErrorCampo(this);
+            
+            const fecha = this.value;
+            if (!fecha) {
+                this.classList.add('is-invalid');
+                mostrarErrorCampo(this, 'La fecha es requerida');
+                return;
+            }
+            
+            // VALIDACIÓN CORREGIDA - Permitir fecha de hoy
             const hoy = new Date();
+            const hoyStr = hoy.getFullYear() + '-' + 
+                          String(hoy.getMonth() + 1).padStart(2, '0') + '-' + 
+                          String(hoy.getDate()).padStart(2, '0');
             
-            // Resetear horas para comparar solo fechas (día completo)
-            fechaSeleccionada.setHours(0, 0, 0, 0);
-            hoy.setHours(0, 0, 0, 0);
-            
-            if (fechaSeleccionada < hoy) {
+            if (fecha < hoyStr) {
                 this.classList.add('is-invalid');
                 mostrarErrorCampo(this, 'La fecha no puede ser de días anteriores');
             }
+        });
+        dateInput.setAttribute('data-validation-configured', 'true');
+    }
+			
             // Si la fecha es válida, los errores ya se limpiaron al inicio
         });
         dateInput.setAttribute('data-validation-configured', 'true');
+    }
+	
+	 
+    if (!dateInput.hasAttribute('data-dia-validation-configured')) {
+        dateInput.addEventListener('change', validarDiaClase);
+        dateInput.setAttribute('data-dia-validation-configured', 'true');
     }
 }
 
@@ -2153,6 +2232,47 @@ function showNotification(message, type = 'success') {
     document.getElementById(toastId).addEventListener('hidden.bs.toast', function() {
         this.remove();
     });
+}
+
+let diasCurso = <?php echo $diasCursoJson; ?>; // ej: ["L", "J"]
+
+// Mapeo simple de letras a nombres
+const nombresDias = {
+    'L': 'Lunes',
+    'M': 'Martes', 
+    'X': 'Miércoles',
+    'J': 'Jueves',
+    'V': 'Viernes'
+};
+
+// Mapeo de letras a números (0=Domingo, 1=Lunes, etc.)
+const numerosDias = {
+    'L': 1, 'M': 2, 'X': 3, 'J': 4, 'V': 5
+};
+
+// Función simple para validar día
+function validarDiaClase() {
+    const dateInput = document.getElementById('activity-date');
+    const fechaSeleccionada = dateInput.value;
+    
+    // Si no hay restricciones o no hay fecha, no validar
+    if (!diasCurso || diasCurso.length === 0 || !fechaSeleccionada) {
+        return;
+    }
+    
+    const fechaObj = new Date(fechaSeleccionada);
+    const diaSemana = fechaObj.getDay(); // 0=Domingo, 1=Lunes, etc.
+    
+    // Verificar si el día está permitido
+    const diaPermitido = diasCurso.some(letra => numerosDias[letra] === diaSemana);
+    
+    if (!diaPermitido) {
+        // Crear lista de días permitidos
+        const diasPermitidos = diasCurso.map(letra => nombresDias[letra]).join(', ');
+        
+        // Mostrar advertencia simple
+        mostrarToast(`⚠️ Este curso tiene clases los días: ${diasPermitidos}`, 'warning');
+    }
 }
 
 </script>
