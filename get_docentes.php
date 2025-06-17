@@ -3,7 +3,7 @@ include("conexion.php");
 
 $idplanclases = isset($_GET['idplanclases']) ? intval($_GET['idplanclases']) : 0;
 
-$buscarCurso = "SELECT cursos_idcursos FROM `planclases` WHERE idplanclases=$idplanclases";
+$buscarCurso = "SELECT cursos_idcursos FROM `a_planclases` WHERE idplanclases=$idplanclases";
 $buscarCursoQ = mysqli_query($conn,$buscarCurso);
 $FilaCurso = mysqli_fetch_assoc($buscarCursoQ);
 $idCurso = $FilaCurso["cursos_idcursos"];
@@ -84,7 +84,7 @@ if (!$equpo_docenteQ) {
 }
 
 // Consulta para verificar docentes asignados  
-$docentes_asignados = "SELECT distinct rutDocente as rut FROM docenteclases WHERE idPlanClases = $idplanclases and vigencia=1";
+$docentes_asignados = "SELECT distinct rutDocente as rut FROM docenteclases_copy WHERE idPlanClases = $idplanclases and vigencia=1";
 $result = mysqli_query($conn, $docentes_asignados);
 $docentes_asignados = [];
 

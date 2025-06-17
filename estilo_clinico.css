@@ -1,0 +1,72 @@
+.hours-input {
+    font-weight: 500;
+}
+
+.hours-input:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.hours-zero {
+    background-color: #f8f9fa;
+    color: #6c757d;
+}
+
+.hours-positive {
+    background-color: #e8f5e8;
+    color: #198754;
+    font-weight: 600;
+}
+
+.hours-saving {
+    background-color: #fff3cd;
+    border-color: #ffc107;
+}
+
+.hours-error {
+    background-color: #f8d7da;
+    border-color: #dc3545;
+}
+
+.input-group-sm .form-control {
+    font-size: 0.875rem;
+}
+
+.input-group-text {
+    font-size: 0.75rem;
+    color: #6c757d;
+}
+
+/* CSS para estados visuales de las horas directas */
+.hours-input {
+    text-align: center;
+    font-weight: 500;
+}
+
+.hours-input.hours-zero {
+    background-color: #f8f9fa;    /* ⚪ Gris cuando está vacío */
+    border-color: #dee2e6;
+    color: #6c757d;
+}
+
+.hours-input.hours-positive {
+    background-color: #d4edda;    /* 🟢 Verde cuando tiene valor */
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.hours-input.hours-saving {
+    background-color: #fff3cd;    /* 🟡 Amarillo al guardar */
+    border-color: #ffeaa7;
+    color: #856404;
+    position: relative;
+}
+
+.hours-input.hours-saving::after {
+    content: "💾";               /* 💾 ¡AQUÍ ESTÁ EL DISQUETE! */
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+}

@@ -36,7 +36,7 @@ try {
    $conn->begin_transaction();
 
    // Obtener el tipo anterior ANTES de cualquier actualización
-   $queryTipoAnterior = "SELECT pcl_TipoSesion FROM planclases WHERE idplanclases = ?";
+   $queryTipoAnterior = "SELECT pcl_TipoSesion FROM a_planclases WHERE idplanclases = ?";
    $stmtTipoAnterior = $conn->prepare($queryTipoAnterior);
    $stmtTipoAnterior->bind_param("i", $idplanclases);
    $stmtTipoAnterior->execute();
@@ -84,7 +84,7 @@ try {
    if ($tipo === 'Clase') {
        $nsalasCalculado = 1;
    } else if ($requiereSalaActual == 1) {
-       $queryNsalasActual = "SELECT pcl_nSalas FROM planclases WHERE idplanclases = ?";
+       $queryNsalasActual = "SELECT pcl_nSalas FROM a_planclases WHERE idplanclases = ?";
        $stmtNsalasActual = $conn->prepare($queryNsalasActual);
        $stmtNsalasActual->bind_param("i", $idplanclases);
        $stmtNsalasActual->execute();
@@ -98,7 +98,7 @@ try {
    }
 
    // Actualizar planclases incluyendo pcl_nSalas
-   $query = "UPDATE planclases SET 
+   $query = "UPDATE a_planclases SET 
                pcl_tituloActividad = ?, 
                pcl_TipoSesion = ?,
                pcl_SubTipoSesion = ?,
@@ -159,7 +159,7 @@ try {
 
     // Solo si el tipo anterior permitía docentes y el nuevo NO
     if ($permiteDocentesAnterior === 1 && $permiteDocentesNuevo === 0) {
-        $queryUpdateVigencia = "UPDATE docenteclases 
+        $queryUpdateVigencia = "UPDATE docenteclases_copy 
                                 SET vigencia = 0, 
                                     fechaModificacion = NOW(),
                                     usuarioModificacion = 'sistema'
@@ -224,7 +224,7 @@ try {
    $stmtTipoAnterior->close();
 
    // Actualizar explícitamente el campo pcl_DeseaSala en planclases
-   $queryUpdateDeseaSala = "UPDATE planclases SET pcl_DeseaSala = ? WHERE idplanclases = ?";
+   $queryUpdateDeseaSala = "UPDATE a_planclases SET pcl_DeseaSala = ? WHERE idplanclases = ?";
    $stmtUpdateDeseaSala = $conn->prepare($queryUpdateDeseaSala);
    $valorDeseaSala = $requiereSala ? 1 : 0;
    $stmtUpdateDeseaSala->bind_param("ii", $valorDeseaSala, $idplanclases);

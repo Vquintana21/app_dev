@@ -13,7 +13,7 @@ try {
 
     if($replicateAll) {
         // Obtener todas las actividades del mismo curso
-        $query = "SELECT idplanclases FROM planclases WHERE cursos_idcursos = (SELECT cursos_idcursos FROM planclases WHERE idplanclases = ?)";
+        $query = "SELECT idplanclases FROM a_planclases WHERE cursos_idcursos = (SELECT cursos_idcursos FROM a_planclases WHERE idplanclases = ?)";
         $stmt = $conn->prepare($query);
         $stmt->bind_param("i", $idplanclases);
         $stmt->execute();
@@ -22,13 +22,13 @@ try {
         while($row = $result->fetch_assoc()) {
             if($checked) {
                 // Insertar docente en cada actividad
-                $insert = "INSERT IGNORE INTO planclases_docentes (idplanclases, rut) VALUES (?, ?)";
+                $insert = "INSERT IGNORE INTO docenteclases_copy (idplanclases, rut) VALUES (?, ?)";
                 $stmt = $conn->prepare($insert);
                 $stmt->bind_param("is", $row['idplanclases'], $rut);
                 $stmt->execute();
             } else {
                 // Eliminar docente de cada actividad
-                $delete = "DELETE FROM planclases_docentes WHERE idplanclases = ? AND rut = ?";
+                $delete = "DELETE FROM docenteclases_copy WHERE idplanclases = ? AND rut = ?";
                 $stmt = $conn->prepare($delete);
                 $stmt->bind_param("is", $row['idplanclases'], $rut);
                 $stmt->execute();
@@ -37,13 +37,13 @@ try {
     } else {
         if($checked) {
             // Insertar solo para esta actividad
-            $insert = "INSERT IGNORE INTO planclases_docentes (idplanclases, rut) VALUES (?, ?)";
+            $insert = "INSERT IGNORE INTO docenteclases_copy (idplanclases, rut) VALUES (?, ?)";
             $stmt = $conn->prepare($insert);
             $stmt->bind_param("is", $idplanclases, $rut);
             $stmt->execute();
         } else {
             // Eliminar solo de esta actividad
-            $delete = "DELETE FROM planclases_docentes WHERE idplanclases = ? AND rut = ?";
+            $delete = "DELETE FROM docenteclases_copy WHERE idplanclases = ? AND rut = ?";
             $stmt = $conn->prepare($delete);
             $stmt->bind_param("is", $idplanclases, $rut);
             $stmt->execute();
@@ -68,9 +68,9 @@ $checked = $data['checked'];
 
 try {
     if($checked) {
-        $query = "INSERT IGNORE INTO docenteclases (idPlanClases, rutDocente) VALUES (?, ?)";
+        $query = "INSERT IGNORE INTO docenteclases_copy (idPlanClases, rutDocente) VALUES (?, ?)";
     } else {
-        $query = "DELETE FROM docenteclases WHERE idPlanClases = ? AND rutDocente = ?";
+        $query = "DELETE FROM docenteclases_copy WHERE idPlanClases = ? AND rutDocente = ?";
     }
     
     $stmt = $conexion->prepare($query);

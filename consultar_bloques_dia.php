@@ -37,7 +37,7 @@ try {
             ELSE 'Sin solicitar'
         END as estado_sala,
         COUNT(a.idplanclases) as salas_solicitadas
-    FROM planclases p
+    FROM a_planclases p
     LEFT JOIN asignacion_piloto a ON p.idplanclases = a.idplanclases
     WHERE p.cursos_idcursos = ? 
       AND p.pcl_Fecha = ?

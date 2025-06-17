@@ -21,7 +21,7 @@ try {
     // Construir consulta base
     $query = "SELECT idplanclases, pcl_tituloActividad, pcl_Fecha, DAYNAME(pcl_Fecha) AS dia_semana, pcl_Inicio, pcl_Termino, 
              pcl_TipoSesion, pcl_SubTipoSesion, dia
-             FROM planclases 
+             FROM a_planclases 
              WHERE cursos_idcursos = ? 
              AND pcl_TipoSesion != '' 
              AND pcl_TipoSesion != 'Autoaprendizaje'

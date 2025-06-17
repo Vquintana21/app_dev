@@ -14,7 +14,7 @@ try {
     $horasNoPresenciales = isset($_POST['horasNoPresenciales']) ? mysqli_real_escape_string($conn, $_POST['horasNoPresenciales']) : '00:00:00';
 
     // Query de actualización
-    $query = "UPDATE planclases SET 
+    $query = "UPDATE a_planclases SET 
                 pcl_tituloActividad = ?, 
                 pcl_HorasNoPresenciales = ?
               WHERE idplanclases = ?";

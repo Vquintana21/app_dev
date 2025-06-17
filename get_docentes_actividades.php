@@ -17,7 +17,7 @@ try {
     
     // Obtener todos los docentes activos para cada actividad
     $query = "SELECT idPlanClases, rutDocente 
-              FROM docenteclases 
+              FROM docenteclases_copy 
               WHERE idPlanClases IN ($actividadesIds) 
               AND idCurso = $idCurso 
               AND vigencia = 1";

@@ -38,6 +38,42 @@ $FilaCurso = mysqli_fetch_assoc($buscarCursoQ);
 $codigo_curso = $FilaCurso["CodigoCurso"];
 $seccion = $FilaCurso["Seccion"];
 
+// ========== NUEVA FUNCIONALIDAD: JUNTAR SECCIONES ==========
+
+// Consultar el cupo del curso individual
+$stmtCupo = $conexion3->prepare("SELECT Cupo FROM spre_cursos WHERE idCurso = ?");
+$stmtCupo->bind_param("i", $idCurso);
+$stmtCupo->execute();
+$resultCupo = $stmtCupo->get_result();
+$cupoData = $resultCupo->fetch_assoc();
+$cupoCurso = $cupoData ? $cupoData['Cupo'] : 0;
+
+// Query para obtener total de alumnos en caso de juntar secciones
+$stmtCupoTotal = $conexion3->prepare("SELECT SUM(Cupo) as cupo_total, COUNT(*) as num_secciones 
+                                     FROM spre_cursos 
+                                     WHERE CodigoCurso = ? AND idperiodo = ?");
+$stmtCupoTotal->bind_param("ss", $codigo_curso, $idPeriodo);
+$stmtCupoTotal->execute();
+$resultCupoTotal = $stmtCupoTotal->get_result();
+$cupoTotalData = $resultCupoTotal->fetch_assoc();
+$cupoTotalSecciones = $cupoTotalData ? $cupoTotalData['cupo_total'] : $cupoCurso;
+$numeroSecciones = $cupoTotalData ? $cupoTotalData['num_secciones'] : 1;
+
+// Consultar todas las secciones del mismo curso para mostrar en interfaz
+$stmtSecciones = $conexion3->prepare("SELECT idCurso, Seccion, Cupo 
+                                     FROM spre_cursos 
+                                     WHERE CodigoCurso = ? AND idperiodo = ? 
+                                     ORDER BY Seccion");
+$stmtSecciones->bind_param("ss", $codigo_curso, $idPeriodo);
+$stmtSecciones->execute();
+$resultSecciones = $stmtSecciones->get_result();
+$seccionesDisponibles = [];
+while ($row = $resultSecciones->fetch_assoc()) {
+    $seccionesDisponibles[] = $row;
+}
+
+// ========== FIN NUEVA FUNCIONALIDAD ==========
+
 //Consulta Ramo
 $nombre_ramo = "SELECT * FROM spre_ramos WHERE CodigoCurso='$codigo_curso' ";
 $ramoQuery = mysqli_query($conexion3,$nombre_ramo);
@@ -45,18 +81,7 @@ $ramo_fila = mysqli_fetch_assoc($ramoQuery);
 
 $nombre_curso = utf8_encode($ramo_fila["NombreCurso"]);
 
-// Consultar el cupo del curso
-$stmtCupo = $conexion3->prepare("SELECT Cupo FROM spre_cursos WHERE idCurso = ?");
 
-// query para obteenr total alumnos en caso de jusntar secciones.
-//SELECT sum(cupo) FROM `spre_cursos` WHERE `CodigoCurso`= 'cb10008'  and `idperiodo`='2024.2';
-// usar para regulares y clinicos
-
-$stmtCupo->bind_param("i", $idCurso);
-$stmtCupo->execute();
-$resultCupo = $stmtCupo->get_result();
-$cupoData = $resultCupo->fetch_assoc();
-$cupoCurso = $cupoData ? $cupoData['Cupo'] : 0;
 
 //Consulta Funcionario
 $spre_personas = "SELECT * FROM spre_personas WHERE Rut='$rut' ";
@@ -210,6 +235,8 @@ $conn->close();
     <title>Calendario Académico</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">	
+	
+	<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 	  
 	 <!-- Vendor CSS Files   -->
   <link href="assets/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
@@ -232,6 +259,7 @@ $conn->close();
   <link href="assets/css/style.css" rel="stylesheet">
   <!-- CSS personalizado -->
   <link href="estilo.css" rel="stylesheet">
+  
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
   
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -241,7 +269,7 @@ $conn->close();
     <!-- Header y navegación igual que en index.php -->
  <!-- ======= Header ======= -->
   <header id="header" class="header fixed-top d-flex align-items-center">
-    <div class="d-flex align-items-center justify-content-between">
+   <div class="d-flex align-items-center justify-content-between">
       <a href="inicio.php" class="logo d-flex align-items-center">
         <img src="assets/img/logo.png" alt="">
         <span class="d-none d-lg-block">Calendario Académico</span>
@@ -314,10 +342,15 @@ $conn->close();
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
-                           <div class="card">
     <div class="card-header">
         <h5 class="card-title">Editar información</h5>
         <!-- Bordered Tabs Justified -->
+		 <div class="card mb-4">
+            <div class="card-body text-center">
+               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
+                
+            </div>
+        </div>
         <ul class="nav nav-tabs nav-tabs-bordered d-flex" id="borderedTabJustified" role="tablist">
             <li class="nav-item flex-fill" role="presentation">
                 <button class="nav-link w-100 active" id="home-tab" data-bs-toggle="tab" data-bs-target="#bordered-justified-home" type="button" role="tab" aria-controls="home" aria-selected="true"><i class="bi bi-calendar4-week"></i> Calendario </button>
@@ -334,13 +367,19 @@ $conn->close();
             
         </ul>
     </div>
-	
+	<div class="container py-4">  
+
 	<div class="tab-content" id="borderedTabJustifiedContent">
         <!-- Tab Calendario (ya existente) -->
         <div class="tab-pane fade show active" id="bordered-justified-home" role="tabpanel" aria-labelledby="home-tab">
             <div class="card-body">
                               
-                                
+                                	 <div class="card mb-4">
+            <div class="card-body text-center">
+               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
+                
+            </div>
+        </div>
                                  <!-- Botón para agregar actividad -->
 								 <hr>
                                 <div class="row mb-4">
@@ -438,6 +477,7 @@ $conn->close();
         </div>
     </div>
 </div>
+ </div>
                             
                             
                         </div>
@@ -545,7 +585,18 @@ $conn->close();
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+	 <script src="validarRUT.js"></script>
+	   <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
+  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="assets/vendor/chart.js/chart.umd.js"></script>
+  <script src="assets/vendor/echarts/echarts.min.js"></script>
+  <script src="assets/vendor/quill/quill.js"></script>
+  <script src="assets/vendor/simple-datatables/simple-datatables.js"></script>
+  <script src="assets/vendor/tinymce/tinymce.min.js"></script>
+  <script src="assets/vendor/php-email-form/validate.js"></script>
+  
+  <script src="assets/js/main.js"></script>
     
     <script>
     // Tipos de sesión desde PHP
@@ -771,7 +822,6 @@ function updateBloquesOnDateChange() {
 }
     
 function resetForm() {
-	
 
 	
     document.getElementById('activityForm').reset();
@@ -783,8 +833,10 @@ function resetForm() {
     actividadesPorBloque.clear();
     
     // Establecer fecha por defecto a hoy
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('activity-date').value = today;
+// Establecer fecha por defecto a hoy
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('activity-date').value = today;
+document.getElementById('activity-date').min = today; // ✅ Solo evita fechas pasadas
     
     // Cargar bloques como checkboxes para modo inserción
     loadBloques(false);
@@ -1294,8 +1346,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Establecer fecha por defecto a hoy para nueva actividad
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('activity-date').value = today;
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('activity-date').value = today;
+document.getElementById('activity-date').min = today; // ✅ Solo evita fechas pasadas
     
     // ===== CONFIGURAR LISTENERS DE FECHA (SOLO UNA VEZ) =====
     const dateInputMain = document.getElementById('activity-date');
@@ -1410,28 +1463,227 @@ document.addEventListener('DOMContentLoaded', function() {
                     docentesList.setAttribute('data-loaded', 'true');
                     
                     // Inicializar Select2 después de cargar el contenido
-                    setTimeout(() => {
-                        if (typeof $ !== 'undefined' && $.fn.select2) {
-                            $('#docente').select2({
-                                theme: 'bootstrap-5',
-                                placeholder: '🔍 Buscar Docente',
-                                allowClear: true,
-                                language: {
-                                    noResults: function() {
-                                        return "No se encontraron docentes";
-                                    },
-                                    searching: function() {
-                                        return "Buscando...";
-                                    }
-                                },
-                                width: '100%',
-                                dropdownParent: $('#docente').parent()
-                            });
-                        }
-                        
-                        // Inicializar manejo de horas después de que todo esté cargado
-                        setupHorasDirectasClinico();
-                    }, 500);
+                        setTimeout(() => {
+
+// ===== FUNCIÓN AUXILIAR PARA CUANDO LA PESTAÑA ESTÁ ACTIVA =====
+function recargarTablaConPestanaActiva() {
+    console.log('🔍 Buscando contenedor con pestaña activa...');
+    
+    // Buscar selectores en orden de prioridad
+    const selectores = [
+        '#bordered-justified-docente #docentes-list',        // Más específico
+        '#docentes-list',                                    // Directo
+        '#bordered-justified-docente .table-responsive',     // Tabla dentro de la pestaña
+        '#bordered-justified-docente',                       // Toda la pestaña
+    ];
+    
+    let contenedor = null;
+    
+    for (let i = 0; i < selectores.length; i++) {
+        contenedor = document.querySelector(selectores[i]);
+        console.log(`🔍 Selector "${selectores[i]}":`, contenedor);
+        if (contenedor) {
+            console.log(`✅ Contenedor encontrado: ${selectores[i]}`);
+            break;
+        }
+    }
+    
+    if (!contenedor) {
+        console.error('❌ Ningún contenedor encontrado. Forzando recarga completa...');
+        forzarRecargaCompleta();
+        return;
+    }
+    
+    // Mostrar spinner y recargar
+    mostrarSpinnerYRecargar(contenedor);
+}
+
+// ===== FUNCIÓN PARA FORZAR RECARGA COMPLETA =====
+function forzarRecargaCompleta() {
+    console.log('🔄 Forzando recarga completa de la pestaña...');
+    
+    // Limpiar cualquier flag de carga
+    const docentesList = document.getElementById('docentes-list');
+    if (docentesList) {
+        docentesList.removeAttribute('data-loaded');
+        console.log('🗑️ Flag de carga eliminado');
+    }
+    
+    // Forzar recarga haciendo click en la pestaña
+    const docenteTab = document.getElementById('docente-tab');
+    if (docenteTab) {
+        setTimeout(() => {
+            docenteTab.click();
+            console.log('✅ Pestaña recargada por click forzado');
+        }, 100);
+    } else {
+        console.error('❌ No se encontró la pestaña de docentes');
+    }
+}
+
+// ===== FUNCIÓN PARA MOSTRAR SPINNER Y RECARGAR =====
+function mostrarSpinnerYRecargar(contenedor) {
+    if (!contenedor) return;
+    
+    console.log('🔄 Mostrando spinner y recargando contenido...');
+    
+    // Mostrar spinner
+    contenedor.innerHTML = `
+        <div class="text-center p-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Actualizando...</span>
+            </div>
+            <p class="mt-2">Actualizando equipo docente...</p>
+        </div>
+    `;
+    
+    // Obtener ID del curso
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
+    
+    if (!idCurso) {
+        console.error('❌ No se encontró ID del curso');
+        contenedor.innerHTML = `
+            <div class="alert alert-danger m-3">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Error: No se encontró el ID del curso
+            </div>
+        `;
+        return;
+    }
+    
+    // Hacer fetch
+    fetch('get_docentes_table_clinico.php?idcurso=' + idCurso)
+        .then(response => {
+            console.log('📡 Respuesta recibida:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(html => {
+            console.log('✅ HTML recibido, longitud:', html.length);
+            
+            // Reemplazar contenido
+            contenedor.innerHTML = html;
+            
+            // Reinicializar funcionalidades
+            setTimeout(() => {
+                reinicializarFuncionalidades();
+            }, 300);
+        })
+        .catch(error => {
+            console.error('❌ Error en fetch:', error);
+            contenedor.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Error al cargar: ${error.message}
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Recargar página
+                    </button>
+                </div>
+            `;
+        });
+}
+
+// ===== FUNCIÓN PARA REINICIALIZAR FUNCIONALIDADES =====
+function reinicializarFuncionalidades() {
+    console.log('🔧 Reinicializando funcionalidades...');
+    
+    const funciones = [
+        { nombre: 'setupHorasDirectasClinico', func: window.setupHorasDirectasClinico },
+        { nombre: 'inicializarBusquedaDocentesClinico', func: window.inicializarBusquedaDocentesClinico },
+        { nombre: 'inicializarCrearDocente', func: window.inicializarCrearDocente },
+        { nombre: 'inicializarEstilosHorasClinico', func: window.inicializarEstilosHorasClinico }
+    ];
+    
+    funciones.forEach(({ nombre, func }) => {
+        if (typeof func === 'function') {
+            try {
+                func();
+                console.log(`✅ ${nombre} reinicializada`);
+            } catch (error) {
+                console.warn(`⚠️ Error reinicializando ${nombre}:`, error);
+            }
+        } else {
+            console.warn(`⚠️ ${nombre} no disponible`);
+        }
+    });
+}
+
+function showSpinnerInElement(element) {
+    element.innerHTML = `
+        <div class="text-center p-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Actualizando...</span>
+            </div>
+            <p class="mt-2">Actualizando equipo docente...</p>
+        </div>
+    `;
+}
+
+function fetchAndUpdateTable(container) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
+    
+    // ✅ USAR EL ARCHIVO CORREGIDO CON FUNCIONALIDAD DE CURSOS CLÍNICOS
+    fetch('get_docentes_table_clinico.php?idcurso=' + idCurso)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.text();
+        })
+        .then(html => {
+            console.log('✅ Tabla de docentes clínicos actualizada');
+            
+            // Reemplazar el contenido de la tabla
+            container.outerHTML = html;
+            
+            // ✅ REINICIALIZAR LA FUNCIONALIDAD DE HORAS DIRECTAS
+            setTimeout(() => {
+                if (typeof setupHorasDirectasClinico === 'function') {
+                    setupHorasDirectasClinico();
+                    console.log('✅ Funcionalidad de horas directas reinicializada');
+                }
+
+if (typeof inicializarBusquedaDocentesClinico === 'function') {
+        inicializarBusquedaDocentesClinico();
+    }
+    
+    if (typeof inicializarCrearDocente === 'function') {
+        inicializarCrearDocente();
+    }
+    // ✅ NUEVO: Inicializar estilos de horas
+    if (typeof inicializarEstilosHorasClinico === 'function') {
+        inicializarEstilosHorasClinico();
+    }
+				else {
+                    console.warn('⚠️ setupHorasDirectasClinico no está disponible');
+                }
+            }, 300);
+        })
+        .catch(error => {
+            console.error('❌ Error al actualizar tabla:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Error al cargar los datos: ${error.message}
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Recargar página
+                    </button>
+                </div>
+            `;
+        });
+}
+			   
+			   
+                if (typeof setupHorasDirectasClinico === 'function') {
+                    setupHorasDirectasClinico();
+                }
+                
+                
+            }, 500);
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -1447,6 +1699,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Si la pestaña está activa al cargar la página, cargar inmediatamente
         if (docenteTab.classList.contains('active') || docenteTab.parentElement.classList.contains('active')) {
             docenteTab.click();
+			 setTimeout(() => {
+        if (typeof inicializarCrearDocente === 'function') {
+            inicializarCrearDocente();
+        }
+    }, 1000);
         }
     }
     
@@ -1776,9 +2033,9 @@ function actualizarEstadoVisual(input, horas) {
     $(input).removeClass('hours-zero hours-positive hours-saving hours-error');
     
     if (horas === 0) {
-        $(input).addClass('hours-zero');
+        $(input).addClass('hours-zero');      // ⚪ Gris para vacío
     } else if (horas > 0) {
-        $(input).addClass('hours-positive');
+        $(input).addClass('hours-positive');  // 🟢 Verde para valor
     }
 }
 
@@ -1789,28 +2046,15 @@ function guardarHorasDocenteClinico(idProfesoresCurso, rutDocente, horas, unidad
     const urlParams = new URLSearchParams(window.location.search);
     const idCurso = urlParams.get('curso');
     
-    // Debug: verificar que tengamos todos los datos
-    console.log('📤 Datos a enviar:', {
-        idProfesoresCurso: idProfesoresCurso,
-        rutDocente: rutDocente,
-        idCurso: idCurso,
-        horas: horas,
-        unidadAcademica: unidadAcademica
-    });
-    
-    // Validar que tengamos los datos mínimos
+    // Validar datos...
     if (!idProfesoresCurso || !rutDocente || !idCurso) {
-        console.error('❌ Faltan datos obligatorios:', {
-            idProfesoresCurso: idProfesoresCurso,
-            rutDocente: rutDocente,
-            idCurso: idCurso
-        });
+        console.error('❌ Faltan datos obligatorios');
         mostrarToast('Error: Faltan datos del docente', 'danger');
         return;
     }
     
-    // Mostrar estado de guardado
-    $(inputElement).removeClass('hours-zero hours-positive hours-error').addClass('hours-saving');
+    // ✅ NUEVA FORMA: Agregar disquete como elemento real
+    mostrarDisqueteGuardando(inputElement);
     
     $.ajax({
         url: 'guardar_horas_docente.php',
@@ -1823,22 +2067,21 @@ function guardarHorasDocenteClinico(idProfesoresCurso, rutDocente, horas, unidad
             horas: horas,
             unidadAcademica: unidadAcademica
         },
-        beforeSend: function() {
-            console.log('🚀 Enviando petición AJAX...');
-        },
         success: function(response) {
             console.log('✅ Respuesta del servidor:', response);
-            $(inputElement).removeClass('hours-saving');
+            
+            // ✅ QUITAR el disquete
+            quitarDisqueteGuardando(inputElement);
             
             if (response.success) {
                 // Actualizar valor original para futuras comparaciones
                 $(inputElement).attr('data-original-value', horas);
                 
-                // Actualizar estado visual
+                // ✅ APLICAR estado visual correcto
                 actualizarEstadoVisual(inputElement, horas);
                 
-                // Mostrar toast discreto de éxito
-                mostrarToastDiscretoClinico('Horas guardadas', 'success');
+                // Toast discreto
+                mostrarToastDiscretoClinico('💾 Horas guardadas', 'success');
                 
             } else {
                 $(inputElement).addClass('hours-error');
@@ -1847,18 +2090,61 @@ function guardarHorasDocenteClinico(idProfesoresCurso, rutDocente, horas, unidad
             }
         },
         error: function(xhr, status, error) {
-            console.error('❌ Error AJAX:', {
-                status: status,
-                error: error,
-                responseText: xhr.responseText,
-                readyState: xhr.readyState,
-                statusText: xhr.statusText
-            });
-            $(inputElement).removeClass('hours-saving').addClass('hours-error');
+            console.error('❌ Error AJAX:', error);
+            
+            // ✅ QUITAR disquete y mostrar error
+            quitarDisqueteGuardando(inputElement);
+            $(inputElement).addClass('hours-error');
             mostrarToast('Error de comunicación con el servidor', 'danger');
         }
     });
 }
+
+// ✅ NUEVAS FUNCIONES para manejar el disquete
+function mostrarDisqueteGuardando(inputElement) {
+    // Cambiar color del input a amarillo
+    $(inputElement).removeClass('hours-zero hours-positive hours-error').addClass('hours-saving');
+    
+    // Remover disquete anterior si existe
+    $(inputElement).siblings('.diskette-saving').remove();
+    
+    // Crear el disquete como elemento real
+    const disquete = $(`
+        <span class="diskette-saving" style="
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            z-index: 1000;
+            pointer-events: none;
+            color: #856404;
+            animation: pulse 1s infinite;
+        ">💾</span>
+    `);
+    
+    // Asegurar que el contenedor tenga position relative
+    const container = $(inputElement).closest('.input-group, td, .form-group');
+    container.css('position', 'relative');
+    
+    // Agregar el disquete al contenedor
+    container.append(disquete);
+    
+    console.log('💾 Disquete mostrado');
+}
+
+function quitarDisqueteGuardando(inputElement) {
+    // Remover el disquete
+    $(inputElement).siblings('.diskette-saving').remove();
+    $(inputElement).closest('.input-group, td, .form-group').find('.diskette-saving').remove();
+    
+    // Quitar la clase de guardando
+    $(inputElement).removeClass('hours-saving');
+    
+    console.log('💾 Disquete removido');
+}
+
+
 
 // Toast discreto para no molestar al usuario
 function mostrarToastDiscretoClinico(mensaje, tipo = 'success') {
@@ -1922,16 +2208,44 @@ $(document).ready(function() {
             setupHorasDirectasClinico();
         }, 1000);
     }
+	
+	 setTimeout(function() {
+        console.log('📊 Verificando inputs de horas después de cargar tabla...');
+        $('.hours-input').each(function(index, input) {
+            const $input = $(input);
+            console.log(`🔍 Input ${index + 1}:`, {
+                id: input.id,
+                value: input.value,
+                'data-id-profesor': $input.attr('data-id-profesor'),
+                'data-rut': $input.attr('data-rut'),
+                'data-unidad-academica': $input.attr('data-unidad-academica'),
+                'data-original-value': $input.attr('data-original-value')
+            });
+            
+            // Aplicar estilo inicial según el valor
+            const horas = parseFloat(input.value) || 0;
+            $input.removeClass('hours-zero hours-positive');
+            if (horas === 0) {
+                $input.addClass('hours-zero');
+            } else if (horas > 0) {
+                $input.addClass('hours-positive');
+            }
+        });
+        
+        console.log(`✅ ${$('.hours-input').length} inputs de horas inicializados`);
+    }, 100);
 });
 
 // Función para recargar la tabla y reinicializar event listeners
+
 function reloadDocentesTableWithHours() {
     console.log('🔄 Recargando tabla de docentes...');
     
-    const tablaDocentesBody = document.querySelector('#bordered-justified-docente #docentes-table-body');
+    // ✅ CAMBIO AQUÍ: Usar el contenedor completo, no solo el tbody
+    const docentesContainer = document.querySelector('#docentes-list');
     
-    if (!tablaDocentesBody) {
-        console.error('❌ No se encontró el elemento donde colocar la tabla de docentes');
+    if (!docentesContainer) {
+        console.error('❌ No se encontró el contenedor de docentes');
         return;
     }
 
@@ -1943,15 +2257,28 @@ function reloadDocentesTableWithHours() {
         },
         success: function(html) {
             console.log('✅ Tabla de docentes recargada exitosamente');
-            $(tablaDocentesBody).html(html);
+            
+            // ✅ CAMBIO AQUÍ: Reemplazar todo el contenido
+            $(docentesContainer).html(html);
+            
             // Reinicializar event listeners después de recargar
             setTimeout(() => {
                 setupHorasDirectasClinico();
-            }, 200);
+                
+                // ✅ AGREGAR: También reinicializar el buscador
+                if (typeof inicializarBusquedaDocentesClinico === 'function') {
+                    inicializarBusquedaDocentesClinico();
+                }
+            }, 300); // Un poco más de tiempo para que se renderice
         },
         error: function(xhr, status, error) {
             console.error('❌ Error al recargar tabla:', { status, error });
-            $(tablaDocentesBody).html('<tr><td colspan="6" class="text-center text-danger">Error al cargar los datos</td></tr>');
+            $(docentesContainer).html(`
+                <div class="alert alert-danger m-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Error al cargar los datos: ${error}
+                </div>
+            `);
         }
     });
 }
@@ -1960,6 +2287,7 @@ function reloadDocentesTableWithHours() {
 <script>
 // Guardar el cupo del curso para acceder fácilmente
 const cupoCurso = <?php echo $cupoCurso; ?>;
+let datosSeccionesCache = null; // Para guardar info de secciones
 
 // Función para calcular los alumnos por sala (redondea hacia arriba sin decimales)
 function calcularAlumnosPorSala() {
@@ -1968,10 +2296,14 @@ function calcularAlumnosPorSala() {
     // Usar Math.ceil para redondear hacia arriba sin decimales
     const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
     document.getElementById('alumnosPorSala').value = alumnosPorSala;
+    
+    console.log(`📊 Cálculo: ${totalAlumnos} alumnos ÷ ${nSalas} salas = ${alumnosPorSala} por sala`);
 }
 
-// Función para solicitar una sala
 async function solicitarSala(idPlanClase) {
+    console.log('=== INICIANDO SOLICITAR SALA ===');
+    console.log('ID Plan Clase:', idPlanClase);
+    
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
     document.getElementById('action').value = 'solicitar';
@@ -1979,9 +2311,10 @@ async function solicitarSala(idPlanClase) {
     
     // Establecer el número de alumnos totales según el cupo del curso
     document.getElementById('alumnosTotales').value = cupoCurso;
-    
-    // Asegurarse de que el campo de alumnos totales esté readonly
     document.getElementById('alumnosTotales').readOnly = true;
+    
+    // NUEVO: Verificar si debe mostrar opción de juntar secciones
+    await verificarYMostrarOpciones(idPlanClase);
     
     // Calcular alumnos por sala inicialmente
     calcularAlumnosPorSala();
@@ -1994,15 +2327,17 @@ async function solicitarSala(idPlanClase) {
     modal.show();
 }
 
+// FUNCIÓN MODIFICADA: modificarSala - ahora verifica secciones
 async function modificarSala(idPlanClase) {
+    console.log('=== INICIANDO MODIFICAR SALA ===');
+    console.log('ID Plan Clase:', idPlanClase);
+    
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
     document.getElementById('salaModalTitle').textContent = 'Modificar Solicitud de Sala';
     
     // Establecer el número de alumnos totales según el cupo del curso
     document.getElementById('alumnosTotales').value = cupoCurso;
-    
-    // Asegurarse de que el campo de alumnos totales esté readonly
     document.getElementById('alumnosTotales').readOnly = true;
     
     try {
@@ -2027,22 +2362,90 @@ async function modificarSala(idPlanClase) {
             // Llenar el formulario con los datos
             document.getElementById('campus').value = datos.pcl_campus || '';
             document.getElementById('nSalas').value = datos.pcl_nSalas || 1;
-            document.getElementById('observaciones').value = datos.observaciones || '';
-            
-            // Agregar evento para recalcular cuando cambie el número de salas
-            const nSalasSelect = document.getElementById('nSalas');
-            nSalasSelect.addEventListener('change', calcularAlumnosPorSala);
-            
-            // Calcular alumnos por sala inicialmente
-            calcularAlumnosPorSala();
+            //document.getElementById('observaciones').value = datos.observaciones || '';
+			document.getElementById('textoObservacionesHistoricas').textContent = datos.observaciones || 'Sin observaciones previas.';
+
         }
     } catch (error) {
         console.error('Error:', error);
-        showNotification('Error al cargar los datos de la sala', 'danger');
+        mostrarNotificacion('Error al cargar los datos de la sala', 'danger');
     }
+    
+    // NUEVO: Verificar si debe mostrar opción de juntar secciones
+    await verificarYMostrarOpciones(idPlanClase);
+    
+    // Calcular alumnos por sala inicialmente
+    calcularAlumnosPorSala();
+    
+    // Agregar evento para recalcular cuando cambie el número de salas
+    const nSalasSelect = document.getElementById('nSalas');
+    nSalasSelect.addEventListener('change', calcularAlumnosPorSala);
     
     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
     modal.show();
+}
+
+// NUEVA FUNCIÓN: Verificar si mostrar opción de juntar secciones
+async function verificarYMostrarOpciones(idPlanClase) {
+    try {
+        console.log('🔍 Verificando opciones de secciones para:', idPlanClase);
+        
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: 'verificar_secciones',
+                idPlanClase: idPlanClase
+            })
+        });
+        
+        const datos = await response.json();
+        console.log('📋 Respuesta verificar_secciones:', datos);
+        
+        datosSeccionesCache = datos; // Guardar para uso posterior
+        
+        const opcionDiv = document.getElementById('opcionJuntarSecciones');
+        const infoSecciones = document.getElementById('infoSecciones');
+        
+        if (datos.success && datos.mostrarOpcion) {
+            // Mostrar la opción porque es sección 1 con múltiples secciones
+            infoSecciones.textContent = `${datos.totalSecciones} secciones disponibles - Total: ${datos.cupoTotal} alumnos`;
+            opcionDiv.style.display = 'block';
+            console.log('✅ Mostrando opción de juntar secciones');
+        } else {
+            // Ocultar la opción
+            opcionDiv.style.display = 'none';
+            console.log('❌ Ocultando opción de juntar secciones');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error verificando secciones:', error);
+        // En caso de error, ocultar la opción
+        const opcionDiv = document.getElementById('opcionJuntarSecciones');
+        if (opcionDiv) opcionDiv.style.display = 'none';
+    }
+}
+
+// NUEVA FUNCIÓN: Recalcular alumnos según checkbox
+function recalcularAlumnos() {
+    const checkbox = document.getElementById('juntarSecciones');
+    const alumnosTotalesInput = document.getElementById('alumnosTotales');
+    
+    if (checkbox.checked && datosSeccionesCache && datosSeccionesCache.cupoTotal) {
+        // Usar cupo total de todas las secciones
+        alumnosTotalesInput.value = datosSeccionesCache.cupoTotal;
+        console.log(`🔄 Juntando secciones: ${datosSeccionesCache.cupoTotal} alumnos`);
+        mostrarNotificacion(`Juntando ${datosSeccionesCache.totalSecciones} secciones - Total: ${datosSeccionesCache.cupoTotal} alumnos`, 'info');
+    } else {
+        // Usar cupo individual del curso
+        alumnosTotalesInput.value = cupoCurso;
+        console.log(`🔄 Sección individual: ${cupoCurso} alumnos`);
+    }
+    
+    // Recalcular alumnos por sala
+    calcularAlumnosPorSala();
 }
 
 async function mostrarModalLiberarSalas(idPlanClase) {
@@ -2141,14 +2544,23 @@ async function guardarSala() {
     const formData = new FormData(form);
     const datos = Object.fromEntries(formData.entries());
     
+    // NUEVO: Agregar información sobre juntar secciones
+    const juntarCheckbox = document.getElementById('juntarSecciones');
+    if (juntarCheckbox && juntarCheckbox.checked) {
+        datos.juntarSecciones = '1';
+        datos.alumnosTotales = document.getElementById('alumnosTotales').value;
+        if (datosSeccionesCache) {
+            datos.totalSecciones = datosSeccionesCache.totalSecciones;
+            datos.cupoTotal = datosSeccionesCache.cupoTotal;
+        }
+    }
+    
     // Mostrar un indicador de carga
     mostrarNotificacion('Procesando solicitud...', 'info');
     
     try {
-        // Imprimir los datos a enviar para depuración
-        console.log('Datos a enviar:', JSON.stringify(datos, null, 2));
+        console.log('📤 Datos a enviar:', JSON.stringify(datos, null, 2));
         
-        // Realizar la solicitud directamente sin usar enviarSolicitudSala
         const response = await fetch('salas_clinico.php', {
             method: 'POST',
             headers: {
@@ -2157,23 +2569,20 @@ async function guardarSala() {
             body: JSON.stringify(datos)
         });
         
-        // Verificar el estado de la respuesta
         if (!response.ok) {
             const responseText = await response.text();
             console.error('Error en la respuesta:', responseText);
-            throw new Error(`Error del servidor: ${response.status}. Detalles: ${responseText.substring(0, 200)}`);
+            throw new Error(`Error del servidor: ${response.status}`);
         }
         
-        // Si llegamos aquí, la respuesta fue exitosa, intentar parsearla como JSON
         const responseText = await response.text();
-        console.log('Respuesta (texto):', responseText);
+        console.log('📥 Respuesta (texto):', responseText);
         
         let data;
         try {
             data = JSON.parse(responseText);
         } catch (parseError) {
-            console.error('Error parseando la respuesta como JSON:', parseError);
-            console.error('Respuesta recibida:', responseText);
+            console.error('Error parseando JSON:', parseError);
             throw new Error('La respuesta no es un JSON válido');
         }
         
@@ -2182,7 +2591,7 @@ async function guardarSala() {
             const modal = bootstrap.Modal.getInstance(document.getElementById('salaModal'));
             modal.hide();
             
-            mostrarNotificacion('Solicitud de sala procesada correctamente', 'success');
+            mostrarNotificacion('Solicitud procesada correctamente', 'success');
             
             // Recargar la página para ver los cambios
             setTimeout(() => location.reload(), 1500);
@@ -2190,7 +2599,7 @@ async function guardarSala() {
             throw new Error(data.error || 'Error desconocido del servidor');
         }
     } catch (error) {
-        console.error('Error completo:', error);
+        console.error('❌ Error completo:', error);
         mostrarNotificacion(`Error: ${error.message}`, 'danger');
     }
 }
@@ -2275,10 +2684,744 @@ function validarDiaClase() {
     }
 }
 
+// Función para eliminar docente
+function eliminarDocente(id) {
+    if(!id) return;
+    
+    // SweetAlert2 - Confirmación elegante
+    Swal.fire({
+        title: '¿Eliminar docente?',
+        html: `
+            <div class="text-center">
+                <i class="bi bi-person-x text-danger" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                <p class="mb-0">Esta acción removerá al docente del equipo del curso.</p>
+                <small class="text-muted">Esta acción no se puede deshacer.</small>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="bi bi-trash me-2"></i>Sí, eliminar',
+        cancelButtonText: '<i class="bi bi-x-circle me-2"></i>Cancelar',
+        buttonsStyling: true,
+        customClass: {
+            confirmButton: 'btn btn-danger px-4',
+            cancelButton: 'btn btn-secondary px-4'
+        },
+        reverseButtons: true, // Pone "Cancelar" a la izquierda
+        focusCancel: true // Focus en cancelar por seguridad
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Mostrar loading mientras se procesa
+            Swal.fire({
+                title: 'Eliminando docente...',
+                html: '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 mb-0">Por favor espere...</p></div>',
+                showConfirmButton: false,
+                allowOutsideClick: false,
+                allowEscapeKey: false
+            });
+            
+            // Realizar la eliminación
+            $.ajax({
+                url: 'eliminar_docente.php',
+                type: 'POST',
+                data: { idProfesoresCurso: id },
+                dataType: 'json',
+                success: function(response) {
+                    if(response.status === 'success') {
+                        // Eliminar la fila con animación
+                        var $btn = $(`button[onclick="eliminarDocente(${id})"]`);
+                        var $row = $btn.closest('tr');
+                        
+                        // Éxito con SweetAlert2
+                        Swal.fire({
+                            title: '¡Eliminado!',
+                            html: `
+                                <div class="text-center">
+                                    <i class="bi bi-check-circle text-success" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                                    <p class="mb-0">El docente ha sido removido del equipo exitosamente.</p>
+                                </div>
+                            `,
+                            icon: 'success',
+                            timer: 2000,
+                            showConfirmButton: false,
+                            timerProgressBar: true
+                        });
+                        
+                        // Animar la eliminación de la fila
+                        $row.fadeOut(300, function() {
+                            $(this).remove();
+                        });
+                        
+                    } else {
+                        // Error del servidor
+                        Swal.fire({
+                            title: 'Error al eliminar',
+                            html: `
+                                <div class="text-center">
+                                    <i class="bi bi-exclamation-triangle text-warning" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                                    <p class="mb-0">${response.message || 'Ocurrió un error al eliminar el docente.'}</p>
+                                    <small class="text-muted">Intente nuevamente o contacte al administrador.</small>
+                                </div>
+                            `,
+                            icon: 'error',
+                            confirmButtonText: '<i class="bi bi-arrow-clockwise me-2"></i>Entendido',
+                            confirmButtonColor: '#0d6efd'
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Error de comunicación
+                    Swal.fire({
+                        title: 'Error de conexión',
+                        html: `
+                            <div class="text-center">
+                                <i class="bi bi-wifi-off text-danger" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                                <p class="mb-0">No se pudo conectar con el servidor.</p>
+                                <small class="text-muted">Verifique su conexión a internet e intente nuevamente.</small>
+                            </div>
+                        `,
+                        icon: 'error',
+                        confirmButtonText: '<i class="bi bi-arrow-clockwise me-2"></i>Reintentar',
+                        confirmButtonColor: '#0d6efd'
+                    });
+                }
+            });
+        }
+    });
+}
+
+function inicializarBusquedaDocentesClinico() {
+    console.log('🔧 Inicializando búsqueda amigable de docentes clínicos...');
+    
+    // Verificar que el select existe
+    if (!$('#docente').length) {
+        console.warn('⚠️ Select #docente no encontrado');
+        return;
+    }
+    
+    // Limpiar inicializaciones previas
+    if ($('#docente').hasClass('select2-hidden-accessible')) {
+        $('#docente').select2('destroy');
+    }
+    
+    // ===== FUNCIÓN MATCHER PERSONALIZADA =====
+    function matcherAmigableClinico(params, data) {
+        // Si no hay término de búsqueda, mostrar todo
+        if ($.trim(params.term) === '') {
+            return data;
+        }
+        
+        // Si no hay texto para comparar, saltear
+        if (typeof data.text === 'undefined') {
+            return null;
+        }
+        
+        // Normalizar el término de búsqueda (más permisivo que antes)
+        const searchTerm = normalizarTextoClinico(params.term.trim());
+        const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
+        
+        // Normalizar el texto del docente
+        const docenteText = normalizarTextoClinico(data.text);
+        
+        // Debug para caso específico "antonio arias"
+        if (searchTerm.includes('antonio') && searchTerm.includes('arias')) {
+            console.log('🔍 DEBUG Antonio Arias:', {
+                original: data.text,
+                normalized: docenteText,
+                searchWords: searchWords,
+                searchTerm: searchTerm
+            });
+        }
+        
+        // Verificar si TODOS los términos están presentes (búsqueda Y)
+        const todasLasPalabrasEncontradas = searchWords.every(word => {
+            const found = docenteText.includes(word);
+            
+            // Debug adicional para términos específicos
+            if ((word === 'antonio' || word === 'arias') && data.text.toLowerCase().includes('antonio')) {
+                console.log(`   → Buscando "${word}" en "${docenteText}": ${found}`);
+            }
+            
+            return found;
+        });
+        
+        if (todasLasPalabrasEncontradas) {
+            // Crear una copia modificada para resaltar
+            const modifiedData = $.extend({}, data, true);
+            
+            // Resaltar términos encontrados
+            let highlightedText = data.text;
+            searchWords.forEach(word => {
+                // Crear regex flexible para encontrar el término en el texto original
+                const regex = new RegExp(`(${escapeRegExpClinico(word)})`, 'gi');
+                highlightedText = highlightedText.replace(regex, '<strong>$1</strong>');
+            });
+            
+            modifiedData.text = highlightedText;
+            return modifiedData;
+        }
+        
+        return null;
+    }
+    
+    // ===== FUNCIÓN PARA NORMALIZAR TEXTO =====
+    function normalizarTextoClinico(texto) {
+        return texto
+            .toLowerCase()
+            .normalize('NFD')                    // Descomponer caracteres acentuados
+            .replace(/[\u0300-\u036f]/g, '')     // Eliminar acentos
+            .replace(/[^a-z0-9\s]/g, '')         // Solo letras, números y espacios
+            .replace(/\s+/g, ' ')                // Espacios múltiples a uno solo
+            .trim();                             // Eliminar espacios al inicio/final
+    }
+    
+    // ===== FUNCIÓN HELPER PARA REGEX =====
+    function escapeRegExpClinico(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+    
+    // ===== CONFIGURACIÓN SELECT2 CON BÚSQUEDA AMIGABLE =====
+    $('#docente').select2({
+        theme: 'bootstrap-5',
+        placeholder: '🔍 Escriba nombre o RUT para buscar',
+        allowClear: true,
+        minimumInputLength: 0,              // ⚡ Buscar desde el primer carácter
+        matcher: matcherAmigableClinico,    // 🧠 Usar nuestro matcher inteligente
+        
+        language: {
+            noResults: function() {
+                return '<div class="text-center p-2"><i class="bi bi-search"></i><br>No se encontraron docentes</div>';
+            },
+            searching: function() {
+                return '<div class="text-center p-2"><i class="bi bi-hourglass-split"></i><br>Buscando...</div>';
+            }
+        },
+        
+        width: '100%',
+        dropdownParent: $('#docente').parent(),
+        
+        // ===== CONFIGURACIÓN DE TEMPLATES =====
+        templateResult: function(docente) {
+            if (docente.loading) {
+                return docente.text;
+            }
+            
+            // Permitir HTML para el resaltado
+            return $('<div>').html(docente.text);
+        },
+        
+        templateSelection: function(docente) {
+            // Para la selección, mostrar sin HTML
+            return docente.text ? docente.text.replace(/<[^>]*>/g, '') : docente.id;
+        },
+        
+        escapeMarkup: function(markup) {
+            return markup; // Permitir HTML para resaltado
+        }
+    });
+    
+    // ===== EVENT LISTENERS =====
+    
+    // Mostrar información de resultados
+    $('#docente').on('select2:open', function() {
+        console.log('📂 Dropdown abierto');
+        setTimeout(() => {
+            mostrarInfoResultadosClinico();
+        }, 100);
+    });
+    
+    // Actualizar info cuando se escriba
+    $('#docente').on('keyup', function() {
+        setTimeout(() => {
+            mostrarInfoResultadosClinico();
+        }, 50);
+    });
+    
+    // Limpiar información al cerrar
+    $('#docente').on('select2:close', function() {
+        const searchInfo = document.getElementById('search-info');
+        if (searchInfo) {
+            searchInfo.style.display = 'none';
+        }
+    });
+    
+    // Habilitar/deshabilitar botón según la selección
+    $('#docente').off('change.docenteClinico').on('change.docenteClinico', function() {
+        const isSelected = $(this).val();
+        $('#boton_agregar').prop('disabled', !isSelected);
+        
+        if (isSelected) {
+            console.log('✅ Docente seleccionado:', isSelected);
+        }
+    });
+    
+    // ===== CONFIGURAR BOTÓN DE AGREGAR DOCENTE =====
+    $('#boton_agregar').off('click.docenteClinico').on('click.docenteClinico', function() {
+        console.log('🎯 Click en botón agregar docente');
+        
+        let rut_docente = $('#docente').val();
+        if (!rut_docente) {
+            console.warn('⚠️ No hay docente seleccionado');
+            return;
+        }
+        
+        console.log('📤 Asignando docente:', rut_docente);
+        
+        // Deshabilitar botón durante la operación
+        $(this).prop('disabled', true).html('<i class="bi bi-hourglass-split"></i> Asignando...');
+        
+        // Obtener el ID del curso de la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const idCurso = urlParams.get('curso');
+        
+        $.ajax({
+            url: 'asignar_docente.php',
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                rut_docente: rut_docente,
+                idcurso: idCurso,
+                funcion: 5 // Función por defecto (Colaborador)
+            },
+            success: function(response) {
+                console.log('📥 Respuesta asignar docente:', response);
+                
+                // Restaurar botón
+                $('#boton_agregar').prop('disabled', false).html('<i class="bi bi-plus-circle"></i> Asignar Docente');
+                
+                if (response.success) {
+                    // Limpiar selección
+                    $('#docente').val(null).trigger('change');
+                    const searchInfo = document.getElementById('search-info');
+                    if (searchInfo) {
+                        searchInfo.style.display = 'none';
+                    }
+                    
+                    // Mostrar notificación
+                    if (typeof mostrarToast === 'function') {
+                        mostrarToast('Docente asignado correctamente', 'success');
+                    } else if (typeof showNotification === 'function') {
+                        showNotification('Docente asignado correctamente', 'success');
+                    } else {
+                        alert('Docente asignado correctamente');
+                    }
+                    
+                    // Recargar tabla de docentes
+                    if (typeof reloadDocentesTableWithHours === 'function') {
+                        setTimeout(() => reloadDocentesTableWithHours(), 1000);
+                    } else {
+                        setTimeout(() => location.reload(), 1500);
+                    }
+					
+					 setTimeout(() => {
+        recargarSoloTablaDocentes();
+    }, 1000);
+	
+                } else {
+                    const errorMsg = response.message || 'Error al asignar docente';
+                    if (typeof mostrarToast === 'function') {
+                        mostrarToast(errorMsg, 'danger');
+                    } else if (typeof showNotification === 'function') {
+                        showNotification(errorMsg, 'danger');
+                    } else {
+                        alert(errorMsg);
+                    }
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('❌ Error asignando docente:', { status, error, responseText: xhr.responseText });
+                
+                // Restaurar botón
+                $('#boton_agregar').prop('disabled', false).html('<i class="bi bi-plus-circle"></i> Asignar Docente');
+                
+                if (typeof mostrarToast === 'function') {
+                    mostrarToast('Error de comunicación con el servidor', 'danger');
+                } else if (typeof showNotification === 'function') {
+                    showNotification('Error de comunicación con el servidor', 'danger');
+                } else {
+                    alert('Error de comunicación con el servidor');
+                }
+            }
+        });
+    });
+    
+    // ===== CONFIGURAR BOTÓN NUEVO DOCENTE =====
+    $('#nuevo-docente-btn').off('click.docenteClinico').on('click.docenteClinico', function() {
+        console.log('🆕 Click en nuevo docente');
+        const urlParams = new URLSearchParams(window.location.search);
+        const idCurso = urlParams.get('curso');
+        //window.location.href = `2_crear_docente.php?idcurso=${idCurso}`;
+    });
+    
+    console.log('✅ Búsqueda amigable de docentes clínicos inicializada completamente');
+}
+
+// ===== FUNCIÓN PARA MOSTRAR INFO DE RESULTADOS =====
+function mostrarInfoResultadosClinico() {
+    const searchInput = $('.select2-search__field').val();
+    const resultados = $('.select2-results__option').not('.select2-results__option--no-results').length;
+    
+    const searchInfo = document.getElementById('search-info');
+    const resultsCount = document.getElementById('search-results-count');
+    
+    if (searchInfo && resultsCount && searchInput && searchInput.length > 0 && resultados > 0) {
+        resultsCount.textContent = `${resultados} docentes encontrados`;
+        searchInfo.style.display = 'block';
+    } else if (searchInfo) {
+        searchInfo.style.display = 'none';
+    }
+}
+
+function inicializarCrearDocente() {
+	
+	$('#nuevo-docente-btn').off('click').on('click', function() {
+    const modal = new bootstrap.Modal(document.getElementById('nuevoDocenteModal'));
+    modal.show();
+});
+	
+    // Event listener para el botón guardar
+    $('#btnGuardarDocente').off('click').on('click', guardar_docente);
+    
+    // Event listener para validar RUT mientras se escribe
+    $('#rut_docente').off('input').on('input', function() {
+        checkRut(this);
+    });
+    
+    // Event listener para habilitar/deshabilitar unidad externa
+    $('#unidad_academica').off('change').on('change', function() {
+        habilitar_unidad(this);
+    });
+}
+
+function checkRut(rut) {
+    // Despejar Puntos
+    var valor = rut.value.replace('.','');
+    // Despejar Guión
+    valor = valor.replace('-','');
+    
+    // Aislar Cuerpo y Digito Verificador
+    cuerpo = valor.slice(0,-1);
+    dv = valor.slice(-1).toUpperCase();
+    
+    // Formatear RUN
+    rut.value = cuerpo + '-'+ dv
+    
+    // Si no cumple con el minimo ej. (n.nnn.nnn)
+    if(cuerpo.length < 7) { 
+        rut.setCustomValidity("RUT Incompleto"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Calcular Digito Verificador
+    suma = 0;
+    multiplo = 2;
+    
+    // Para cada digito del Cuerpo
+    for(i=1;i<=cuerpo.length;i++) {
+        // Obtener su Producto con el Múltiplo Correspondiente
+        index = multiplo * valor.charAt(cuerpo.length - i);
+        
+        // Sumar al Contador General
+        suma = suma + index;
+        
+        // Consolidar Múltiplo dentro del rango [2,7]
+        if(multiplo < 7) { multiplo = multiplo + 1; } else { multiplo = 2; }
+    }
+    
+    // Calcular Digito Verificador en base al Módulo 11
+    dvEsperado = 11 - (suma % 11);
+    
+    // Casos Especiales (0 y K)
+    dv = (dv == 'K')?10:dv;
+    dv = (dv == 0)?11:dv;
+    
+    // Validar que el Cuerpo coincide con su Digito Verificador
+    if(dvEsperado != dv) { 
+        rut.setCustomValidity("RUT Inválido"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Validar RUTs repetidos o inválidos
+    if(cuerpo == '0000000000' || cuerpo == '00000000' ||
+       cuerpo == '11111111' || cuerpo == '1111111' ||
+       cuerpo == '22222222' || cuerpo == '2222222' ||
+       cuerpo == '33333333' || cuerpo == '3333333' ||
+       cuerpo == '44444444' || cuerpo == '4444444' ||
+       cuerpo == '55555555' || cuerpo == '5555555' ||
+       cuerpo == '66666666' || cuerpo == '6666666' ||
+       cuerpo == '77777777' || cuerpo == '7777777' ||
+       cuerpo == '88888888' || cuerpo == '8888888' ||
+       cuerpo == '99999999' || cuerpo == '9999999') {
+        rut.setCustomValidity("RUT Inválido"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Si todo sale bien, eliminar errores (decretar que es válido)
+    rut.setCustomValidity('');
+    $('#flag').val('true');
+}
+
+function habilitar_unidad(sel) {
+    var depto = sel.value;
+    
+    if(depto == 'Unidad Externa') {
+        document.getElementById("unidad_externa").disabled = false;
+        document.getElementById("unidad_externa").required = true;
+        document.getElementById("unidad_externa").placeholder = 'Unidad Externa *';
+    } else {
+        document.getElementById("unidad_externa").disabled = true;
+        document.getElementById("unidad_externa").required = false;
+        document.getElementById("unidad_externa").placeholder = 'Unidad Externa';
+    }
+}
+
+function guardar_docente() {
+    var curso = $("#curso").val(); 
+    var rut = $("#rut_docente").val(); 
+    var flag = $("#flag").val();
+    var unidad = $("#unidad_academica").val(); 
+    
+    var largo_rut = rut.length;
+    
+    if($("#unidad_externa").val() != '') {
+        var uE = $("#unidad_externa").val();
+    } else {
+        var uE = "Sin Unidad"; 
+    }
+    
+    var nombres = $("#nombres").val(); 
+    var paterno = $("#paterno").val(); 
+    var materno = $("#materno").val(); 
+    var email = $("#email").val(); 
+    var funcion = $("#funcion").val();
+    
+    if(flag == 'true') {
+        if(rut != '' && largo_rut >= 9 && unidad != '' && uE != '' && nombres != '' && paterno != '' && email != '' && funcion != '') {
+            // Mostrar loading en el botón
+            const $btnGuardar = $('#btnGuardarDocente');
+            const textoOriginal = $btnGuardar.html();
+            $btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Guardando...');
+            
+            $.ajax({
+                dataType: "json",
+                data: {
+                    "curso": curso,
+                    "rut_docente": rut,
+                    "unidad_academica": unidad,
+                    "unidad_externa": uE,
+                    "nombres": nombres,
+                    "paterno": paterno,
+                    "materno": materno,
+                    "email": email,
+                    "funcion": funcion
+                },
+                url: 'guardar_docente_nuevo.php', 
+                type: 'POST',
+
+
+// En la función guardar_docente(), cambiar esta sección:
+success: function(respuesta) {
+    // Restaurar botón
+    $btnGuardar.prop('disabled', false).html(textoOriginal);
+    
+    if(respuesta.success) {
+        console.log('✅ Docente guardado exitosamente');
+        
+        // Mostrar notificación de éxito
+        mostrarToast('Docente agregado correctamente', 'success');
+        
+        // ===== CAMBIO AQUÍ: USAR EL MISMO MÉTODO QUE PARA ASIGNAR DOCENTE =====
+        setTimeout(() => {
+            console.log('🔄 Recargando tabla de docentes...');
+            
+            // 1. Primero intentar reloadDocentesTableWithHours
+            if (typeof reloadDocentesTableWithHours === 'function') {
+                reloadDocentesTableWithHours();
+                console.log('✅ Usando reloadDocentesTableWithHours');
+            } else {
+                // 2. Fallback: usar recargarSoloTablaDocentes
+                if (typeof recargarSoloTablaDocentes === 'function') {
+                    recargarSoloTablaDocentes();
+                    console.log('✅ Usando recargarSoloTablaDocentes');
+                } else {
+                    console.log('❌ Funciones no disponibles, recargando página');
+                    location.reload();
+                }
+            }
+        }, 1000);
+        
+    } else {
+        // Mostrar error
+        mostrarToast(respuesta.message || 'Error al agregar docente', 'danger');
+    }
+},
+
+                error: function(xhr, status, error) {
+                    // Restaurar botón
+                    $btnGuardar.prop('disabled', false).html(textoOriginal);
+                    
+                    console.error('Error:', xhr.responseText);
+                    mostrarToast('Error de comunicación con el servidor', 'danger');
+                }
+            });
+        } else {
+            mostrarToast('Por favor complete todos los campos obligatorios', 'warning');
+        }
+    } else {
+        mostrarToast('El formato del RUT no es válido', 'warning');
+    }
+}
+
+// ===== FUNCIONES PARA RECARGAR SOLO LA TABLA DE DOCENTES =====
+
+function recargarSoloTablaDocentes() {
+    console.log('🔄 Recargando solo la tabla de docentes clínicos...');
+    
+    // Buscar específicamente el contenedor de la tabla
+    const tablaContainer = document.querySelector('#docentes-list .table-responsive');
+    
+    if (!tablaContainer) {
+        console.log('📋 Contenedor específico no encontrado, usando fallback de pestaña completa');
+        // Fallback: recargar toda la pestaña
+        const docentesList = document.getElementById('docentes-list');
+        const docenteTab = document.getElementById('docente-tab');
+        
+        if (docentesList) {
+            docentesList.removeAttribute('data-loaded');
+        }
+        
+        if (docenteTab) {
+            docenteTab.click();
+        }
+        return;
+    }
+    
+    showSpinnerInElement(tablaContainer);
+    fetchAndUpdateTable(tablaContainer);
+}
+
+function showSpinnerInElement(element) {
+    element.innerHTML = `
+        <div class="text-center p-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Actualizando...</span>
+            </div>
+            <p class="mt-2">Actualizando equipo docente...</p>
+        </div>
+    `;
+}
+
+//function fetchAndUpdateTable(container) {
+//    const urlParams = new URLSearchParams(window.location.search);
+//    const idCurso = urlParams.get('curso');
+//    
+//    // ✅ USAR EL ARCHIVO CORREGIDO CON FUNCIONALIDAD DE CURSOS CLÍNICOS
+//    fetch('get_docentes_table_only.php?idcurso=' + idCurso)
+//        .then(response => {
+//            if (!response.ok) {
+//                throw new Error(`HTTP error! status: ${response.status}`);
+//            }
+//            return response.text();
+//        })
+//        .then(html => {
+//            console.log('✅ Tabla de docentes clínicos actualizada');
+//            
+//            // Reemplazar el contenido de la tabla
+//            container.outerHTML = html;
+//            
+//            // ✅ REINICIALIZAR LA FUNCIONALIDAD DE HORAS DIRECTAS
+//            setTimeout(() => {
+//                if (typeof setupHorasDirectasClinico === 'function') {
+//                    setupHorasDirectasClinico();
+//                    console.log('✅ Funcionalidad de horas directas reinicializada');
+//                } else {
+//                    console.warn('⚠️ setupHorasDirectasClinico no está disponible');
+//                }
+//            }, 300);
+//        })
+//        .catch(error => {
+//            console.error('❌ Error al actualizar tabla:', error);
+//            container.innerHTML = `
+//                <div class="alert alert-danger m-3">
+//                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+//                    Error al cargar los datos: ${error.message}
+//                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">
+//                        <i class="bi bi-arrow-clockwise"></i> Recargar página
+//                    </button>
+//                </div>
+//            `;
+//        });
+//}
+
+// Hacer las funciones accesibles globalmente
+window.recargarSoloTablaDocentes = recargarSoloTablaDocentes;
+
+
+// ===== FUNCIÓN PARA INICIALIZAR ESTILOS DE INPUTS DE HORAS =====
+function inicializarEstilosHorasClinico() {
+    console.log('🎨 Inicializando estilos de inputs de horas clínicos...');
+    
+    $('.hours-input').each(function(index, input) {
+        const $input = $(input);
+        
+        // Debug: verificar datos del input
+        console.log(`🔍 Input ${index + 1}:`, {
+            id: input.id,
+            value: input.value,
+            'data-id-profesor': $input.attr('data-id-profesor'),
+            'data-rut': $input.attr('data-rut'),
+            'data-unidad-academica': $input.attr('data-unidad-academica'),
+            'data-original-value': $input.attr('data-original-value')
+        });
+        
+        // Aplicar estilo inicial según el valor
+        const horas = parseFloat(input.value) || 0;
+        $input.removeClass('hours-zero hours-positive hours-saving hours-error');
+        
+        if (horas === 0) {
+            $input.addClass('hours-zero');
+        } else if (horas > 0) {
+            $input.addClass('hours-positive');
+        }
+    });
+    
+    console.log(`✅ ${$('.hours-input').length} inputs de horas inicializados con estilos`);
+}
+
+// Hacer la función accesible globalmente
+window.inicializarEstilosHorasClinico = inicializarEstilosHorasClinico;
+
+function volverYRecargarTabla() {
+    console.log('🔄 Cerrando modal...');
+    
+    // 1. Cerrar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('nuevoDocenteModal'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // 2. Limpiar formulario (si existe)
+    const form = document.querySelector('#nuevoDocenteModal form');
+    if (form) {
+        form.reset();
+    }
+    
+    // 3. Estrategia simple: esperar un poco y recargar
+    setTimeout(() => {
+        console.log('🔄 Ejecutando recarga...');
+        recargarSoloTablaDocentes();
+    }, 500); // Más tiempo para que se cierre el modal
+}
+
 </script>
 
 <!-- Justo antes del cierre del body -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="docentes-handler.js"></script>
 

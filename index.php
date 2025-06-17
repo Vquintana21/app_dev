@@ -13,7 +13,7 @@ $rut = "016784781K";
 $query = "SELECT `idplanclases`, pcl_tituloActividad, `pcl_Fecha`, `pcl_Inicio`, `pcl_Termino`, 
           `pcl_nSalas`, `pcl_Seccion`, `pcl_TipoSesion`, `pcl_SubTipoSesion`, 
           `pcl_Semana`, `pcl_AsiCodigo`, `pcl_AsiNombre`, `Sala`, `Bloque`, `dia`, `pcl_condicion`, `pcl_ActividadConEvaluacion`, pcl_BloqueExtendido
-          FROM `planclases` 
+          FROM `a_planclases` 
           WHERE `cursos_idcursos` = ?";
 
 $stmt = $conn->prepare($query);
@@ -37,6 +37,96 @@ $FilaCurso = mysqli_fetch_assoc($buscarCursoQ);
 
 $codigo_curso = $FilaCurso["CodigoCurso"];
 $seccion = $FilaCurso["Seccion"];
+
+$esSecciones1 = ($seccion == "1");
+$tieneMultiplesSecciones = false;
+$cupoTotalSecciones = 0;
+
+// MEJORADO: Consulta más robusta para detectar múltiples secciones
+if ($esSecciones1) {
+    // Consultar si tiene múltiples secciones con validación adicional
+    $queryMultiples = "SELECT COUNT(DISTINCT Seccion) as total_secciones_distintas,
+                              COUNT(*) as total_registros,
+                              SUM(Cupo) as cupo_total,
+                              GROUP_CONCAT(DISTINCT Seccion ORDER BY Seccion) as secciones_existentes
+                       FROM spre_cursos 
+                       WHERE CodigoCurso = ? 
+                       AND idperiodo = ?
+                       AND Cupo > 0";  // Solo contar secciones con alumnos
+    
+    $stmtMultiples = $conexion3->prepare($queryMultiples);
+    $periodo = $FilaCurso["idperiodo"];
+    $stmtMultiples->bind_param("ss", $codigo_curso, $periodo);
+    $stmtMultiples->execute();
+    $resultMultiples = $stmtMultiples->get_result();
+    $dataMultiples = $resultMultiples->fetch_assoc();
+    
+    // LOGGING MEJORADO para debug
+    error_log("DEBUG - Consulta múltiples secciones:");
+    error_log("Código curso: $codigo_curso");
+    error_log("Período: $periodo");
+    error_log("Resultado: " . json_encode($dataMultiples));
+    
+    // Verificación más estricta
+    $tieneMultiplesSecciones = ($dataMultiples['total_secciones_distintas'] > 1);
+    $cupoTotalSecciones = $dataMultiples['cupo_total'] ?: 0;
+    
+    // Debug adicional
+    if ($tieneMultiplesSecciones) {
+        error_log("✅ Múltiples secciones detectadas para curso $codigo_curso:");
+        error_log("Secciones: " . $dataMultiples['secciones_existentes']);
+        error_log("Total secciones: " . $dataMultiples['total_secciones_distintas']);
+        error_log("Cupo total: $cupoTotalSecciones");
+    } else {
+        error_log("❌ Solo una sección para curso $codigo_curso");
+    }
+    
+    $stmtMultiples->close();
+} else {
+    error_log("❌ No es sección 1 (sección actual: $seccion), no evaluar múltiples secciones");
+}
+
+// MEJORADO: Variables para funcionalidad de juntar secciones con más información
+$datosJuntarSecciones = array(
+    'esSecciones1' => $esSecciones1,
+    'tieneMultiplesSecciones' => $tieneMultiplesSecciones,
+    'cupoTotalSecciones' => $cupoTotalSecciones,
+    'cupoSeccionActual' => $FilaCurso["Cupo"],
+    'seccionActual' => $seccion,
+    'codigoCurso' => $codigo_curso,
+    'periodo' => $FilaCurso["idperiodo"],
+    'debug' => [
+        'timestamp' => date('Y-m-d H:i:s'),
+        'consulta_ejecutada' => $esSecciones1,
+        'datos_multiples' => $esSecciones1 ? $dataMultiples : null
+    ]
+);
+
+// CRITICO: Asegurar que el JSON se genere correctamente
+$datosJuntarSeccionesJson = json_encode($datosJuntarSecciones, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+
+// Verificar que el JSON sea válido
+if (json_last_error() !== JSON_ERROR_NONE) {
+    error_log("❌ Error al generar JSON datosJuntarSecciones: " . json_last_error_msg());
+    // Fallback con datos mínimos
+    $datosJuntarSeccionesJson = json_encode([
+        'esSecciones1' => false,
+        'tieneMultiplesSecciones' => false,
+        'cupoTotalSecciones' => 0,
+        'cupoSeccionActual' => $FilaCurso["Cupo"] ?: 0,
+        'error' => 'Error al generar datos completos'
+    ]);
+} else {
+    error_log("✅ JSON datosJuntarSecciones generado correctamente");
+}
+
+// NUEVO: Agregar logs adicionales para debugging en producción
+error_log("=== DATOS JUNTAR SECCIONES ===");
+error_log("Es sección 1: " . ($esSecciones1 ? 'SÍ' : 'NO'));
+error_log("Tiene múltiples secciones: " . ($tieneMultiplesSecciones ? 'SÍ' : 'NO'));
+error_log("Cupo total: $cupoTotalSecciones");
+error_log("Cupo sección actual: " . $FilaCurso["Cupo"]);
+error_log("JSON length: " . strlen($datosJuntarSeccionesJson));
 
 //Consulta Ramo
 $nombre_ramo = "SELECT * FROM spre_ramos WHERE CodigoCurso='$codigo_curso' ";
@@ -269,8 +359,14 @@ $conn->close();
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title"><i class="bi bi-pencil"></i> Editar información </h5>
-                    <!-- Bordered Tabs Justified -->
+				<h5 class="card-title"><i class="bi bi-pencil"></i> Editar información </h5>
+				 <div class="card mb-4">
+            <div class="card-body text-center">
+               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
+                
+            </div>
+        </div>
+		
                     <ul class="nav nav-tabs nav-tabs-bordered d-flex" id="borderedTabJustified" role="tablist">
                         <li class="nav-item flex-fill" role="presentation">
                             <button class="nav-link w-100 active" id="home-tab" data-bs-toggle="tab" data-bs-target="#bordered-justified-home" type="button" role="tab" aria-controls="home" aria-selected="true"><i class="bi bi-calendar4-week"></i> Calendario </button>
@@ -347,7 +443,7 @@ $conn->close();
                                         <form id="activityForm">
                                             <input type="hidden" id="idplanclases" name="idplanclases">
 											<input type="hidden" id="tipo-anterior" name="tipo_anterior">
-<span id="modal-tipo-actividad" style="display: none;"></span>
+											<span id="modal-tipo-actividad" style="display: none;"></span>
 												</br>
                                             <div class="row mb-3">
                                                 <label class="col-sm-2 col-form-label">Título de la actividad</label>
@@ -491,7 +587,8 @@ $conn->close();
   <a href="#" class="back-to-top d-flex align-items-center justify-content-center"><i class="bi bi-arrow-up-short"></i></a>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
-	 
+	   
+	 <script src="validarRUT.js"></script>
   <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
   <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="assets/vendor/chart.js/chart.umd.js"></script>
@@ -505,16 +602,302 @@ $conn->close();
 	
 	<!-- FUNCIONES DE ACTIVIDADES Y DONCETES-->
    <script>
-    let planClases = <?php echo $planclasesJson; ?>;
+   
+   // ========================================
+// JAVASCRIPT COMPLETO RESTAURADO Y ORGANIZADO PARA INDEX.PHP
+// Mantiene TODA la funcionalidad original + organización
+// ========================================
 
+// ===========================================
+// 1. VARIABLES GLOBALES Y CONFIGURACIÓN INICIAL
+// ===========================================
+
+let planClases = <?php echo $planclasesJson; ?>;
 let tiposSesion = <?php echo $tiposSesionJson; ?>;
-
 const horasSemanales = <?php echo $horasSemanalesJson; ?>;
+
+// Variables globales para el asignador masivo
+let actividadesSeleccionadas = [];
+
+// Variables para el sistema de juntar secciones
+let juntarSeccionesConfigurado = false;
+
+// Variables para validación de datos de juntar secciones
+console.log('🔧 Cargando datos juntar secciones...');
+
+// Verificar que PHP generó los datos
+<?php if (!empty($datosJuntarSeccionesJson)): ?>
+    let datosJuntarSecciones = <?php echo $datosJuntarSeccionesJson; ?>;
+    
+    // Validar que se cargaron correctamente
+    if (datosJuntarSecciones && typeof datosJuntarSecciones === 'object') {
+        console.log('✅ Datos juntar secciones cargados correctamente:', datosJuntarSecciones);
+        window.datosJuntarSeccionesDebug = datosJuntarSecciones;
+        
+        if (datosJuntarSecciones.esSecciones1 && datosJuntarSecciones.tieneMultiplesSecciones) {
+            console.log('🎯 Condiciones cumplidas para mostrar checkbox juntar secciones');
+            console.log(`📊 Cupo total: ${datosJuntarSecciones.cupoTotalSecciones}, Cupo actual: ${datosJuntarSecciones.cupoSeccionActual}`);
+        } else {
+            console.log('❌ Condiciones NO cumplidas:', {
+                esSecciones1: datosJuntarSecciones.esSecciones1,
+                tieneMultiplesSecciones: datosJuntarSecciones.tieneMultiplesSecciones
+            });
+        }
+    } else {
+        console.error('❌ Error: datosJuntarSecciones no es un objeto válido:', datosJuntarSecciones);
+    }
+<?php else: ?>
+    console.error('❌ PHP no generó datosJuntarSeccionesJson');
+    let datosJuntarSecciones = {
+        esSecciones1: false,
+        tieneMultiplesSecciones: false,
+        cupoTotalSecciones: 0,
+        cupoSeccionActual: 0,
+        error: 'No se pudieron cargar los datos desde PHP'
+    };
+    console.warn('⚠️ Usando datos de fallback para juntar secciones');
+<?php endif; ?>
+
+// ===========================================
+// 2. FUNCIONES AUXILIARES Y VALIDACIÓN
+// ===========================================
 
 function validateAutoTime(hours, minutes) {
     const totalHours = hours + (minutes / 60);
     return totalHours <= horasSemanales;
 }
+
+/**
+ * Limpia completamente el modal de salas antes de configurarlo
+ * Elimina elementos dinámicos y resetea variables
+ */
+function limpiarModalSalaCompleto() {
+    console.log('🧹 Iniciando limpieza completa del modal');
+    
+    // 1. Ocultar elementos de juntar secciones (NO eliminar)
+    const existingJuntar = document.querySelector('#juntarSeccionesDiv');
+if (existingJuntar) {
+    existingJuntar.style.display = 'none';
+    const formulario = document.querySelector('#formularioSalasModal');
+    if (formulario) {
+        formulario.appendChild(existingJuntar);
+        console.log("✅ Elemento juntar secciones ocultado y reubicado temporalmente");
+    }
+}
+    
+    // 2. Limpiar cualquier checkbox con name="juntarSecciones" (por si queda alguno huérfano)
+    const checkboxesJuntar = document.querySelectorAll('input[name="juntarSecciones"]');
+    checkboxesJuntar.forEach(checkbox => {
+        const parentDiv = checkbox.closest('.mb-3');
+        if (parentDiv && parentDiv.id !== 'juntarSeccionesDiv') {
+            // Solo eliminar si no es el div principal (por seguridad)
+            parentDiv.remove();
+        }
+    });
+    
+    // 3. Limpiar sección de computación
+    const seccionComputacion = document.getElementById('seccion-computacion');
+    if (seccionComputacion) {
+        seccionComputacion.style.display = 'none';
+        seccionComputacion.innerHTML = '';
+        console.log('✅ Sección de computación limpiada');
+    }
+    
+    // 4. Limpiar alertas de bloques
+    limpiarAlertasBloques();
+    
+    // 5. Resetear variables globales
+    juntarSeccionesConfigurado = false;
+    
+    // 6. Limpiar datos de salas disponibles
+    if (window.salasDisponiblesData) {
+        window.salasDisponiblesData = null;
+        console.log('✅ Datos de salas disponibles limpiados');
+    }
+    
+    // 7. Ocultar badge de salas disponibles
+    ocultarBadgeSalas();
+    
+    console.log('✅ Limpieza completa del modal finalizada');
+}
+
+
+function limpiarAlertasBloques() {
+    var alertaExistente = document.getElementById('alerta-bloques');
+    if (alertaExistente) {
+        alertaExistente.remove();
+        console.log('🧹 Alerta de bloques eliminada');
+    }
+}
+
+function validarDatosJuntarSecciones() {
+    if (typeof datosJuntarSecciones === 'undefined') {
+        return false;
+    }
+    
+    if (!datosJuntarSecciones || typeof datosJuntarSecciones !== 'object') {
+        return false;
+    }
+    
+    const propiedadesRequeridas = ['esSecciones1', 'tieneMultiplesSecciones', 'cupoTotalSecciones', 'cupoSeccionActual'];
+    for (const prop of propiedadesRequeridas) {
+        if (!(prop in datosJuntarSecciones)) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+function debugTablaSalas() {
+    console.log('🔍 Debug - Estado de la tabla de salas:');
+    
+    var filas = document.querySelectorAll('#salas-list table tbody tr');
+    console.log('Total de filas encontradas:', filas.length);
+    
+    filas.forEach(function(fila, index) {
+        var celdas = fila.cells;
+        if (celdas.length > 1) {
+            console.log('Fila ' + index + ':', {
+                id: fila.dataset.id,
+                fecha: celdas[1] ? celdas[1].textContent.trim() : 'N/A',
+                horario: celdas[2] ? celdas[2].textContent.trim() : 'N/A',
+                tipo: celdas[3] ? celdas[3].textContent.trim() : 'N/A'
+            });
+        }
+    });
+}
+
+function verificarDependencias() {
+    var dependencias = [
+        'verificarBloquesMismoDia',
+        'procesarBloquesMismoDia',
+        'mostrarAlertaBloquesRelacionados',
+        'parsearFechaParaConsulta'
+    ];
+    
+    var faltantes = [];
+    
+    dependencias.forEach(function(func) {
+        if (typeof window[func] !== 'function') {
+            faltantes.push(func);
+        }
+    });
+    
+    if (faltantes.length > 0) {
+        console.error('❌ Faltan las siguientes funciones:', faltantes);
+        return false;
+    } else {
+        console.log('✅ Todas las dependencias están disponibles');
+        return true;
+    }
+}
+
+// Función auxiliar para truncar texto
+function truncateText(text, maxLength) {
+    if (text.length <= maxLength) {
+        return text;
+    }
+    return text.substring(0, maxLength) + '...';
+}
+
+// ===========================================
+// 3. FUNCIONES DE TOAST Y NOTIFICACIONES
+// ===========================================
+
+function mostrarToast(mensaje, tipo = 'success', duracion = 3000) {
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+
+    const icono = tipo === 'success' ? 'check-circle' : 'x-circle';
+    const toastHTML = `
+        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${icono} me-2"></i>
+                    ${mensaje}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    const toast = new bootstrap.Toast(toastContainer.lastElementChild, {
+        autohide: true,
+        delay: duracion
+    });
+    toast.show();
+}
+
+function mostrarToastCarga(mensaje) {
+    const toastHTML = `
+        <div class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    ${mensaje}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(toastContainer);
+    }
+    
+    toastContainer.innerHTML = ''; // Limpiar toasts anteriores
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toast = new bootstrap.Toast(toastContainer.firstElementChild, {
+        autohide: false
+    });
+    toast.show();
+}
+
+function mostrarToastSalas(mensaje, tipo = 'success') {
+    let toastContainerSalas = document.querySelector('.toast-container-salas');
+    if (!toastContainerSalas) {
+        toastContainerSalas = document.createElement('div');
+        toastContainerSalas.className = 'toast-container-salas position-fixed bottom-0 end-0 p-3';
+        document.body.appendChild(toastContainerSalas);
+    }
+
+    const icono = tipo === 'success' ? 'check-circle' : 'exclamation-circle';
+    const toastHTML = `
+        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-${icono} me-2"></i>
+                    ${mensaje}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    `;
+    
+    toastContainerSalas.innerHTML = '';
+    toastContainerSalas.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toastElement = new bootstrap.Toast(toastContainerSalas.querySelector('.toast'), {
+        autohide: true,
+        delay: 3000
+    });
+    toastElement.show();
+}
+
+// ===========================================
+// 4. FUNCIONES DEL CALENDARIO Y ACTIVIDADES
+// ===========================================
 
 function loadActivityTypes() {
     const selectTipo = document.getElementById('activity-type');
@@ -567,23 +950,23 @@ function updateSubTypes() {
     }
 }
 
-    function getMonthRange() {
-        if (!planClases || planClases.length === 0) return [];
-        
-        const dates = planClases.map(activity => new Date(activity.pcl_Fecha));
-        const firstDate = new Date(Math.min.apply(null, dates));
-        const lastDate = new Date(Math.max.apply(null, dates));
-        
-        const months = [];
-        const currentDate = new Date(firstDate);
-        
-        while (currentDate <= lastDate) {
-            months.push(new Date(currentDate));
-            currentDate.setMonth(currentDate.getMonth() + 1);
-        }
-        
-        return months;
+function getMonthRange() {
+    if (!planClases || planClases.length === 0) return [];
+    
+    const dates = planClases.map(activity => new Date(activity.pcl_Fecha));
+    const firstDate = new Date(Math.min.apply(null, dates));
+    const lastDate = new Date(Math.max.apply(null, dates));
+    
+    const months = [];
+    const currentDate = new Date(firstDate);
+    
+    while (currentDate <= lastDate) {
+        months.push(new Date(currentDate));
+        currentDate.setMonth(currentDate.getMonth() + 1);
     }
+    
+    return months;
+}
 
 function createActivityButton(activity) {
     const button = document.createElement('button');
@@ -645,15 +1028,15 @@ function createActivityButton(activity) {
         
        // Formatear la fecha
 		const fecha = new Date(activity.pcl_Fecha);
-const day = fecha.getDate().toString().padStart(2, '0');
-const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
-const fechaFormateada = `${day}-${month}`;
+        const day = fecha.getDate().toString().padStart(2, '0');
+        const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
+        const fechaFormateada = `${day}-${month}`;
         
         let content = '';
         if (activity.pcl_tituloActividad) {
             content = `
                 <div class="class-date"><i class="fas fa-calendar-days me-1"></i>${fechaFormateada}</div>
-<div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
+                <div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
                 <div class="activity-title"><i class="fas fa-book me-1"></i>${truncateText(activity.pcl_tituloActividad, 25)}</div>
             `;
             
@@ -664,7 +1047,7 @@ const fechaFormateada = `${day}-${month}`;
         } else {
             content = `
                 <div class="class-date"><i class="fas fa-calendar-days me-1"></i>${fechaFormateada}</div>
-<div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
+                <div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
                 <div class="activity-title" style="color: #ffc107;">
                     <i class="fas fa-plus"></i> Agregar actividad
                 </div>
@@ -684,13 +1067,209 @@ const fechaFormateada = `${day}-${month}`;
     return button;
 }
 
-// Función auxiliar para truncar texto
-function truncateText(text, maxLength) {
-    if (text.length <= maxLength) {
-        return text;
-    }
-    return text.substring(0, maxLength) + '...';
+// Función auxiliar para obtener el rango de fechas de la semana
+function getWeekDates(activity) {
+    const fecha = new Date(activity.pcl_Fecha);
+    const diaSemana = fecha.getDay();
+    
+    // Obtener el lunes de la semana
+    const lunes = new Date(fecha);
+    lunes.setDate(fecha.getDate() - (diaSemana - 1));
+    
+    // Obtener el viernes de la semana
+    const viernes = new Date(lunes);
+    viernes.setDate(lunes.getDate() + 4);
+    
+    // Formatear las fechas manualmente para asegurar el formato dd-mm
+    const formatDate = (date) => {
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        return `${day}-${month}`;
+    };
+    
+    return {
+        inicio: formatDate(lunes),
+        fin: formatDate(viernes)
+    };
 }
+
+function generateCalendar(activitiesForMonth, calendarBody, currentMonth) {
+    const weeklyActivities = new Map();
+    
+    // Primero ordenamos las actividades por fecha
+    activitiesForMonth.sort((a, b) => new Date(a.pcl_Fecha) - new Date(b.pcl_Fecha));
+    
+    // Agrupar por semana
+    activitiesForMonth.forEach(activity => {
+        const weekNumber = parseInt(activity.pcl_Semana);
+        if (weekNumber === 0) return;
+        
+        const activityDate = new Date(activity.pcl_Fecha);
+        const weekKey = `week-${weekNumber}`;
+        
+        if (!weeklyActivities.has(weekKey)) {
+            weeklyActivities.set(weekKey, {
+                weekNum: weekNumber,
+                activities: [],
+                startDate: activityDate
+            });
+        }
+        
+        weeklyActivities.get(weekKey).activities.push(activity);
+    });
+
+    // Convertir el Map a Array y ordenar por semana
+    const sortedWeeks = Array.from(weeklyActivities.values())
+        .filter(week => week.activities.length > 0)
+        .sort((a, b) => a.weekNum - b.weekNum);
+
+    if (sortedWeeks.length === 0) {
+        const emptyRow = document.createElement('tr');
+        emptyRow.innerHTML = `
+            <td colspan="7" class="text-center py-4">
+                No hay actividades programadas para este mes
+            </td>
+        `;
+        calendarBody.appendChild(emptyRow);
+        return;
+    }
+
+    sortedWeeks.forEach(week => {
+        const weekRow = document.createElement('tr');
+        
+        // Celda de semana
+        const weekCell = document.createElement('td');
+        weekCell.className = 'week-number';
+        const weekDates = getWeekDates(week.activities[0]);
+        weekCell.innerHTML = `Semana ${week.weekNum}<br><small class="text-muted">${weekDates.inicio} al ${weekDates.fin}</small>`;
+        weekRow.appendChild(weekCell);
+        
+     // Celdas de días
+        ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].forEach(day => {
+            const dayCell = document.createElement('td');
+            dayCell.className = 'calendar-cell';
+            
+            // Actividades para este día que pertenecen a este mes
+            const dayActivities = week.activities
+                .filter(activity => {
+                    if (activity.dia !== day) return false;
+                    
+                    const activityDate = new Date(activity.pcl_Fecha);
+                    return activityDate.getMonth() === currentMonth;
+                })
+                .sort((a, b) => a.pcl_Inicio.localeCompare(b.pcl_Inicio));
+            
+            dayActivities.forEach(activity => {
+                const button = createActivityButton(activity);
+                dayCell.appendChild(button);
+            });
+            
+            weekRow.appendChild(dayCell);
+        });
+        
+        // Celda de autoaprendizaje
+        const autoCell = document.createElement('td');
+        autoCell.className = 'calendar-cell autoaprendizaje';
+        
+        // Solo mostrar autoaprendizaje
+        const autoActivity = week.activities.find(activity => 
+            activity.pcl_TipoSesion === 'Autoaprendizaje'
+        );
+        
+        if (autoActivity) {
+            const button = createActivityButton(autoActivity);
+            autoCell.appendChild(button);
+        }
+        
+        weekRow.appendChild(autoCell);
+        calendarBody.appendChild(weekRow);
+    });
+}
+
+function generateFullCalendar() {
+    const months = getMonthRange();
+    const container = document.getElementById('calendar-container');
+    container.innerHTML = '';
+
+    months.forEach(date => {
+        const monthSection = document.createElement('div');
+        monthSection.className = 'month-section mb-4';
+
+        const monthHeader = document.createElement('h3');
+        monthHeader.className = 'mb-3';
+        monthHeader.textContent = date.toLocaleString('es-ES', { 
+            month: 'long', 
+            year: 'numeric' 
+        }).charAt(0).toUpperCase() + date.toLocaleString('es-ES', { 
+            month: 'long', 
+            year: 'numeric' 
+        }).slice(1);
+        monthSection.appendChild(monthHeader);
+
+        // Filtrar actividades para este mes
+        const monthActivities = planClases.filter(activity => {
+            const activityDate = new Date(activity.pcl_Fecha);
+            
+            // Para actividades regulares, solo mostrar si pertenecen a este mes
+            if (activity.pcl_TipoSesion !== 'Autoaprendizaje') {
+                return activityDate.getMonth() === date.getMonth() && 
+                       activityDate.getFullYear() === date.getFullYear();
+            }
+            
+            // Para actividades de autoaprendizaje
+            if (activity.pcl_TipoSesion === 'Autoaprendizaje') {
+                const weekNumber = parseInt(activity.pcl_Semana);
+                
+                // Encontrar todas las actividades regulares de esta semana
+                const regularActivities = planClases.filter(a => 
+                    parseInt(a.pcl_Semana) === weekNumber && 
+                    a.pcl_TipoSesion !== 'Autoaprendizaje'
+                );
+                
+                if (regularActivities.length === 0) return false;
+                
+                // Obtener el último día de la semana
+                const lastDayOfWeek = regularActivities
+                    .map(a => new Date(a.pcl_Fecha))
+                    .sort((a, b) => b - a)[0];
+                
+                // El autoaprendizaje solo aparece en el mes que contiene el último día de la semana
+                return lastDayOfWeek.getMonth() === date.getMonth() && 
+                       lastDayOfWeek.getFullYear() === date.getFullYear();
+            }
+            
+            return false;
+        });
+
+        const table = document.createElement('div');
+        table.className = 'table-responsive';
+        table.innerHTML = `
+            <table class="table table-bordered">
+                <thead class="calendar-header">
+                    <tr>
+                        <th style="width: 8%">Semana</th>
+                        <th>Lunes</th>
+                        <th>Martes</th>
+                        <th>Miércoles</th>
+                        <th>Jueves</th>
+                        <th>Viernes</th>
+                        <th style="width: 15%">Autoaprendizaje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        `;
+        
+        generateCalendar(monthActivities, table.querySelector('tbody'), date.getMonth());
+        monthSection.appendChild(table);
+        container.appendChild(monthSection);
+    });
+}
+
+// ===========================================
+// 5. FUNCIONES DE ACTIVIDADES Y CARGA DE DATOS
+// ===========================================
 
 function loadAutoActivityData(activity) {
    document.getElementById('auto-idplanclases').value = activity.idplanclases;
@@ -745,8 +1324,8 @@ function loadAutoActivityData(activity) {
        saveButton.disabled = this.value.trim() === '';
    });
 }
-	
-	 // Modificar la función loadActivityData existente
+
+// Modificar la función loadActivityData existente
 function loadActivityData(activity) {
 	
 	 console.log('Datos de actividad recibidos:', activity); // Para debug
@@ -764,22 +1343,16 @@ function loadActivityData(activity) {
 	 document.getElementById('tipo-anterior').value = activity.pcl_TipoSesion;
 	 document.getElementById('modal-tipo-actividad').textContent = activity.pcl_TipoSesion;
 	
-	 // Formatear y mostrar fecha y hora
-    const fecha = new Date(activity.pcl_Fecha);
-    const fechaFormateada = fecha.toLocaleDateString('es-ES', { 
-        day: '2-digit', 
-        month: '2-digit' 
-    }).replace('/', '-');
-    const horaInicio = activity.pcl_Inicio.substring(0,5);
-    const horaTermino = activity.pcl_Termino.substring(0,5);
-    
-	console.log('Horarios que se están usando:', {
-        inicio: horaInicio,
-        termino: horaTermino
-    }); // Para debug
-	
-    document.getElementById('modal-fecha-hora').textContent = 
-        `Día ${fechaFormateada} desde las ${horaInicio} a las ${horaTermino}`;
+	const fecha = new Date(activity.pcl_Fecha);
+const day = fecha.getDate().toString().padStart(2, '0');
+const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
+const fechaFormateada = `${day}-${month}`;
+
+const horaInicio = activity.pcl_Inicio.substring(0,5);
+const horaTermino = activity.pcl_Termino.substring(0,5);
+
+document.getElementById('modal-fecha-hora').textContent = 
+    `Día ${fechaFormateada} desde las ${horaInicio} a las ${horaTermino}`;
 	
 	 // Actualizar título y ajustar altura
     const titleTextarea = document.getElementById('activity-title');
@@ -948,7 +1521,6 @@ function formatTimeString(date) {
     return date.toTimeString().substring(0, 8);
 }
 
-
 function loadDocentes(idplanclases) {
     const docentesContainer = document.getElementById('docentes-container');
     docentesContainer.innerHTML = '<h5 class="card-title">Cargando docentes...</h5>';
@@ -1025,32 +1597,34 @@ function reordenarDocentes() {
     selected.forEach(row => container.appendChild(row));
     notSelected.forEach(row => container.appendChild(row));
 }
-	
-	function setupTimeRestrictions(startInput, endInput, originalStart, originalEnd) {
-        function validateTime(value, min, max) {
-            if (value < min) return min;
-            if (value > max) return max;
-            return value;
-        }
-        
-        startInput.addEventListener('change', function() {
-            this.value = validateTime(this.value, originalStart, originalEnd);
-            if (this.value > endInput.value) {
-                endInput.value = this.value;
-            }
-        });
-        
-        endInput.addEventListener('change', function() {
-            this.value = validateTime(this.value, originalStart, originalEnd);
-            if (this.value < startInput.value) {
-                startInput.value = this.value;
-            }
-        });
+
+function setupTimeRestrictions(startInput, endInput, originalStart, originalEnd) {
+    function validateTime(value, min, max) {
+        if (value < min) return min;
+        if (value > max) return max;
+        return value;
     }
+    
+    startInput.addEventListener('change', function() {
+        this.value = validateTime(this.value, originalStart, originalEnd);
+        if (this.value > endInput.value) {
+            endInput.value = this.value;
+        }
+    });
+    
+    endInput.addEventListener('change', function() {
+        this.value = validateTime(this.value, originalStart, originalEnd);
+        if (this.value < startInput.value) {
+            startInput.value = this.value;
+        }
+    });
+}
 
-         
+// ===========================================
+// 6. FUNCIONES DE GUARDADO Y PROCESAMIENTO
+// ===========================================
 
-  function saveActivity() {
+function saveActivity() {
     // Validar título
     const activityTitle = document.getElementById('activity-title').value.trim();
     if (activityTitle === '') {
@@ -1127,11 +1701,9 @@ function reordenarDocentes() {
         // Si no hay cambio de tipo, proceder directamente
         procesarGuardado();
     }
-    
-    // Función interna para procesar el guardado
-    
-	// REEMPLAZAR TODA la función procesarGuardado() en index.php:
+}
 
+// REEMPLAZAR TODA la función procesarGuardado() en index.php:
 function procesarGuardado() {
     // Mostrar toast de carga
     mostrarToastCarga('Guardando cambios...');
@@ -1197,7 +1769,8 @@ function procesarGuardado() {
         
         // ===== LÓGICA ESPECIAL PARA CASO "DEBE SOLICITAR SALA" =====
         const esCasoSolicitudSala = data.mensaje_sala && 
-                                    data.mensaje_sala.includes('Debe solicitar sala desde pestaña Salas');
+                                    data.mensaje_sala.includes('Debe solicitar sala desde pestaña Salas') ||
+									data.mensaje_sala.includes('Cambiado a Clase - CRON gestionará asignación automática')
         
         if (esCasoSolicitudSala) {
             // CERRAR MODAL PRIMERO
@@ -1207,71 +1780,62 @@ function procesarGuardado() {
             
             // OCULTAR TOAST DE CARGA
             document.querySelector('.toast-container').innerHTML = '';
+			
+			let mensajeHTML = '';
+
+			if (data.mensaje_sala.includes('Debe solicitar sala')) {
+				mensajeHTML = `
+					<div class="text-start">
+						<p class="mb-3">
+							<i class="bi bi-check-circle text-success me-2"></i>
+							<strong>Su actividad ha sido actualizada exitosamente.</strong>
+						</p>
+						<div class="alert alert-info mb-3">
+							<i class="bi bi-info-circle me-2"></i>
+							Este tipo de actividad requiere gestión manual de sala.
+						</div>
+						<p class="text-primary mb-0">
+							<i class="bi bi-arrow-right me-2"></i>
+							<strong>Próximo paso:</strong> Solicite una sala desde la pestaña "Salas".
+						</p>
+					</div>
+				`;
+			} else {
+				mensajeHTML = `
+					<div class="text-start">
+						<p class="mb-3">
+							<i class="bi bi-check-circle text-success me-2"></i>
+							<strong>Tipo de actividad cambiado a Clase.</strong>
+						</p>
+						<div class="alert alert-info mb-3">
+							<i class="bi bi-info-circle me-2"></i>
+							El sistema gestionará automáticamente la asignación de sala.
+						</div>
+						<p class="text-muted mb-0">
+							<i class="bi bi-clock-history me-2"></i>
+							En las próximas horas verá reflejada la asignación en la pestaña "Salas".
+						</p>
+					</div>
+				`;
+			}
+
             
             // CASO ESPECIAL: SweetAlert sin recarga automática
             Swal.fire({
-                icon: 'info',
-                title: '¡Actividad actualizada!',
-                html: `
-                    <div class="text-start">
-                        <p class="mb-3">
-                            <i class="bi bi-check-circle text-success me-2"></i>
-                            <strong>Su actividad ha sido actualizada exitosamente.</strong>
-                        </p>
-                        <div class="alert alert-info mb-3">
-                            <i class="bi bi-info-circle me-2"></i>
-                            Este tipo de actividad requiere gestión manual de sala.
-                        </div>
-                        <p class="text-primary mb-0">
-                            <i class="bi bi-arrow-right me-2"></i>
-                            <strong>Próximo paso:</strong> Solicite una sala desde la pestaña "Salas".
-                        </p>
-                    </div>
-                `,
-                showConfirmButton: true,
-                confirmButtonText: '<i class="bi bi-building me-2"></i>Ir a Salas ahora',
-                showCancelButton: true,
-                cancelButtonText: '<i class="bi bi-check me-2"></i>Entendido',
-                confirmButtonColor: '#0d6efd',
-                cancelButtonColor: '#198754',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                customClass: {
-                    popup: 'swal-wide'
-                }
-            }).then((result) => {
-    if (result.isConfirmed) {
-        // Limpiar cualquier overlay residual
-        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        
-        // Cambiar a pestaña salas
-        const salasTab = document.getElementById('salas-tab');
-        salasTab.click();
-        
-        // Forzar carga del contenido de salas
-        setTimeout(() => {
-            const cursoId = new URLSearchParams(window.location.search).get('curso');
-            const salasList = document.getElementById('salas-list');
-            
-            salasList.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando salas...</p></div>';
-            
-            fetch('salas2.php?curso=' + cursoId)
-                .then(response => response.text())
-                .then(html => {
-                    salasList.innerHTML = html;
-                    mostrarToast('💡 Ahora puede solicitar una sala para su actividad', 'info', 5000);
-                })
-                .catch(error => {
-                    salasList.innerHTML = '<div class="alert alert-danger">Error al cargar salas</div>';
-                });
-        }, 500);
-        
-    } else {
-        location.reload();
-    }
-});
+					icon: 'info',
+					title: '¡Actividad actualizada!',
+					html: mensajeHTML,
+					confirmButtonText: '<i class="bi bi-check me-2"></i>Entendido',
+					confirmButtonColor: '#0d6efd',
+					allowOutsideClick: false,
+					allowEscapeKey: false,
+					customClass: {
+						popup: 'swal-wide'
+					}
+				}).then(() => {
+					location.reload();
+				});
+
             
             // ⚠️ CRÍTICO: Rehabilitar botón y NO continuar con el resto del código
             if (saveButton) saveButton.disabled = false;
@@ -1354,707 +1918,75 @@ function procesarGuardado() {
         if (saveButton) saveButton.disabled = false;
     });
 }
-	
-}
 
-function mostrarToastCarga(mensaje) {
-    const toastHTML = `
-        <div class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <div class="spinner-border spinner-border-sm me-2" role="status">
-                        <span class="visually-hidden">Cargando...</span>
-                    </div>
-                    ${mensaje}
-                </div>
-            </div>
-        </div>
-    `;
+function saveAutoActivity() {
+    const form = document.getElementById('autoaprendizajeForm');
+    const formData = new FormData();
     
-    let toastContainer = document.querySelector('.toast-container');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-        document.body.appendChild(toastContainer);
-    }
+    // Obtener los datos del formulario
+    const idplanclases = document.getElementById('auto-idplanclases').value;
+    const activityTitle = document.getElementById('auto-activity-title').value.trim();
     
-    toastContainer.innerHTML = ''; // Limpiar toasts anteriores
-    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-    
-    const toast = new bootstrap.Toast(toastContainer.firstElementChild, {
-        autohide: false
-    });
-    toast.show();
-}
-
-// Función auxiliar para mostrar toasts
-function mostrarToast(mensaje, tipo) {
-    let toastContainer = document.querySelector('.toast-container');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-        document.body.appendChild(toastContainer);
-    }
-
-    const toastHTML = `
-        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="bi bi-${tipo === 'success' ? 'check-circle' : 'x-circle'} me-2"></i>
-                    ${mensaje}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
-        </div>
-    `;
-    
-    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-    const toast = new bootstrap.Toast(toastContainer.lastElementChild);
-    toast.show();
-}
-	
-	
-
-// Función auxiliar para obtener el rango de fechas de la semana
-function getWeekDates(activity) {
-    const fecha = new Date(activity.pcl_Fecha);
-    const diaSemana = fecha.getDay();
-    
-    // Obtener el lunes de la semana
-    const lunes = new Date(fecha);
-    lunes.setDate(fecha.getDate() - (diaSemana - 1));
-    
-    // Obtener el viernes de la semana
-    const viernes = new Date(lunes);
-    viernes.setDate(lunes.getDate() + 4);
-    
-    // Formatear las fechas manualmente para asegurar el formato dd-mm
-    const formatDate = (date) => {
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        return `${day}-${month}`;
-    };
-    
-    return {
-        inicio: formatDate(lunes),
-        fin: formatDate(viernes)
-    };
-}
-
-function generateCalendar(activitiesForMonth, calendarBody, currentMonth) {
-    const weeklyActivities = new Map();
-    
-    // Primero ordenamos las actividades por fecha
-    activitiesForMonth.sort((a, b) => new Date(a.pcl_Fecha) - new Date(b.pcl_Fecha));
-    
-    // Agrupar por semana
-    activitiesForMonth.forEach(activity => {
-        const weekNumber = parseInt(activity.pcl_Semana);
-        if (weekNumber === 0) return;
-        
-        const activityDate = new Date(activity.pcl_Fecha);
-        const weekKey = `week-${weekNumber}`;
-        
-        if (!weeklyActivities.has(weekKey)) {
-            weeklyActivities.set(weekKey, {
-                weekNum: weekNumber,
-                activities: [],
-                startDate: activityDate
-            });
-        }
-        
-        weeklyActivities.get(weekKey).activities.push(activity);
-    });
-
-    // Convertir el Map a Array y ordenar por semana
-    const sortedWeeks = Array.from(weeklyActivities.values())
-        .filter(week => week.activities.length > 0)
-        .sort((a, b) => a.weekNum - b.weekNum);
-
-    if (sortedWeeks.length === 0) {
-        const emptyRow = document.createElement('tr');
-        emptyRow.innerHTML = `
-            <td colspan="7" class="text-center py-4">
-                No hay actividades programadas para este mes
-            </td>
-        `;
-        calendarBody.appendChild(emptyRow);
+    // Validar título
+    if (activityTitle === '') {
+        mostrarToast('Debe ingresar un título para la actividad de autoaprendizaje', 'danger');
         return;
     }
-
-    sortedWeeks.forEach(week => {
-        const weekRow = document.createElement('tr');
-        
-        // Celda de semana
-        const weekCell = document.createElement('td');
-        weekCell.className = 'week-number';
-        const weekDates = getWeekDates(week.activities[0]);
-        weekCell.innerHTML = `Semana ${week.weekNum}<br><small class="text-muted">${weekDates.inicio} al ${weekDates.fin}</small>`;
-        weekRow.appendChild(weekCell);
-        
-     // Celdas de días
-        ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].forEach(day => {
-            const dayCell = document.createElement('td');
-            dayCell.className = 'calendar-cell';
-            
-            // Actividades para este día que pertenecen a este mes
-            const dayActivities = week.activities
-                .filter(activity => {
-                    if (activity.dia !== day) return false;
-                    
-                    const activityDate = new Date(activity.pcl_Fecha);
-                    return activityDate.getMonth() === currentMonth;
-                })
-                .sort((a, b) => a.pcl_Inicio.localeCompare(b.pcl_Inicio));
-            
-            dayActivities.forEach(activity => {
-                const button = createActivityButton(activity);
-                dayCell.appendChild(button);
-            });
-            
-            weekRow.appendChild(dayCell);
-        });
-        
-        // Celda de autoaprendizaje
-        const autoCell = document.createElement('td');
-        autoCell.className = 'calendar-cell autoaprendizaje';
-        
-        // Solo mostrar autoaprendizaje
-        const autoActivity = week.activities.find(activity => 
-            activity.pcl_TipoSesion === 'Autoaprendizaje'
-        );
-        
-        if (autoActivity) {
-            const button = createActivityButton(autoActivity);
-            autoCell.appendChild(button);
-        }
-        
-        weekRow.appendChild(autoCell);
-        calendarBody.appendChild(weekRow);
-    });
-}
-
-
-function generateFullCalendar() {
-    const months = getMonthRange();
-    const container = document.getElementById('calendar-container');
-    container.innerHTML = '';
-
-    months.forEach(date => {
-        const monthSection = document.createElement('div');
-        monthSection.className = 'month-section mb-4';
-
-        const monthHeader = document.createElement('h3');
-        monthHeader.className = 'mb-3';
-        monthHeader.textContent = date.toLocaleString('es-ES', { 
-            month: 'long', 
-            year: 'numeric' 
-        }).charAt(0).toUpperCase() + date.toLocaleString('es-ES', { 
-            month: 'long', 
-            year: 'numeric' 
-        }).slice(1);
-        monthSection.appendChild(monthHeader);
-
-        // Filtrar actividades para este mes
-        const monthActivities = planClases.filter(activity => {
-            const activityDate = new Date(activity.pcl_Fecha);
-            
-            // Para actividades regulares, solo mostrar si pertenecen a este mes
-            if (activity.pcl_TipoSesion !== 'Autoaprendizaje') {
-                return activityDate.getMonth() === date.getMonth() && 
-                       activityDate.getFullYear() === date.getFullYear();
-            }
-            
-            // Para actividades de autoaprendizaje
-            if (activity.pcl_TipoSesion === 'Autoaprendizaje') {
-                const weekNumber = parseInt(activity.pcl_Semana);
-                
-                // Encontrar todas las actividades regulares de esta semana
-                const regularActivities = planClases.filter(a => 
-                    parseInt(a.pcl_Semana) === weekNumber && 
-                    a.pcl_TipoSesion !== 'Autoaprendizaje'
-                );
-                
-                if (regularActivities.length === 0) return false;
-                
-                // Obtener el último día de la semana
-                const lastDayOfWeek = regularActivities
-                    .map(a => new Date(a.pcl_Fecha))
-                    .sort((a, b) => b - a)[0];
-                
-                // El autoaprendizaje solo aparece en el mes que contiene el último día de la semana
-                return lastDayOfWeek.getMonth() === date.getMonth() && 
-                       lastDayOfWeek.getFullYear() === date.getFullYear();
-            }
-            
-            return false;
-        });
-
-        const table = document.createElement('div');
-        table.className = 'table-responsive';
-        table.innerHTML = `
-            <table class="table table-bordered">
-                <thead class="calendar-header">
-                    <tr>
-                        <th style="width: 8%">Semana</th>
-                        <th>Lunes</th>
-                        <th>Martes</th>
-                        <th>Miércoles</th>
-                        <th>Jueves</th>
-                        <th>Viernes</th>
-                        <th style="width: 15%">Autoaprendizaje</th>
-                    </tr>
-                </thead>
-                <tbody>
-                </tbody>
-            </table>
-        `;
-        
-        generateCalendar(monthActivities, table.querySelector('tbody'), date.getMonth());
-        monthSection.appendChild(table);
-        container.appendChild(monthSection);
-    });
-}
-
-function debugTablaSalas() {
-    console.log('🔍 Debug - Estado de la tabla de salas:');
     
-    var filas = document.querySelectorAll('#salas-list table tbody tr');
-    console.log('Total de filas encontradas:', filas.length);
+    const hours = parseInt(document.getElementById('auto-hours').value) || 0;
+    const minutes = parseInt(document.getElementById('auto-minutes').value) || 0;
     
-    filas.forEach(function(fila, index) {
-        var celdas = fila.cells;
-        if (celdas.length > 1) {
-            console.log('Fila ' + index + ':', {
-                id: fila.dataset.id,
-                fecha: celdas[1] ? celdas[1].textContent.trim() : 'N/A',
-                horario: celdas[2] ? celdas[2].textContent.trim() : 'N/A',
-                tipo: celdas[3] ? celdas[3].textContent.trim() : 'N/A'
-            });
-        }
-    });
-}
-
-function verificarDependencias() {
-    var dependencias = [
-        'verificarBloquesMismoDia',
-        'procesarBloquesMismoDia',
-        'mostrarAlertaBloquesRelacionados',
-        'parsearFechaParaConsulta'
-    ];
-    
-    var faltantes = [];
-    
-    dependencias.forEach(function(func) {
-        if (typeof window[func] !== 'function') {
-            faltantes.push(func);
-        }
-    });
-    
-    if (faltantes.length > 0) {
-        console.error('❌ Faltan las siguientes funciones:', faltantes);
-        return false;
-    } else {
-        console.log('✅ Todas las dependencias están disponibles');
-        return true;
-    }
-}
-
-    document.addEventListener('DOMContentLoaded', () => {
-        generateFullCalendar();
-		loadActivityTypes();
-		
-		  // Inicializar tooltips de Bootstrap
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        });
-		
-		
-    // Obtener el ID del curso de la URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const cursoId = urlParams.get('curso');
-
-    // Agregar evento para cargar salas
-    document.getElementById('salas-tab').addEventListener('click', function() {
-        fetch('salas2.php?curso=' + cursoId)
-            .then(response => response.text())
-            .then(html => {
-                document.getElementById('salas-list').innerHTML = html;
-            })
-            .catch(error => {
-                document.getElementById('salas-list').innerHTML = '<div class="alert alert-danger">Error al cargar la información de salas</div>';
-            });
-    });
-	
-	 // Nuevo: Limpiar alertas al cerrar modal de salas
-    var salaModal = document.getElementById('salaModal');
-    if (salaModal) {
-        salaModal.addEventListener('hidden.bs.modal', function() {
-            limpiarAlertasBloques();
-        });
-    }
-	
-	 setTimeout(function() {
-        verificarDependencias();
-    }, 1000);
-	
-	 var alumnosPorSala = document.getElementById('alumnosPorSala');
-    if (alumnosPorSala) {
-        alumnosPorSala.addEventListener('input', function() {
-            // Delay para evitar múltiples consultas
-            clearTimeout(window.timeoutSalas);
-            window.timeoutSalas = setTimeout(actualizarSalasDisponibles, 500);
-        });
+    // Validar horas y minutos
+    if (!validateAutoTime(hours, minutes)) {
+        mostrarToast(`Las horas asignadas exceden el máximo semanal (${horasSemanales} horas)`, 'danger');
+        return;
     }
     
-    // Actualizar salas cuando cambie el campus
-    var campus = document.getElementById('campus');
-    if (campus) {
-        campus.addEventListener('change', actualizarSalasDisponibles);
-    }
+    // Formatear las horas en formato HH:MM:SS
+    const horasNoPresenciales = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
     
-    // Actualizar salas cuando se cargue el modal (si es necesario)
-    var modalSalas = document.getElementById('salaModal');
-    if (modalSalas) {
-        modalSalas.addEventListener('shown.bs.modal', function() {
-            // Delay para asegurar que todos los campos estén cargados
-            setTimeout(actualizarSalasDisponibles, 1000);
-        });
-    }
-	
-	
-	 // Agregar evento para cargar docente
-    document.getElementById('docente-tab').addEventListener('click', function() {
-    const docentesList = document.getElementById('docentes-list');
+    // Añadir datos al formData
+    formData.append('idplanclases', idplanclases);
+    formData.append('activity-title', activityTitle);
+    formData.append('horasNoPresenciales', horasNoPresenciales);
     
-    // Mostrar spinner de carga
-    docentesList.innerHTML = '<div class="text-center p-5"><i class="bi bi-arrow-repeat spinner"></i><p>Cargando...</p></div>';
-    
-    fetch('1_asignar_docente.php?idcurso=' + cursoId)
-        .then(response => response.text())
-        .then(html => {
-            docentesList.innerHTML = html;
-        })
-        .catch(error => {
-            docentesList.innerHTML = '<div class="alert alert-danger">Error al cargar los datos</div>';
-        });
-});
-
-document.getElementById('docente-masivo-tab').addEventListener('click', function() {
-    const docentesMasivoList = document.getElementById('docentes-masivo-list');
-    
-    // Mostrar spinner de carga
-    docentesMasivoList.innerHTML = '<div class="text-center p-5"><i class="bi bi-arrow-repeat spinner"></i><p>Cargando...</p></div>';
-    
-    fetch('asignacion_masiva_docentes.php?curso=' + cursoId)
-        .then(response => response.text())
-        .then(html => {
-            docentesMasivoList.innerHTML = html;
-            // IMPORTANTE: Inicializar los event listeners después de cargar el contenido
-            inicializarAsignadorMasivo();
-        })
-        .catch(error => {
-            docentesMasivoList.innerHTML = '<div class="alert alert-danger">Error al cargar los datos</div>';
-        });
-});
-	
- // Validación en tiempo real del tiempo asignado
-    const hoursInput = document.getElementById('auto-hours');
-    const minutesInput = document.getElementById('auto-minutes');
-    
-    function validateInputs() {
-        const hours = parseInt(hoursInput.value) || 0;
-        const minutes = parseInt(minutesInput.value) || 0;
-        
-        if (!validateAutoTime(hours, minutes)) {
-            hoursInput.classList.add('is-invalid');
-            minutesInput.classList.add('is-invalid');
+    // Enviar datos al servidor
+    fetch('guardar_autoaprendizaje.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Cerrar modal
+            const modalElement = document.getElementById('autoaprendizajeModal');
+            const modal = bootstrap.Modal.getInstance(modalElement);
+            if (modal) modal.hide();
+            
+            // Mostrar notificación de éxito
+            mostrarToast('Autoaprendizaje guardado correctamente', 'success');
+            
+            // Recargar la página después de un breve periodo
+            setTimeout(() => location.reload(), 2000);
         } else {
-            hoursInput.classList.remove('is-invalid');
-            minutesInput.classList.remove('is-invalid');
+            throw new Error(data.message || 'Error al guardar el autoaprendizaje');
         }
-    }
-    
-    hoursInput.addEventListener('input', validateInputs);
-    minutesInput.addEventListener('input', validateInputs);
-	
-	$('#autoaprendizajeModal').on('shown.bs.modal', function() {
-        const saveButton = document.getElementById('save-auto-btn');
-        const titleField = document.getElementById('auto-activity-title');
-        
-        // Verificar si el título está vacío
-        saveButton.disabled = titleField.value.trim() === '';
-        
-        // Foco en el campo del título
-        titleField.focus();
+    })
+    .catch(error => {
+        mostrarToast('Error: ' + error.message, 'danger');
     });
-	
-});
-</script>
-
-<script>
-// Función global para eliminar docentes
-// Función global para eliminar docentes con modal de confirmación
-window.eliminarDocente = function(id) {
-    if(!id) return;
-    
-    // Crear el modal de confirmación
-    const modalHTML = `
-        <div class="modal fade" id="confirmarEliminarModal" tabindex="-1" data-bs-backdrop="static">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">
-                            <i class="bi bi-exclamation-triangle text-danger"></i> 
-                            Confirmar eliminación
-                        </h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>¿Está seguro que desea eliminar este docente del curso?</p>
-                        <div class="alert alert-warning">
-                            <i class="bi bi-info-circle"></i>
-                            <strong>Importante:</strong> Esta acción también eliminará al docente de todas las actividades asignadas en este curso.
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-danger" id="confirmarEliminar">
-                            <i class="bi bi-trash"></i> Eliminar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Si ya existe el modal, eliminarlo
-    $('#confirmarEliminarModal').remove();
-    
-    // Agregar el modal al body
-    $('body').append(modalHTML);
-    
-    // Mostrar el modal
-    const modal = new bootstrap.Modal(document.getElementById('confirmarEliminarModal'));
-    modal.show();
-    
-    // Handler para el botón de confirmar
-    $('#confirmarEliminar').off('click').on('click', function() {
-        // Cerrar el modal
-        modal.hide();
-        
-        // Proceder con la eliminación
-        $.ajax({
-            url: 'eliminar_docente.php',
-            type: 'POST',
-            data: { idProfesoresCurso: id },
-            dataType: 'json',
-            success: function(response) {
-                if(response.status === 'success') {
-                    // Eliminar la fila de la tabla
-                    var $btn = $(`button[onclick="eliminarDocente(${id})"]`);
-                    var $row = $btn.closest('tr');
-                    
-                    $row.fadeOut(300, function() {
-                        $(this).remove();
-                    });
-
-                    // Crear y mostrar toast de éxito
-                    const toastHTML = `
-                        <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                            <div class="d-flex">
-                                <div class="toast-body">
-                                    <i class="bi bi-check-circle me-2"></i>
-                                    ${response.message || 'Docente removido exitosamente'}
-                                </div>
-                                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Asegurar que existe el contenedor de toasts
-                    if ($('.toast-container').length === 0) {
-                        $('body').append('<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>');
-                    }
-                    
-                    $('.toast-container').append(toastHTML);
-                    const toastElement = new bootstrap.Toast($('.toast').last(), {
-                        autohide: true,
-                        delay: 3000
-                    });
-                    toastElement.show();
-                } else {
-                    // Mostrar error
-                    mostrarToast(response.message || 'Error al eliminar docente', 'danger');
-                }
-            },
-            error: function() {
-                mostrarToast('Error de comunicación con el servidor', 'danger');
-            }
-        });
-    });
-    
-    // Limpiar el modal cuando se cierre
-    $('#confirmarEliminarModal').on('hidden.bs.modal', function () {
-        $(this).remove();
-    });
-};
-
-
-
-// Función auxiliar para mostrar toasts
-function mostrarToast(mensaje, tipo = 'success') {
-    const toastHTML = `
-        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="bi bi-${tipo === 'success' ? 'check-circle' : 'x-circle'} me-2"></i>
-                    ${mensaje}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
-        </div>
-    `;
-    
-    if ($('.toast-container').length === 0) {
-        $('body').append('<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>');
-    }
-    
-    $('.toast-container').append(toastHTML);
-    const toastElement = new bootstrap.Toast($('.toast').last(), {
-        autohide: true,
-        delay: 3000
-    });
-    toastElement.show();
 }
-</script>
-<script>
-// Función global para actualizar función de docente
-window.actualizarFuncion = function(selectElement, idProfesoresCurso) {
-    const nuevoTipo = selectElement.value;
-    
-    $.ajax({
-        url: 'guardarFuncion.php',
-        type: 'POST',
-        data: { 
-            idProfesoresCurso: idProfesoresCurso,
-            idTipoParticipacion: nuevoTipo
-        },
-        dataType: 'json',
-        success: function(response) {
-            if(response.status === 'success') {
-                // Mostrar toast de éxito
-                const toastHTML = `
-                    <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                        <div class="d-flex">
-                            <div class="toast-body">
-                                <i class="bi bi-check-circle me-2"></i>
-                                Función actualizada exitosamente
-                            </div>
-                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                        </div>
-                    </div>
-                `;
-                
-                $('.toast-container').append(toastHTML);
-                const toastElement = new bootstrap.Toast($('.toast').last(), {
-                    autohide: true,
-                    delay: 2000
-                });
-                toastElement.show();
-            }
-        },
-        error: function() {
-            // Mostrar toast de error
-            const toastHTML = `
-                <div class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                    <div class="d-flex">
-                        <div class="toast-body">
-                            <i class="bi bi-x-circle me-2"></i>
-                            Error al actualizar la función
-                        </div>
-                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                    </div>
-                </div>
-            `;
-            
-            $('.toast-container').append(toastHTML);
-            const toastElement = new bootstrap.Toast($('.toast').last(), {
-                autohide: true,
-                delay: 2000
-            });
-            toastElement.show();
-        }
-    });
-};
-</script>
 
-<!-- FUNCIONES A REVISAR-->
+// ===========================================
+// 7. SISTEMA DE SALAS COMPLETO
+// ===========================================
 
-<script>
-// Funciones para manejar las acciones de sala
-// function solicitarSala(id) {
-//   document.getElementById('idplanclases').value = id;
-//   document.getElementById('salaModalTitle').textContent = 'Solicitar Sala';
-//   const modal = new bootstrap.Modal(document.getElementById('salaModal'));
-//   modal.show();
-// }
-// 
-// function modificarSala(id) {
-//   document.getElementById('idplanclases').value = id;
-//   document.getElementById('salaModalTitle').textContent = 'Modificar Sala';
-//   const modal = new bootstrap.Modal(document.getElementById('salaModal'));
-//   modal.show();
-// }
-// 
-// function liberarSala(id) {
-//   if(confirm('¿Está seguro que desea liberar esta sala?')) {
-//     // Aquí iría el código para liberar la sala
-//   }
-// }
-// 
-// function guardarSala() {
-//   // Aquí iría el código para guardar los cambios de sala
-//   const modal = bootstrap.Modal.getInstance(document.getElementById('salaModal'));
-//   modal.hide();
-// }
-
-// Función para cargar el contenido de salas en el tab
-//function loadSalas() {
-//  fetch('salas2.php')
-//    .then(response => response.text())
-//    .then(html => {
-//      document.getElementById('salas-list').innerHTML = html;
-//    });
-//}
-//
-
-// Eliminar el código duplicado y usar solo esta versión
-//document.getElementById('salas-tab').addEventListener('click', function() {
-//    const salasList = document.getElementById('salas-list');
-//    
-//    // Mostrar spinner de carga - mismo estilo que docentes
-//    salasList.innerHTML = '<div class="text-center p-5"><i class="bi bi-arrow-repeat spinner"></i><p>Cargando...</p></div>';
-//    
-//    // Fetch con el curso como parámetro
-//    fetch('salas2.php?curso=' + cursoId)
-//        .then(response => response.text())
-//        .then(html => {
-//            salasList.innerHTML = html;
-//        })
-//        .catch(error => {
-//            salasList.innerHTML = '<div class="alert alert-danger">Error al cargar la información de salas</div>';
-//        });
-//});
-
-</script>
-
-<!-- FUNCIONAES DE SALAS -->
-<script>
+// FUNCIÓN PRINCIPAL: solicitarSala
 async function solicitarSala(idPlanClase) {
     console.log('=== INICIANDO SOLICITAR SALA ===');
     console.log('ID Plan Clase:', idPlanClase);
+    
+     limpiarModalSalaCompleto();
     
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
@@ -2080,7 +2012,8 @@ async function solicitarSala(idPlanClase) {
             document.getElementById('campus').value = data.pcl_campus || 'Norte';
             document.getElementById('nSalas').value = data.pcl_nSalas || 1;
             document.getElementById('requiereSala').value = data.pcl_DeseaSala || 1;
-            document.getElementById('observaciones').value = data.observaciones || '';
+            //document.getElementById('observaciones').value = data.observaciones || '';
+			document.getElementById('textoObservacionesHistoricas').textContent = data.observaciones || 'Sin observaciones previas.';
             
             // NUEVA LÍNEA: Prellenar movilidad reducida
             document.getElementById('movilidadReducida').value = data.pcl_movilidadReducida || 'No';
@@ -2138,6 +2071,11 @@ async function solicitarSala(idPlanClase) {
     setTimeout(() => {
         console.log('⚡ Ejecutando cálculo inmediato en solicitarSala');
         calcularAlumnosPorSala();
+        
+        // Configurar juntar secciones si los datos están disponibles
+        if (typeof datosJuntarSecciones !== 'undefined' && datosJuntarSecciones && !juntarSeccionesConfigurado) {
+            configurarJuntarSecciones();
+        }
     }, 50);
 }
     
@@ -2153,6 +2091,8 @@ async function solicitarSala(idPlanClase) {
 async function modificarSala(idPlanClase) {
     console.log('=== INICIANDO MODIFICAR SALA ===');
     console.log('ID Plan Clase:', idPlanClase);
+    
+     limpiarModalSalaCompleto();
     
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
@@ -2206,13 +2146,18 @@ async function modificarSala(idPlanClase) {
             });
             
             // Mostrar mensajes anteriores en el campo observaciones
-            if (datos.mensajeAnterior) {
-                document.getElementById('observaciones').value = datos.mensajeAnterior;
-                document.getElementById('observaciones').placeholder = 'Escriba aquí su nuevo mensaje...';
-            } else {
-                document.getElementById('observaciones').value = '';
-                document.getElementById('observaciones').placeholder = 'Por favor, describa su requerimiento con el mayor nivel de detalle posible...';
-            }
+            //if (datos.mensajeAnterior) {
+            //    document.getElementById('observaciones').value = datos.mensajeAnterior;
+            //    document.getElementById('observaciones').placeholder = 'Escriba aquí su nuevo mensaje...';
+            //} else {
+            //    document.getElementById('observaciones').value = '';
+            //    document.getElementById('observaciones').placeholder = 'Por favor, describa su requerimiento con el mayor nivel de detalle posible...';
+            //}
+			
+			document.getElementById('observaciones').value = '';
+document.getElementById('observaciones').placeholder = 'Por favor, describa su requerimiento con el mayor nivel de detalle posible...';
+document.getElementById('textoObservacionesHistoricas').textContent = datos.mensajeAnterior || 'Sin observaciones previas.';
+
             
              document.getElementById('alumnosTotales').value = tr.dataset.alumnos;
             document.getElementById('alumnosTotales').readOnly = true;
@@ -2223,6 +2168,11 @@ async function modificarSala(idPlanClase) {
             setTimeout(() => {
                 console.log('⚡ Ejecutando cálculo inmediato en modificarSala');
                 calcularAlumnosPorSala();
+                
+                // Configurar juntar secciones si los datos están disponibles
+                if (typeof datosJuntarSecciones !== 'undefined' && datosJuntarSecciones && !juntarSeccionesConfigurado) {
+                    configurarJuntarSecciones();
+                }
             }, 50);
          // NUEVO: Verificar bloques relacionados del mismo día
 		const fechaCell = tr.cells[1] ? tr.cells[1].textContent.trim() : '';
@@ -2263,12 +2213,229 @@ async function modificarSala(idPlanClase) {
     console.log('=== MODIFICAR SALA COMPLETADO ===');
 }
 
-function limpiarAlertasBloques() {
-    var alertaExistente = document.getElementById('alerta-bloques');
-    if (alertaExistente) {
-        alertaExistente.remove();
-        console.log('🧹 Alerta de bloques eliminada');
+// FUNCIÓN: configurarJuntarSecciones
+// FUNCIÓN ACTUALIZADA: configurarJuntarSecciones
+function configurarJuntarSecciones() {
+    console.log("🔧 Iniciando configuración de juntar secciones");
+
+    // Verifica condiciones lógicas base
+    if (!datosJuntarSecciones || !datosJuntarSecciones.esSecciones1 || !datosJuntarSecciones.tieneMultiplesSecciones) {
+        console.log("❌ No aplica para juntar secciones");
+        return;
     }
+
+    let intentos = 0;
+    const maxIntentos = 20;
+    const intervalo = 200;
+
+    const esperarRender = setInterval(() => {
+        const campoNSalas = document.querySelector('#nSalas');
+        const divCheckbox = document.querySelector('#juntarSeccionesDiv');
+
+        if (campoNSalas && divCheckbox) {
+            clearInterval(esperarRender);
+
+            const contenedorNSalas = campoNSalas.closest('.mb-3');
+            if (!contenedorNSalas) {
+                console.warn("⚠️ No se encontró contenedor de #nSalas");
+                return;
+            }
+
+            try {
+                // Asegurar que no tenga estilos ocultos anteriores
+                divCheckbox.style.removeProperty('display');
+                divCheckbox.classList.remove('d-none');
+
+                // Insertar el div antes del campo nSalas
+                contenedorNSalas.parentNode.insertBefore(divCheckbox, contenedorNSalas);
+
+                divCheckbox.style.removeProperty('display');
+                divCheckbox.style.visibility = 'visible';
+                divCheckbox.style.opacity = '1';
+                divCheckbox.classList.remove('d-none');
+                divCheckbox.style.height = 'auto';
+                divCheckbox.style.marginBottom = '1rem';
+                divCheckbox.style.padding = '1rem';
+                divCheckbox.style.zIndex = '10';
+
+                // 🆕 AGREGAR EVENT LISTENER PARA EL CHECKBOX
+                const checkbox = document.getElementById('juntarSecciones');
+                if (checkbox) {
+                    // Remover listener anterior si existe para evitar duplicados
+                    checkbox.removeEventListener('change', manejarCambioJuntarSecciones);
+                    
+                    // Agregar nuevo listener
+                    checkbox.addEventListener('change', manejarCambioJuntarSecciones);
+                    
+                    console.log("✅ Event listener configurado para juntar secciones");
+                } else {
+                    console.warn("⚠️ No se encontró checkbox juntarSecciones");
+                }
+
+                juntarSeccionesConfigurado = true;
+                console.log("✅ Checkbox juntarsecciones visible y movido correctamente");
+                
+            } catch (error) {
+                console.error("❌ Error al insertar checkbox:", error);
+            }
+        } else {
+            intentos++;
+            if (intentos >= maxIntentos) {
+                clearInterval(esperarRender);
+                console.warn("❌ No se pudo configurar checkbox después de varios intentos");
+            }
+        }
+    }, intervalo);
+}
+
+// 🆕 NUEVA FUNCIÓN: Manejar cambio de checkbox juntar secciones
+function manejarCambioJuntarSecciones() {
+    const checkbox = document.getElementById('juntarSecciones');
+    const alumnosTotalesInput = document.getElementById('alumnosTotales');
+    
+    if (!checkbox || !alumnosTotalesInput) {
+        console.error('❌ No se encontraron elementos necesarios');
+        return;
+    }
+    
+    console.log('🔄 Cambio en juntar secciones:', checkbox.checked);
+    
+    if (checkbox.checked) {
+        // Usar el cupo total de todas las secciones
+        const cupoTotal = datosJuntarSecciones.cupoTotalSecciones;
+        alumnosTotalesInput.value = cupoTotal;
+        
+        console.log('✅ Actualizado a cupo total:', cupoTotal);
+        
+        // Mostrar mensaje informativo
+        mostrarMensajeJuntarSecciones(true, cupoTotal);
+        
+    } else {
+        // Volver al cupo de la sección actual
+        const cupoSeccionActual = datosJuntarSecciones.cupoSeccionActual;
+        alumnosTotalesInput.value = cupoSeccionActual;
+        
+        console.log('✅ Actualizado a cupo sección actual:', cupoSeccionActual);
+        
+        // Ocultar mensaje informativo
+        mostrarMensajeJuntarSecciones(false);
+    }
+    
+    // IMPORTANTE: Recalcular alumnos por sala
+    calcularAlumnosPorSala();
+    
+    // IMPORTANTE: Actualizar consulta de salas disponibles
+    actualizarSalasDisponibles();
+    
+    // IMPORTANTE: Verificar condiciones de computación con el nuevo número
+    verificarCondicionesComputacion();
+}
+
+// 🆕 NUEVA FUNCIÓN: Mostrar mensaje cuando se juntan secciones
+function mostrarMensajeJuntarSecciones(mostrar, cupoTotal = 0) {
+    let mensajeDiv = document.getElementById('mensaje-juntar-secciones');
+    
+    if (mostrar) {
+        if (!mensajeDiv) {
+            // Crear el mensaje si no existe
+            const alumnosTotalesDiv = document.getElementById('alumnosTotales').closest('.mb-3');
+            mensajeDiv = document.createElement('div');
+            mensajeDiv.id = 'mensaje-juntar-secciones';
+            mensajeDiv.className = 'alert alert-info alert-sm mt-2';
+            alumnosTotalesDiv.appendChild(mensajeDiv);
+        }
+        
+        mensajeDiv.innerHTML = `
+            <i class="bi bi-info-circle me-1"></i>
+            <small>
+                <strong>Secciones unificadas:</strong> Se están considerando los alumnos de todas las secciones del curso (${cupoTotal} estudiantes total).
+            </small>
+        `;
+        mensajeDiv.style.display = 'block';
+        
+    } else {
+        if (mensajeDiv) {
+            mensajeDiv.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * Verificar si el checkbox sigue existiendo después de un tiempo
+ */
+function verificarPersistenciaCheckbox() {
+    setTimeout(() => {
+        const checkbox = document.querySelector('input[name="juntarSecciones"]');
+        const divContainer = document.getElementById('juntarSeccionesDiv');
+        
+        console.log('🔍 === VERIFICACIÓN DE PERSISTENCIA (después de 2 segundos) ===');
+        console.log('¿Existe el checkbox?', !!checkbox);
+        console.log('¿Existe el div container?', !!divContainer);
+        
+        if (checkbox) {
+            console.log('✅ Checkbox sigue existente, ID:', checkbox.id);
+            console.log('✅ Checkbox visible?', checkbox.offsetParent !== null);
+            
+            // NUEVO: Analizar estilos CSS del checkbox
+            const computedStyle = window.getComputedStyle(checkbox);
+            console.log('🎨 Estilos CSS del checkbox:', {
+                display: computedStyle.display,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity,
+                position: computedStyle.position,
+                top: computedStyle.top,
+                left: computedStyle.left,
+                transform: computedStyle.transform
+            });
+            
+            // NUEVO: Verificar clases CSS aplicadas
+            console.log('📋 Clases CSS del checkbox:', checkbox.className);
+            console.log('📋 Clases CSS del div padre:', checkbox.closest('.form-check')?.className);
+            
+        } else {
+            console.log('❌ Checkbox NO existe - fue eliminado por algo');
+        }
+        
+        if (divContainer) {
+            console.log('✅ Div container sigue existente');
+            console.log('✅ Div visible?', divContainer.offsetParent !== null);
+            console.log('✅ Contenido del div:', divContainer.innerHTML.substring(0, 100) + '...');
+        } else {
+            console.log('❌ Div container NO existe - fue eliminado por algo');
+        }
+        
+        console.log('🏁 === FIN VERIFICACIÓN DE PERSISTENCIA ===');
+    }, 2000);
+}
+
+// FUNCIÓN: actualizarAlumnosTotales
+ 
+function actualizarAlumnosTotales() {
+    const juntarSeccionesCheckbox = document.querySelector('input[name="juntarSecciones"]');
+    const alumnosTotalesInput = document.getElementById('alumnosTotales');
+    
+    if (!alumnosTotalesInput) {
+        console.error('❌ Campo alumnosTotales no encontrado');
+        return;
+    }
+    
+    if (typeof datosJuntarSecciones === 'undefined' || !datosJuntarSecciones) {
+        console.error('❌ datosJuntarSecciones no disponible en actualizarAlumnosTotales');
+        return;
+    }
+    
+    let alumnosTotales;
+    
+    if (juntarSeccionesCheckbox && juntarSeccionesCheckbox.checked) {
+        alumnosTotales = datosJuntarSecciones.cupoTotalSecciones;
+        console.log('📊 Usando cupo total de secciones:', alumnosTotales);
+    } else {
+        alumnosTotales = datosJuntarSecciones.cupoSeccionActual;
+        console.log('📊 Usando cupo sección actual:', alumnosTotales);
+    }
+    
+    alumnosTotalesInput.value = alumnosTotales;
+    calcularAlumnosPorSala();
 }
 
 var calculoAlumnosTimeout;
@@ -2282,19 +2449,12 @@ function calcularAlumnosPorSala() {
     const alumnosPorSalaInput = document.getElementById('alumnosPorSala');
     if (alumnosPorSalaInput) {
         alumnosPorSalaInput.value = alumnosPorSala;
-        console.log('✅ Campo alumnos por sala actualizado:', {
+        
+        console.log('✅ Cálculo alumnos por sala:', {
             totalAlumnos: totalAlumnos,
             nSalas: nSalas,
             alumnosPorSala: alumnosPorSala,
-            campoEncontrado: true
-        });
-    } else {
-        console.error('❌ Campo alumnosPorSala NO encontrado en el DOM');
-        // Debug adicional
-        console.log('Campos disponibles:', {
-            alumnosTotales: !!document.getElementById('alumnosTotales'),
-            nSalas: !!document.getElementById('nSalas'),
-            alumnosPorSala: !!document.getElementById('alumnosPorSala')
+            formula: `Math.ceil(${totalAlumnos} ÷ ${nSalas}) = ${alumnosPorSala}`
         });
     }
 }
@@ -2567,23 +2727,6 @@ function restaurarHTMLSeccionComputacion() {
 }
 
 // 7. FUNCIÓN: Configurar event listeners para la sección de computación
-//function setupEventListenersComputacion() {
-//    const checkbox = document.getElementById('deseaComputacion');
-//    if (checkbox) {
-//        checkbox.addEventListener('change', function() {
-//            const opcionesContainer = document.getElementById('opciones-computacion');
-//            if (this.checked) {
-//                opcionesContainer.style.display = 'block';
-//            } else {
-//                opcionesContainer.style.display = 'none';
-//                // Limpiar selecciones
-//                const radios = opcionesContainer.querySelectorAll('input[type="radio"]');
-//                radios.forEach(radio => radio.checked = false);
-//            }
-//        });
-//    }
-//}
-
 function setupEventListenersComputacion() {
     const checkbox = document.getElementById('deseaComputacion');
     if (checkbox) {
@@ -2684,8 +2827,7 @@ function parsearHorarios(horarioTexto) {
     }
 }
 
-// 11. MODIFICAR LA FUNCIÓN guardarSala EXISTENTE
-// Esta función debe ser modificada en el código existente
+// 11. FUNCIÓN COMPLETA: guardarSala
 async function guardarSala() {
     const form = document.getElementById('salaForm');
     if (!form.checkValidity()) {
@@ -2700,7 +2842,22 @@ async function guardarSala() {
     datos.requiereSala = document.getElementById('requiereSala').value;
     datos.observaciones = document.getElementById('observaciones').value;
     datos.movilidadReducida = document.getElementById('movilidadReducida').value;
-    datos.alumnosPorSala = document.getElementById('alumnosPorSala').value;
+    datos.alumnosPorSala = document.getElementById('alumnosPorSala').value;     // ✅ ESTE ES EL IMPORTANTE
+    datos.alumnosTotales = document.getElementById('alumnosTotales').value;     // Para referencia
+    
+    // Verificar si hay selección de juntar secciones
+    const juntarSeccionesCheckbox = document.querySelector('input[name="juntarSecciones"]');
+    if (juntarSeccionesCheckbox && juntarSeccionesCheckbox.checked) {
+        datos.juntarSecciones = 'on';
+    }
+    
+    // ✅ Debug para verificar el cálculo
+    console.log('📊 Cálculo de alumnos:', {
+        alumnosTotales: datos.alumnosTotales,
+        alumnosPorSala: datos.alumnosPorSala,
+        nSalas: datos.nSalas,
+        juntarSecciones: datos.juntarSecciones ? 'SÍ' : 'NO'
+    });
     
     // NUEVA LÓGICA: Verificar si hay selección de computación
     const deseaComputacion = document.getElementById('deseaComputacion');
@@ -2786,7 +2943,11 @@ async function guardarConComputacion(datos, opcionComputacion) {
                 observaciones: datos.observaciones,
                 requiereSala: datos.requiereSala,
                 nSalas: datos.nSalas,
-                campus: datos.campus
+                campus: datos.campus,
+				juntarSecciones: document.getElementById('juntarSecciones').checked ? 'on' : '',
+				alumnosPorSala: document.getElementById('alumnosPorSala').value,
+                alumnosTotales: document.getElementById('alumnosTotales').value,
+                movilidadReducida: document.getElementById('movilidadReducida').value
             })
         });
 
@@ -2885,7 +3046,6 @@ function setupModalListeners() {
     }, 100);
 }
 
-
 function manejarCambioSalas() {
     console.log('🔄 Cambio en número de salas detectado');
     calcularAlumnosPorSala();
@@ -2966,28 +3126,6 @@ function verificarCondicionesComputacion() {
         console.log('❌ No cumple condiciones, ocultando sección');
         ocultarSeccionComputacion();
     }
-}
-
-function manejarCambioCampus() {
-    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
-    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
-    const campus = document.getElementById('campus').value;
-    
-    console.log('Cambio de campus detectado:', {
-        campus: campus,
-        nSalas: nSalas,
-        totalAlumnos: totalAlumnos
-    });
-    
-    // Recalcular alumnos por sala (esto no cambia, pero mantiene consistencia)
-    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
-    const alumnosPorSalaInput = document.getElementById('alumnosPorSala');
-    if (alumnosPorSalaInput) {
-        alumnosPorSalaInput.value = alumnosPorSala;
-    }
-    
-    // CLAVE: Volver a consultar disponibilidad de salas de computación
-    consultarSalasComputacion(campus, nSalas, totalAlumnos);
 }
 
 async function mostrarModalLiberarSalas(idPlanClase) {
@@ -3084,890 +3222,286 @@ async function liberarSala(idAsignacion) {
 
 
 
-function mostrarToastSalas(mensaje, tipo = 'success') {
-    // Buscar o crear el contenedor de toast para salas
-    let toastContainerSalas = document.querySelector('.toast-container-salas');
-    if (!toastContainerSalas) {
-        toastContainerSalas = document.createElement('div');
-        toastContainerSalas.className = 'toast-container-salas position-fixed bottom-0 end-0 p-3';
-        document.body.appendChild(toastContainerSalas);
-    }
 
-    // Crear el toast con los iconos de Bootstrap
-    const icono = tipo === 'success' ? 'check-circle' : 'exclamation-circle';
-    const toastHTML = `
-        <div class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body">
-                    <i class="bi bi-${icono} me-2"></i>
-                    ${mensaje}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>
-        </div>
-    `;
+// ===========================================
+// 8. SISTEMA DE SALAS DISPONIBLES
+// ===========================================
+
+function actualizarSalasDisponibles() {
+    console.log('🔄 INICIANDO actualizarSalasDisponibles');
     
-    // Limpiar toasts anteriores
-    toastContainerSalas.innerHTML = '';
+    // Obtener valores del formulario
+    var alumnosPorSala = parseInt(document.getElementById('alumnosPorSala').value) || 0;
+    var campus = document.getElementById('campus').value || '';
     
-    // Agregar el nuevo toast
-    toastContainerSalas.insertAdjacentHTML('beforeend', toastHTML);
+    // Obtener fecha y horarios de la actividad seleccionada
+    var fecha = obtenerFechaActividad();
+    var horarios = obtenerHorariosActividad();
     
-    // Mostrar el toast con opciones personalizadas
-    const toastElement = new bootstrap.Toast(toastContainerSalas.querySelector('.toast'), {
-        autohide: true,
-        delay: 3000
+    console.log('🔄 Datos para consulta:', {
+        alumnosPorSala: alumnosPorSala,
+        campus: campus,
+        fecha: fecha,
+        horarios: horarios
     });
-    toastElement.show();
-}
-
-function saveAutoActivity() {
-    const form = document.getElementById('autoaprendizajeForm');
-    const formData = new FormData();
     
-    // Obtener los datos del formulario
-    const idplanclases = document.getElementById('auto-idplanclases').value;
-    const activityTitle = document.getElementById('auto-activity-title').value.trim();
-    
-    // Validar título
-    if (activityTitle === '') {
-        mostrarToast('Debe ingresar un título para la actividad de autoaprendizaje', 'danger');
+    // Validar que tengamos los datos mínimos
+    if (!alumnosPorSala || !campus || !fecha || !horarios.inicio || !horarios.termino) {
+        console.log('❌ Faltan datos, ocultando badge');
+        ocultarBadgeSalas();
         return;
     }
     
-    const hours = parseInt(document.getElementById('auto-hours').value) || 0;
-    const minutes = parseInt(document.getElementById('auto-minutes').value) || 0;
-    
-    // Validar horas y minutos
-    if (!validateAutoTime(hours, minutes)) {
-        mostrarToast(`Las horas asignadas exceden el máximo semanal (${horasSemanales} horas)`, 'danger');
-        return;
-    }
-    
-    // Formatear las horas en formato HH:MM:SS
-    const horasNoPresenciales = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:00`;
-    
-    // Añadir datos al formData
-    formData.append('idplanclases', idplanclases);
-    formData.append('activity-title', activityTitle);
-    formData.append('horasNoPresenciales', horasNoPresenciales);
-    
-    // Enviar datos al servidor
-    fetch('guardar_autoaprendizaje.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Cerrar modal
-            const modalElement = document.getElementById('autoaprendizajeModal');
-            const modal = bootstrap.Modal.getInstance(modalElement);
-            if (modal) modal.hide();
-            
-            // Mostrar notificación de éxito
-            mostrarToast('Autoaprendizaje guardado correctamente', 'success');
-            
-            // Recargar la página después de un breve periodo
-            setTimeout(() => location.reload(), 2000);
-        } else {
-            throw new Error(data.message || 'Error al guardar el autoaprendizaje');
-        }
-    })
-    .catch(error => {
-        mostrarToast('Error: ' + error.message, 'danger');
-    });
+    // LÍNEA CRÍTICA CORREGIDA:
+    consultarSalasDisponibles(alumnosPorSala, campus, fecha, horarios.inicio, horarios.termino);
 }
 
-
-
-</script>
-
-<script>
-
-// Variables globales para el asignador masivo
-let actividadesSeleccionadas = [];
-
-// Funciones del asignador masivo
-function inicializarAsignadorMasivo() {
-    // Inicializar interfaz
-    $('#btnVisualizar').off('click').on('click', buscarActividades);
-    
-    $('#seleccionarTodos').off('change').on('change', function() {
-        $('.docente-check').prop('checked', $(this).is(':checked'));
-        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
-        verificarSelecciones();
-    });
-    
-    // Botones de asignación y eliminación
-    $('#btnAsignarDocentes').off('click').on('click', function() {
-        gestionarDocentes('asignar');
-    });
-    
-    $('#btnEliminarDocentes').off('click').on('click', function() {
-        gestionarDocentes('eliminar');
-    });
-    
-    // Verificar cambios en los checkboxes de docentes
-    $(document).off('change', '.docente-check').on('change', '.docente-check', function() {
-        const todasSeleccionadas = $('.docente-check:checked').length === $('.docente-check').length;
-        $('#seleccionarTodos').prop('checked', todasSeleccionadas);
-        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
-        verificarSelecciones();
-    });
-    
-    $('#btnLimpiarFiltros').off('click').on('click', function() {
-        // Limpiar campos de filtro
-        $('#tipoActividad').val('');
-        $('#diaSemana').val('');
-        $('#subtipo').val('');
-        $('#fechaInicio').val('');
-        $('#fechaTermino').val('');
-        $('#horaInicio').val('');
-        $('#horaTermino').val('');
-        
-        // Ocultar mensaje de sin resultados
-        $('#sinResultados').addClass('d-none');
-        
-        // Limpiar tabla de actividades
-        $('#tablaActividades tbody').empty();
-        
-        // Deshabilitar botones
-        $('#btnAsignarDocentes').prop('disabled', true);
-        $('#btnEliminarDocentes').prop('disabled', true);
-        
-        // Reiniciar lista de actividades seleccionadas
-        actividadesSeleccionadas = [];
-        
-        // Desmarcar todos los profesores
-        $('.docente-check').prop('checked', false);
-        $('#seleccionarTodos').prop('checked', false);
-        
-        // Reordenar después de limpiar
-        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
-        
-        verificarFiltros();
-    });
-    
-    // Agregar evento para validar filtros en tiempo real
-    $('#tipoActividad, #diaSemana, #fechaInicio, #fechaTermino, #horaInicio, #horaTermino').on('change', function() {
-        verificarFiltros();
-    });
-    
-    // Verificar filtros al inicio
-    verificarFiltros();
-}
-
-function verificarFiltros() {
-    const tipoActividad = $('#tipoActividad').val();
-    const diaSemana = $('#diaSemana').val();
-    const fechaInicio = $('#fechaInicio').val();
-    const fechaTermino = $('#fechaTermino').val();
-    const horaInicio = $('#horaInicio').val();
-    const horaTermino = $('#horaTermino').val();
-    
-    // Habilitar/deshabilitar el botón según si hay algún filtro
-    const hayFiltro = tipoActividad || diaSemana || fechaInicio || fechaTermino || horaInicio || horaTermino;
-    $('#btnVisualizar').prop('disabled', !hayFiltro);
-}
-
-function buscarActividades() {
-    // Obtener valores de los filtros
-    const tipoActividad = $('#tipoActividad').val();
-    const diaSemana = $('#diaSemana').val();
-    const fechaInicio = $('#fechaInicio').val();
-    const fechaTermino = $('#fechaTermino').val();
-    const horaInicio = $('#horaInicio').val();
-    const horaTermino = $('#horaTermino').val();
-    
-    // Validar que al menos un filtro esté presente
-    if (!tipoActividad && !diaSemana && !fechaInicio && !fechaTermino && !horaInicio && !horaTermino) {
-        mostrarNotificacionAsignacion('Debe seleccionar al menos un filtro para buscar actividades', 'warning');
-        return;
-    }
-	
-	   mostrarNotificacionMasiva('Buscando actividades...', 'info', 1000);
-    
-    // Obtener el ID del curso actual
-    const urlParams = new URLSearchParams(window.location.search);
-    const idCurso = urlParams.get('curso');
-    
-    // Crear objeto con los filtros
-    const filtros = {
-        idcurso: idCurso,
-        tipoActividad: tipoActividad,
-        diaSemana: diaSemana,
-        subtipo: '', // Ya no usas subtipo en los filtros actuales
-        fechaInicio: fechaInicio,
-        fechaTermino: fechaTermino,
+/**
+ * Realizar consulta AJAX para obtener salas disponibles
+ */
+function consultarSalasDisponibles(alumnosPorSala, campus, fecha, horaInicio, horaTermino) {
+    console.log('🚀 EJECUTANDO consultarSalasDisponibles:', {
+        alumnosPorSala: alumnosPorSala,
+        campus: campus,
+        fecha: fecha,
         horaInicio: horaInicio,
         horaTermino: horaTermino
-    };
-    
-    // Realizar solicitud AJAX
-       $.ajax({
-        url: 'buscar_actividades.php',
-        type: 'POST',
-        dataType: 'json',
-        data: filtros,
-        success: function(response) {
-            if (response.success) {
-                mostrarActividades(response.actividades);
-                actividadesSeleccionadas = response.actividades.map(act => act.idplanclases);
-                
-                // Habilitar/deshabilitar botones según resultados
-                const hayActividades = response.actividades.length > 0;
-                $('#btnAsignarDocentes').prop('disabled', !hayActividades);
-                $('#btnEliminarDocentes').prop('disabled', !hayActividades);
-                
-                if (!hayActividades) {
-                    $('#sinResultados').removeClass('d-none');
-                } else {
-                    $('#sinResultados').addClass('d-none');
-                    
-                    // IMPORTANTE: Siempre desmarcar todos los docentes al buscar
-                    $('.docente-check').prop('checked', false);
-                    $('#seleccionarTodos').prop('checked', false);
-                    reordenarDocentesMasivo();
-                    verificarSelecciones();
-                }
-            } else {
-                mostrarNotificacionMasiva(response.message || 'Error al buscar actividades', 'danger');
-            }
-        },
-        error: function() {
-            mostrarNotificacionMasiva('Error de comunicación con el servidor', 'danger');
-        }
-    });
-}
-
-// la dejare por si se requiere a futuro o se puede reutilizar
-function obtenerDocentesComunes_desactivada(actividades) {
-    if (!actividades || actividades.length === 0) return;
-    
-    // Desmarcar todos los docentes primero
-    $('.docente-check').prop('checked', false);
-    $('#seleccionarTodos').prop('checked', false);
-    
-    // Obtener el ID del curso actual
-    const urlParams = new URLSearchParams(window.location.search);
-    const idCurso = urlParams.get('curso');
-    
-    // Consultar los docentes asignados a todas las actividades
-    $.ajax({
-        url: 'get_docentes_actividades.php',
-        type: 'POST',
-        dataType: 'json',
-        data: {
-            actividades: actividades,
-            idcurso: idCurso
-        },
-        success: function(response) {
-            if (response.success && response.docentesComunes) {
-                // Marcar docentes comunes
-                response.docentesComunes.forEach(rut => {
-                    $(`.docente-check[data-rut="${rut}"]`).prop('checked', true);
-                });
-                
-                // Verificar si todos están seleccionados
-                const todasSeleccionadas = $('.docente-check:checked').length === $('.docente-check').length;
-                $('#seleccionarTodos').prop('checked', todasSeleccionadas);
-                
-                // Actualizar estado de los botones
-                verificarSelecciones();
-            }
-        },
-        error: function() {
-            console.error('Error al obtener docentes comunes');
-        }
-    });
-}
-
-function mostrarActividades(actividades) {
-    const tbody = $('#tablaActividades tbody');
-    tbody.empty();
-    
-    if (actividades.length === 0) {
-        return;
-    }
-    
-    actividades.forEach(act => {
-        // Formatear fecha
-        const fecha = new Date(act.pcl_Fecha);
-        const fechaFormateada = fecha.toLocaleDateString('es-ES');
-        
-        // Formatear horas
-        const horaInicio = act.pcl_Inicio ? act.pcl_Inicio.substring(0, 5) : '';
-        const horaTermino = act.pcl_Termino ? act.pcl_Termino.substring(0, 5) : '';
-        
-		// Día de la semana en español
-    const diaSemana = fecha.toLocaleDateString('es-ES', { weekday: 'long' });
-	
-        // Crear fila
-        const fila = `
-            <tr data-id="${act.idplanclases}">
-                <td>${fechaFormateada}</td>
-				<td>${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)}</td>
-                <td>${horaInicio}</td>
-                <td>${horaTermino}</td>
-                <td>${act.pcl_tituloActividad || ''}</td>
-                <td>${act.pcl_TipoSesion}${act.pcl_SubTipoSesion ? ' (' + act.pcl_SubTipoSesion + ')' : ''}</td>
-            </tr>
-        `;
-        
-        tbody.append(fila);
-    });
-}
-
-function verificarSelecciones() {
-    const docentesSeleccionados = $('.docente-check:checked').length > 0;
-    const hayActividades = actividadesSeleccionadas.length > 0;
-    
-    $('#btnAsignarDocentes, #btnEliminarDocentes').prop('disabled', !hayActividades || !docentesSeleccionados);
-}
-
-function gestionarDocentes(accion) {
-    // Verificar que haya actividades seleccionadas
-    if (actividadesSeleccionadas.length === 0) {
-        mostrarNotificacionAsignacion('No hay actividades seleccionadas', 'warning');
-        return;
-    }
-    
-    // Obtener docentes seleccionados
-    const docentesSeleccionados = [];
-    $('.docente-check:checked').each(function() {
-        docentesSeleccionados.push({
-            rut: $(this).data('rut'),
-            nombre: $(this).closest('.docente-row').find('p.mb-0').text(),
-            cargo: $(this).closest('.docente-row').find('small.text-muted').text()
-        });
     });
     
-    if (docentesSeleccionados.length === 0) {
-        mostrarNotificacionAsignacion('No hay docentes seleccionados', 'warning');
-        return;
-    }
-	
-	 if (actividadesSeleccionadas.length === 0) {
-        mostrarNotificacionMasiva('No hay actividades seleccionadas', 'warning');
-        return;
-    }
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'consultar_salas_disponibles.php', true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
     
-    // Llenar el modal con la información
-    $('#accionTitulo').text(accion === 'asignar' ? 'Asignación' : 'Eliminación');
-    $('#accionDescripcion').text(
-        accion === 'asignar' ? 
-        'Se asignarán los docentes seleccionados a todas las actividades listadas' : 
-        'Se eliminarán los docentes seleccionados de todas las actividades listadas'
-    );
-    $('#numActividades').text(actividadesSeleccionadas.length);
-    $('#numDocentes').text(docentesSeleccionados.length);
-    
-     const actividadesPreview = $('#actividadesPreview');
-    actividadesPreview.empty();
-    
-    // Primero, encontrar las filas de las actividades seleccionadas
-    $('#tablaActividades tbody tr').each(function() {
-        const row = $(this);
-        const idActividad = parseInt(row.data('id'));
-        
-        // Verificar si esta actividad está seleccionada
-        if (actividadesSeleccionadas.includes(idActividad)) {
-            const fecha = row.find('td:eq(0)').text();
-			const dia = row.find('td:eq(1)').text();
-            const horaInicio = row.find('td:eq(2)').text();
-            const horaTermino = row.find('td:eq(3)').text();
-            const titulo = row.find('td:eq(4)').text();
-            
-            
-            // Crear la fila para el preview
-            const previewRow = `
-                <tr>
-                    <td>${fecha}</td>
-                    <td>${dia}</td>
-                    <td>${horaInicio} a las ${horaTermino}</td>
-                    <td>${titulo || 'Sin título'}</td>
-                </tr>
-            `;
-            actividadesPreview.append(previewRow);
-        }
-    });
-    
-    // Si no encuentra actividades de esta forma, intentar otra aproximación
-    if (actividadesPreview.find('tr').length === 0) {
-        // Mensaje de debug para ver qué está pasando
-        console.log('Actividades seleccionadas:', actividadesSeleccionadas);
-        console.log('Filas encontradas:', $('#tablaActividades tbody tr').length);
-        
-        // Agregar una fila de aviso
-        actividadesPreview.append(`
-            <tr>
-                <td colspan="4" class="text-center text-muted">
-                    Error al cargar las actividades. IDs: ${actividadesSeleccionadas.join(', ')}
-                </td>
-            </tr>
-        `);
-    }
-    
-    // Llenar tabla de docentes
-    const docentesPreview = $('#docentesPreview');
-    docentesPreview.empty();
-    
-    docentesSeleccionados.forEach(docente => {
-        const row = `
-            <tr>
-                <td>${docente.nombre}</td>
-                <td>${docente.cargo}</td>
-            </tr>
-        `;
-        docentesPreview.append(row);
-    });
-    
-    // Mostrar el modal
-    const modal = new bootstrap.Modal(document.getElementById('previsualizacionModal'));
-    modal.show();
-    
-    // Configurar el botón de confirmar
-    $('#confirmarAccion').off('click').on('click', function() {
-        modal.hide();
-        procesarAsignacion(accion, docentesSeleccionados.map(d => d.rut));
-    });
-}
-
-// En la función procesarAsignacion, asegúrate de que esté así:
-function procesarAsignacion(accion, docentesRuts) {
-    // Obtener el ID del curso actual
-    const urlParams = new URLSearchParams(window.location.search);
-    const idCurso = urlParams.get('curso');
-    
-    // Preparar datos para enviar
-    const datos = {
-        idcurso: idCurso,
-        actividades: actividadesSeleccionadas,
-        docentes: docentesRuts,
-        accion: accion
-    };
-    
-    // Debug
-    console.log('Datos a enviar:', datos);
-    
-    // Mostrar indicador de carga y guardar la referencia
-    let toastCarga = mostrarNotificacionMasiva('Procesando... Por favor espere.', 'info');
-    
-    // Deshabilitar botones para evitar múltiples clicks
-    $('#confirmarAccion').prop('disabled', true);
-    $('#btnAsignarDocentes').prop('disabled', true);
-    $('#btnEliminarDocentes').prop('disabled', true);
-    
-    // Realizar solicitud AJAX
-    $.ajax({
-        url: 'procesar_asignacion_masiva.php',
-        type: 'POST',
-        dataType: 'json',
-        data: JSON.stringify(datos),
-        contentType: 'application/json',
-        success: function(response) {
-            console.log('Respuesta:', response);
-            
-            // Cerrar el toast de carga de forma segura
-            if (toastCarga) {
-                // Forzar el cierre del toast
-                $(toastCarga).remove();
-            }
-            
-            // Cerrar el modal de previsualización
-            const modal = bootstrap.Modal.getInstance(document.getElementById('previsualizacionModal'));
-            if (modal) modal.hide();
-            
-            // Mostrar resultado
-            if (response.success) {
-                mostrarNotificacionMasiva(
-                    `${accion === 'asignar' ? 'Asignación' : 'Desvinculación'} completada correctamente. 
-                    ${response.operaciones || 0} operaciones realizadas.`, 
-                    'success'
-                );
-                
-                // Actualizar la vista después de un breve retraso
-                setTimeout(() => {
-                    $('#btnVisualizar').click();
-                }, 1500);
-            } else {
-                mostrarNotificacionMasiva(response.message || 'Error al procesar la solicitud', 'danger');
-            }
-        },
-        error: function(xhr, status, error) {
-            // Cerrar el toast de carga
-            if (toastCarga) {
-                $(toastCarga).remove();
-            }
-            
-            console.error("Error AJAX:", xhr.responseText);
-            mostrarNotificacionMasiva('Error de comunicación con el servidor: ' + (error || status), 'danger');
-        },
-        complete: function() {
-            // Asegurarse de que el toast de carga se cierre
-            if (toastCarga) {
-                $(toastCarga).remove();
-            }
-            
-            // Rehabilitar los botones
-            $('#confirmarAccion').prop('disabled', false);
-            $('#btnAsignarDocentes').prop('disabled', false);
-            $('#btnEliminarDocentes').prop('disabled', false);
-        }
-    });
-}
-
-function mostrarNotificacionAsignacion(mensaje, tipo = 'success') {
-    // Buscar el contenedor de toast principal
-    let toastContainer = document.querySelector('.toast-container');
-    
-    // Si no existe, crearlo
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
-        toastContainer.style.zIndex = '11';
-        document.body.appendChild(toastContainer);
-    }
-    
-    // Crear el toast
-    const toastId = 'toast-' + Date.now();
-     // Modificar el HTML del toast según el tipo
-    let iconHtml = '';
-    if (tipo === 'info' && mensaje.includes('Procesando')) {
-        iconHtml = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Cargando...</span></div>';
-    } else {
-        iconHtml = `<i class="bi bi-${tipo === 'success' ? 'check-circle' : tipo === 'danger' ? 'x-circle' : 'info-circle'} me-2"></i>`;
-    }
-    
-    const toastHTML = `
-        <div id="${toastId}" class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body">
-                    ${iconHtml}
-                    ${mensaje}
-                </div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        </div>
-    `;
-    
-    // Añadir al contenedor
-    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-    
-    // Mostrar toast
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, {
-        autohide: true,
-        delay: 5000
-    });
-    toast.show();
-    
-    // Eliminar toast después de ocultarse
-    toastElement.addEventListener('hidden.bs.toast', function() {
-        toastElement.remove();
-    });
-}
-
-</script>
-
-<script>
-
-// En index.php, después del JavaScript del asignador masivo, agregar:
-
-// Funciones para crear docente
-function inicializarCrearDocente() {
-	
-	$('#nuevo-docente-btn').off('click').on('click', function() {
-    const modal = new bootstrap.Modal(document.getElementById('nuevoDocenteModal'));
-    modal.show();
-});
-	
-    // Event listener para el botón guardar
-    $('#btnGuardarDocente').off('click').on('click', guardar_docente);
-    
-    // Event listener para validar RUT mientras se escribe
-    $('#rut_docente').off('input').on('input', function() {
-        checkRut(this);
-    });
-    
-    // Event listener para habilitar/deshabilitar unidad externa
-    $('#unidad_academica').off('change').on('change', function() {
-        habilitar_unidad(this);
-    });
-}
-
-function checkRut(rut) {
-    // Despejar Puntos
-    var valor = rut.value.replace('.','');
-    // Despejar Guión
-    valor = valor.replace('-','');
-    
-    // Aislar Cuerpo y Digito Verificador
-    cuerpo = valor.slice(0,-1);
-    dv = valor.slice(-1).toUpperCase();
-    
-    // Formatear RUN
-    rut.value = cuerpo + '-'+ dv
-    
-    // Si no cumple con el minimo ej. (n.nnn.nnn)
-    if(cuerpo.length < 7) { 
-        rut.setCustomValidity("RUT Incompleto"); 
-        $('#flag').val('false'); 
-        return false;
-    }
-    
-    // Calcular Digito Verificador
-    suma = 0;
-    multiplo = 2;
-    
-    // Para cada digito del Cuerpo
-    for(i=1;i<=cuerpo.length;i++) {
-        // Obtener su Producto con el Múltiplo Correspondiente
-        index = multiplo * valor.charAt(cuerpo.length - i);
-        
-        // Sumar al Contador General
-        suma = suma + index;
-        
-        // Consolidar Múltiplo dentro del rango [2,7]
-        if(multiplo < 7) { multiplo = multiplo + 1; } else { multiplo = 2; }
-    }
-    
-    // Calcular Digito Verificador en base al Módulo 11
-    dvEsperado = 11 - (suma % 11);
-    
-    // Casos Especiales (0 y K)
-    dv = (dv == 'K')?10:dv;
-    dv = (dv == 0)?11:dv;
-    
-    // Validar que el Cuerpo coincide con su Digito Verificador
-    if(dvEsperado != dv) { 
-        rut.setCustomValidity("RUT Inválido"); 
-        $('#flag').val('false'); 
-        return false;
-    }
-    
-    // Validar RUTs repetidos o inválidos
-    if(cuerpo == '0000000000' || cuerpo == '00000000' ||
-       cuerpo == '11111111' || cuerpo == '1111111' ||
-       cuerpo == '22222222' || cuerpo == '2222222' ||
-       cuerpo == '33333333' || cuerpo == '3333333' ||
-       cuerpo == '44444444' || cuerpo == '4444444' ||
-       cuerpo == '55555555' || cuerpo == '5555555' ||
-       cuerpo == '66666666' || cuerpo == '6666666' ||
-       cuerpo == '77777777' || cuerpo == '7777777' ||
-       cuerpo == '88888888' || cuerpo == '8888888' ||
-       cuerpo == '99999999' || cuerpo == '9999999') {
-        rut.setCustomValidity("RUT Inválido"); 
-        $('#flag').val('false'); 
-        return false;
-    }
-    
-    // Si todo sale bien, eliminar errores (decretar que es válido)
-    rut.setCustomValidity('');
-    $('#flag').val('true');
-}
-
-function habilitar_unidad(sel) {
-    var depto = sel.value;
-    
-    if(depto == 'Unidad Externa') {
-        document.getElementById("unidad_externa").disabled = false;
-        document.getElementById("unidad_externa").required = true;
-        document.getElementById("unidad_externa").placeholder = 'Unidad Externa *';
-    } else {
-        document.getElementById("unidad_externa").disabled = true;
-        document.getElementById("unidad_externa").required = false;
-        document.getElementById("unidad_externa").placeholder = 'Unidad Externa';
-    }
-}
-
-function guardar_docente() {
-    var curso = $("#curso").val(); 
-    var rut = $("#rut_docente").val(); 
-    var flag = $("#flag").val();
-    var unidad = $("#unidad_academica").val(); 
-    
-    var largo_rut = rut.length;
-    
-    if($("#unidad_externa").val() != '') {
-        var uE = $("#unidad_externa").val();
-    } else {
-        var uE = "Sin Unidad"; 
-    }
-    
-    var nombres = $("#nombres").val(); 
-    var paterno = $("#paterno").val(); 
-    var materno = $("#materno").val(); 
-    var email = $("#email").val(); 
-    var funcion = $("#funcion").val();
-    
-    if(flag == 'true') {
-        if(rut != '' && largo_rut >= 9 && unidad != '' && uE != '' && nombres != '' && paterno != '' && email != '' && funcion != '') {
-            // Mostrar loading en el botón
-            const $btnGuardar = $('#btnGuardarDocente');
-            const textoOriginal = $btnGuardar.html();
-            $btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Guardando...');
-            
-            $.ajax({
-                dataType: "json",
-                data: {
-                    "curso": curso,
-                    "rut_docente": rut,
-                    "unidad_academica": unidad,
-                    "unidad_externa": uE,
-                    "nombres": nombres,
-                    "paterno": paterno,
-                    "materno": materno,
-                    "email": email,
-                    "funcion": funcion
-                },
-                url: 'guardar_docente_nuevo.php', 
-                type: 'POST',
-                success: function(respuesta) {
-                    // Restaurar botón
-                    $btnGuardar.prop('disabled', false).html(textoOriginal);
-                    
-                    if(respuesta.success) {
-                        // Cerrar el modal de nuevo docente
-                        const modalElement = document.getElementById('nuevoDocenteModal');
-                        const modal = bootstrap.Modal.getInstance(modalElement);
-                        if (modal) modal.hide();
-                        
-                        // Mostrar notificación de éxito
-                        mostrarToast('Docente agregado correctamente', 'success');
-                        
-                        // Recargar la pestaña de docentes
-                        $('#docente-tab').click();
-                        
-                        // Limpiar el formulario para la próxima vez
-                        $('#nuevoDocenteForm')[0].reset();
-                        $('#unidad_externa').prop('disabled', true);
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4) {
+            console.log('📡 Respuesta recibida - Status:', xhr.status);
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    console.log('📋 Datos procesados:', data);
+                    if (data.success) {
+                        mostrarBadgeSalas(data.total_salas);
+                        // Guardar datos para el modal
+                        window.salasDisponiblesData = data;
                     } else {
-                        // Mostrar error
-                        mostrarToast(respuesta.message || 'Error al agregar docente', 'danger');
+                        console.error('❌ Error en consulta:', data.error);
+                        ocultarBadgeSalas();
                     }
-                },
-                error: function(xhr, status, error) {
-                    // Restaurar botón
-                    $btnGuardar.prop('disabled', false).html(textoOriginal);
-                    
-                    console.error('Error:', xhr.responseText);
-                    mostrarToast('Error de comunicación con el servidor', 'danger');
+                } catch (error) {
+                    console.error('❌ Error al procesar JSON:', error);
+                    console.error('❌ Respuesta raw:', xhr.responseText);
+                    ocultarBadgeSalas();
                 }
-            });
-        } else {
-            mostrarToast('Por favor complete todos los campos obligatorios', 'warning');
+            } else {
+                console.error('❌ Error HTTP:', xhr.status, xhr.statusText);
+                ocultarBadgeSalas();
+            }
         }
-    } else {
-        mostrarToast('El formato del RUT no es válido', 'warning');
-    }
-}
-
-// Esta función se agregará SOLO en la sección del asignador masivo
-function mostrarNotificacionMasiva(mensaje, tipo = 'success', duracion = 3000) {
-    // Buscar o crear el contenedor específico para el asignador masivo
-    let toastContainer = document.querySelector('.toast-container-masivo');
-    if (!toastContainer) {
-        toastContainer = document.createElement('div');
-        toastContainer.className = 'toast-container-masivo position-fixed bottom-0 end-0 p-3';
-        toastContainer.style.zIndex = '1055';
-        document.body.appendChild(toastContainer);
-    }
+    };
     
-    // Determinar si es un mensaje de carga
-    const esCarga = tipo === 'info' && mensaje.toLowerCase().includes('procesando');
-    
-    // Determinar el ícono según el tipo
-    let iconHtml = '';
-    if (esCarga) {
-        iconHtml = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Cargando...</span></div>';
-    } else {
-        const iconos = {
-            'success': 'check-circle',
-            'danger': 'exclamation-circle',
-            'warning': 'exclamation-triangle',
-            'info': 'info-circle'
-        };
-        iconHtml = `<i class="bi bi-${iconos[tipo] || 'info-circle'} me-2"></i>`;
-    }
-    
-    // Crear el toast
-    const toastId = 'toast-masivo-' + Date.now();
-    const toastHTML = `
-        <div id="${toastId}" class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-tipo="${tipo}">
-            <div class="d-flex">
-                <div class="toast-body">
-                    ${iconHtml}
-                    ${mensaje}
-                </div>
-                ${!esCarga ? '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' : ''}
-            </div>
-        </div>
-    `;
-    
-    // Añadir al contenedor
-    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-    
-    // Mostrar el toast
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, {
-        autohide: !esCarga,  // No auto-ocultar si es carga
-        delay: duracion
+    var requestData = JSON.stringify({
+        alumnos_por_sala: alumnosPorSala,
+        campus: campus,
+        fecha: fecha,
+        hora_inicio: horaInicio,
+        hora_termino: horaTermino
     });
-    toast.show();
     
-    // Si NO es un toast de carga, eliminarlo después de ocultar
-    if (!esCarga) {
-        toastElement.addEventListener('hidden.bs.toast', function() {
-            toastElement.remove();
-        });
-    }
-    
-    return toastElement;
+    console.log('📤 Enviando request:', requestData);
+    xhr.send(requestData);
 }
 
-
-function reordenarDocentesMasivo() {
-    const container = document.getElementById('listaDocentes');
-    if (!container) return;
+/**
+ * Mostrar el badge con el número de salas disponibles
+ */
+function mostrarBadgeSalas(numeroSalas) {
+    var badge = document.getElementById('btnSalasDisponibles');
+    var numero = document.getElementById('numeroSalasDisponibles');
     
-    const docenteRows = Array.from(container.querySelectorAll('.docente-row'));
-    
-    // Separar en dos grupos
-    const selected = [];
-    const notSelected = [];
-    
-    docenteRows.forEach(row => {
-        const checkbox = row.querySelector('.docente-check');
-        if (checkbox && checkbox.checked) {
-            selected.push(row);
+    if (badge && numero) {
+        numero.textContent = numeroSalas;
+        badge.style.display = numeroSalas >= 0 ? 'block' : 'none';
+        
+        // Cambiar color según disponibilidad
+        if (numeroSalas > 0) {
+            badge.className = 'btn btn-outline-success';
         } else {
-            notSelected.push(row);
+            badge.className = 'btn btn-outline-warning';
+            numero.textContent = '0';
         }
-    });
-    
-    // Mantener el orden alfabético en los no seleccionados
-    notSelected.sort((a, b) => {
-        const nameA = a.querySelector('p.mb-0').textContent.toLowerCase();
-        const nameB = b.querySelector('p.mb-0').textContent.toLowerCase();
-        return nameA.localeCompare(nameB);
-    });
-    
-    // Reconstruir el contenedor
-    container.innerHTML = '';
-    
-    // Agregar primero los seleccionados, luego los no seleccionados
-    selected.forEach(row => container.appendChild(row));
-    notSelected.forEach(row => container.appendChild(row));
+            
+        console.log('✅ Badge actualizado:', numeroSalas, 'salas disponibles');
+    }
 }
 
-// funcionalidad para mensaje de bloques el mismo dia
+/**
+ * Ocultar el badge de salas disponibles
+ */
+function ocultarBadgeSalas() {
+    var badge = document.getElementById('btnSalasDisponibles');
+    if (badge) {
+        badge.style.display = 'none';
+    }
+}
 
-// ==========================================
-// FUNCIONES PARA DETECCIÓN DE BLOQUES RELACIONADOS
-// Compatible con PHP 5.6 (sin async/await)
-// ==========================================
+/**
+ * Mostrar el modal con la lista detallada de salas
+ */
+function mostrarSalasDisponibles() {
+    if (!window.salasDisponiblesData || !window.salasDisponiblesData.salas) {
+        console.warn('⚠️ No hay datos de salas disponibles');
+        return;
+    }
+    
+    var data = window.salasDisponiblesData;
+    
+    // Actualizar criterios de búsqueda
+    actualizarCriteriosBusqueda(data.parametros);
+    
+    // Generar lista de salas
+    generarListaSalas(data.salas);
+    
+    // Mostrar modal
+    var modal = new bootstrap.Modal(document.getElementById('modalSalasDisponibles'));
+    modal.show();
+    
+    console.log('📋 Modal de salas disponibles mostrado');
+}
+
+/**
+ * Actualizar los criterios de búsqueda mostrados en el modal
+ */
+function actualizarCriteriosBusqueda(parametros) {
+    var criterios = document.getElementById('criterios-busqueda');
+    if (criterios) {
+        criterios.innerHTML = 
+            '<strong>Capacidad:</strong> ≥' + parametros.alumnos_por_sala + ' estudiantes | ' +
+            '<strong>Campus:</strong> ' + parametros.campus + ' | ' +
+            '<strong>Horario:</strong> ' + parametros.hora_inicio.substring(0,5) + '-' + parametros.hora_termino.substring(0,5);
+    }
+}
+
+/**
+ * Generar la lista HTML de salas disponibles
+ */
+function generarListaSalas(salas) {
+    var container = document.getElementById('lista-salas-disponibles');
+    
+    if (!container) {
+        console.error('❌ No se encontró el container de salas');
+        return;
+    }
+    
+    if (salas.length === 0) {
+        container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> No hay salas disponibles con estos criterios.</div>';
+        return;
+    }
+    
+    var html = '<div class="list-group list-group-flush">';
+    
+    for (var i = 0; i < salas.length; i++) {
+        var sala = salas[i];
+        html += '<div class="list-group-item d-flex justify-content-between align-items-center py-2">' +
+                    '<div>' +
+                        '<strong>' + sala.nombre + '</strong>' +
+                        '<br><small class="text-muted">' + (sala.idSala) + '</small>' +
+                    '</div>' +
+                    '<span class="badge bg-primary rounded-pill">' + sala.capacidad + '</span>' +
+                '</div>';
+    }
+    
+    html += '</div>';
+    html += '<div class="mt-2"><small class="text-muted"><strong>Total:</strong> ' + salas.length + ' salas disponibles</small></div>';
+    
+    container.innerHTML = html;
+}
+
+/**
+ * Obtener la fecha de la actividad actual
+ * AJUSTADO para salas2.php - obtiene la fecha de la fila seleccionada
+ */
+function obtenerFechaActividad() {
+    // Obtener el ID de la actividad actual del modal
+    var idPlanClase = document.getElementById('idplanclases').value;
+    
+    if (!idPlanClase) {
+        console.warn('⚠️ No hay idplanclases en el modal');
+        return null;
+    }
+    
+    // Buscar la fila en la tabla con este ID
+    var fila = document.querySelector('tr[data-id="' + idPlanClase + '"]');
+    if (!fila) {
+        console.warn('⚠️ No se encontró la fila para idplanclases:', idPlanClase);
+        return null;
+    }
+    
+    // La fecha está en la segunda celda (índice 1)
+    var celdaFecha = fila.cells[1];
+    if (!celdaFecha) {
+        console.warn('⚠️ No se encontró la celda de fecha');
+        return null;
+    }
+    
+    var fechaTexto = celdaFecha.textContent.trim();
+    console.log('📅 Fecha obtenida de la tabla:', fechaTexto);
+    
+    // Convertir DD/MM/YYYY a YYYY-MM-DD
+    return parsearFechaParaConsulta(fechaTexto);
+}
+
+/**
+ * Obtener los horarios de inicio y término de la actividad
+ * AJUSTADO para salas2.php - obtiene los horarios de la fila seleccionada
+ */
+function obtenerHorariosActividad() {
+    // Obtener el ID de la actividad actual del modal
+    var idPlanClase = document.getElementById('idplanclases').value;
+    
+    if (!idPlanClase) {
+        console.warn('⚠️ No hay idplanclases en el modal');
+        return { inicio: null, termino: null };
+    }
+    
+    // Buscar la fila en la tabla con este ID
+    var fila = document.querySelector('tr[data-id="' + idPlanClase + '"]');
+    if (!fila) {
+        console.warn('⚠️ No se encontró la fila para idplanclases:', idPlanClase);
+        return { inicio: null, termino: null };
+    }
+    
+    // El horario está en la tercera celda (índice 2) con formato "HH:MM - HH:MM"
+    var celdaHorario = fila.cells[2];
+    if (!celdaHorario) {
+        console.warn('⚠️ No se encontró la celda de horario');
+        return { inicio: null, termino: null };
+    }
+    
+    var horarioTexto = celdaHorario.textContent.trim();
+    console.log('🕒 Horario obtenido de la tabla:', horarioTexto);
+    
+    // Parsear formato "15:00 - 16:30"
+    var partes = horarioTexto.split(' - ');
+    if (partes.length !== 2) {
+        console.warn('⚠️ Formato de horario no válido:', horarioTexto);
+        return { inicio: null, termino: null };
+    }
+    
+    // Agregar segundos si no los tiene (HH:MM -> HH:MM:00)
+    var inicio = partes[0].includes(':') && partes[0].split(':').length === 2 ? 
+                 partes[0] + ':00' : partes[0];
+    var termino = partes[1].includes(':') && partes[1].split(':').length === 2 ? 
+                  partes[1] + ':00' : partes[1];
+    
+    return {
+        inicio: inicio,
+        termino: termino
+    };
+}
+
+// ===========================================
+// 9. FUNCIONES DE BLOQUES RELACIONADOS
+// ===========================================
 
 /**
  * Función principal para verificar bloques del mismo día
@@ -4334,285 +3868,1333 @@ function logEstadoAlerta(actividades, fecha) {
     });
 }
 
-// para mostrar las salas disponibles como informativo
-function actualizarSalasDisponibles() {
-    console.log('🔄 INICIANDO actualizarSalasDisponibles');
-    
-    // Obtener valores del formulario
-    var alumnosPorSala = parseInt(document.getElementById('alumnosPorSala').value) || 0;
-    var campus = document.getElementById('campus').value || '';
-    
-    // Obtener fecha y horarios de la actividad seleccionada
-    var fecha = obtenerFechaActividad();
-    var horarios = obtenerHorariosActividad();
-    
-    console.log('🔄 Datos para consulta:', {
-        alumnosPorSala: alumnosPorSala,
-        campus: campus,
-        fecha: fecha,
-        horarios: horarios
-    });
-    
-    // Validar que tengamos los datos mínimos
-    if (!alumnosPorSala || !campus || !fecha || !horarios.inicio || !horarios.termino) {
-        console.log('❌ Faltan datos, ocultando badge');
-        ocultarBadgeSalas();
-        return;
-    }
-    
-    // LÍNEA CRÍTICA CORREGIDA:
-    consultarSalasDisponibles(alumnosPorSala, campus, fecha, horarios.inicio, horarios.termino);
-}
+// ===========================================
+// 10. FUNCIONES GLOBALES DE DOCENTES
+// ===========================================
 
-/**
- * Realizar consulta AJAX para obtener salas disponibles
- */
-function consultarSalasDisponibles(alumnosPorSala, campus, fecha, horaInicio, horaTermino) {
-    console.log('🚀 EJECUTANDO consultarSalasDisponibles:', {
-        alumnosPorSala: alumnosPorSala,
-        campus: campus,
-        fecha: fecha,
-        horaInicio: horaInicio,
-        horaTermino: horaTermino
-    });
+// Función global para eliminar docentes
+// Función global para eliminar docentes con modal de confirmación
+window.eliminarDocente = function(id) {
+    if(!id) return;
     
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'consultar_salas_disponibles.php', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
+    // Crear el modal de confirmación
+    const modalHTML = `
+        <div class="modal fade" id="confirmarEliminarModal" tabindex="-1" data-bs-backdrop="static">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="bi bi-exclamation-triangle text-danger"></i> 
+                            Confirmar eliminación
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>¿Está seguro que desea eliminar este docente del curso?</p>
+                        <div class="alert alert-warning">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Importante:</strong> Esta acción también eliminará al docente de todas las actividades asignadas en este curso.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-danger" id="confirmarEliminar">
+                            <i class="bi bi-trash"></i> Eliminar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
     
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === 4) {
-            console.log('📡 Respuesta recibida - Status:', xhr.status);
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    console.log('📋 Datos procesados:', data);
-                    if (data.success) {
-                        mostrarBadgeSalas(data.total_salas);
-                        // Guardar datos para el modal
-                        window.salasDisponiblesData = data;
-                    } else {
-                        console.error('❌ Error en consulta:', data.error);
-                        ocultarBadgeSalas();
-                    }
-                } catch (error) {
-                    console.error('❌ Error al procesar JSON:', error);
-                    console.error('❌ Respuesta raw:', xhr.responseText);
-                    ocultarBadgeSalas();
-                }
-            } else {
-                console.error('❌ Error HTTP:', xhr.status, xhr.statusText);
-                ocultarBadgeSalas();
-            }
-        }
-    };
+    // Si ya existe el modal, eliminarlo
+    $('#confirmarEliminarModal').remove();
     
-    var requestData = JSON.stringify({
-        alumnos_por_sala: alumnosPorSala,
-        campus: campus,
-        fecha: fecha,
-        hora_inicio: horaInicio,
-        hora_termino: horaTermino
-    });
+    // Agregar el modal al body
+    $('body').append(modalHTML);
     
-    console.log('📤 Enviando request:', requestData);
-    xhr.send(requestData);
-}
-
-/**
- * Mostrar el badge con el número de salas disponibles
- */
-function mostrarBadgeSalas(numeroSalas) {
-    var badge = document.getElementById('btnSalasDisponibles');
-    var numero = document.getElementById('numeroSalasDisponibles');
-    
-    if (badge && numero) {
-        numero.textContent = numeroSalas;
-        badge.style.display = numeroSalas >= 0 ? 'block' : 'none';
-        
-        // Cambiar color según disponibilidad
-        if (numeroSalas > 0) {
-            badge.className = 'btn btn-outline-success';
-        } else {
-            badge.className = 'btn btn-outline-warning';
-            numero.textContent = '0';
-        }
-            
-        console.log('✅ Badge actualizado:', numeroSalas, 'salas disponibles');
-    }
-}
-
-/**
- * Ocultar el badge de salas disponibles
- */
-function ocultarBadgeSalas() {
-    var badge = document.getElementById('btnSalasDisponibles');
-    if (badge) {
-        badge.style.display = 'none';
-    }
-}
-
-/**
- * Mostrar el modal con la lista detallada de salas
- */
-function mostrarSalasDisponibles() {
-    if (!window.salasDisponiblesData || !window.salasDisponiblesData.salas) {
-        console.warn('⚠️ No hay datos de salas disponibles');
-        return;
-    }
-    
-    var data = window.salasDisponiblesData;
-    
-    // Actualizar criterios de búsqueda
-    actualizarCriteriosBusqueda(data.parametros);
-    
-    // Generar lista de salas
-    generarListaSalas(data.salas);
-    
-    // Mostrar modal
-    var modal = new bootstrap.Modal(document.getElementById('modalSalasDisponibles'));
+    // Mostrar el modal
+    const modal = new bootstrap.Modal(document.getElementById('confirmarEliminarModal'));
     modal.show();
     
-    console.log('📋 Modal de salas disponibles mostrado');
-}
+    // Handler para el botón de confirmar
+    $('#confirmarEliminar').off('click').on('click', function() {
+        // Cerrar el modal
+        modal.hide();
+        
+        // Proceder con la eliminación
+        $.ajax({
+            url: 'eliminar_docente.php',
+            type: 'POST',
+            data: { idProfesoresCurso: id },
+            dataType: 'json',
+            success: function(response) {
+                if(response.status === 'success') {
+                    // Eliminar la fila de la tabla
+                    var $btn = $(`button[onclick="eliminarDocente(${id})"]`);
+                    var $row = $btn.closest('tr');
+                    
+                    $row.fadeOut(300, function() {
+                        $(this).remove();
+                    });
 
-/**
- * Actualizar los criterios de búsqueda mostrados en el modal
- */
-function actualizarCriteriosBusqueda(parametros) {
-    var criterios = document.getElementById('criterios-busqueda');
-    if (criterios) {
-        criterios.innerHTML = 
-            '<strong>Capacidad:</strong> ≥' + parametros.alumnos_por_sala + ' estudiantes | ' +
-            '<strong>Campus:</strong> ' + parametros.campus + ' | ' +
-            '<strong>Horario:</strong> ' + parametros.hora_inicio.substring(0,5) + '-' + parametros.hora_termino.substring(0,5);
-    }
-}
-
-/**
- * Generar la lista HTML de salas disponibles
- */
-function generarListaSalas(salas) {
-    var container = document.getElementById('lista-salas-disponibles');
+                    // Crear y mostrar toast de éxito
+                    const toastHTML = `
+                        <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                            <div class="d-flex">
+                                <div class="toast-body">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    ${response.message || 'Docente removido exitosamente'}
+                                </div>
+                                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Asegurar que existe el contenedor de toasts
+                    if ($('.toast-container').length === 0) {
+                        $('body').append('<div class="toast-container position-fixed bottom-0 end-0 p-3"></div>');
+                    }
+                    
+                    $('.toast-container').append(toastHTML);
+                    const toastElement = new bootstrap.Toast($('.toast').last(), {
+                        autohide: true,
+                        delay: 3000
+                    });
+                    toastElement.show();
+                } else {
+                    mostrarToast(response.message || 'Error al eliminar docente', 'danger');
+                }
+            },
+            error: function() {
+                mostrarToast('Error de comunicación con el servidor', 'danger');
+            }
+        });
+    });
     
-    if (!container) {
-        console.error('❌ No se encontró el container de salas');
+    // Limpiar el modal cuando se cierre
+    $('#confirmarEliminarModal').on('hidden.bs.modal', function () {
+        $(this).remove();
+    });
+};
+
+// Función global para actualizar función de docente
+window.actualizarFuncion = function(selectElement, idProfesoresCurso) {
+    const nuevoTipo = selectElement.value;
+    
+    $.ajax({
+        url: 'guardarFuncion.php',
+        type: 'POST',
+        data: { 
+            idProfesoresCurso: idProfesoresCurso,
+            idTipoParticipacion: nuevoTipo
+        },
+        dataType: 'json',
+        success: function(response) {
+            if(response.status === 'success') {
+                // Mostrar toast de éxito
+                const toastHTML = `
+                    <div class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Función actualizada exitosamente
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                        </div>
+                    </div>
+                `;
+                
+                $('.toast-container').append(toastHTML);
+                const toastElement = new bootstrap.Toast($('.toast').last(), {
+                    autohide: true,
+                    delay: 2000
+                });
+                toastElement.show();
+            }
+        },
+        error: function() {
+            // Mostrar toast de error
+            const toastHTML = `
+                <div class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="bi bi-x-circle me-2"></i>
+                            Error al actualizar la función
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            
+            $('.toast-container').append(toastHTML);
+            const toastElement = new bootstrap.Toast($('.toast').last(), {
+                autohide: true,
+                delay: 2000
+            });
+            toastElement.show();
+        }
+    });
+};
+
+// ===========================================
+// 11. ASIGNADOR MASIVO DE DOCENTES
+// ===========================================
+
+// Funciones del asignador masivo
+function inicializarAsignadorMasivo() {
+    // Inicializar interfaz
+    $('#btnVisualizar').off('click').on('click', buscarActividades);
+    
+    $('#seleccionarTodos').off('change').on('change', function() {
+        $('.docente-check').prop('checked', $(this).is(':checked'));
+        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
+        verificarSelecciones();
+    });
+    
+    // Botones de asignación y eliminación
+    $('#btnAsignarDocentes').off('click').on('click', function() {
+        gestionarDocentes('asignar');
+    });
+    
+    $('#btnEliminarDocentes').off('click').on('click', function() {
+        gestionarDocentes('eliminar');
+    });
+    
+    // Verificar cambios en los checkboxes de docentes
+    $(document).off('change', '.docente-check').on('change', '.docente-check', function() {
+        const todasSeleccionadas = $('.docente-check:checked').length === $('.docente-check').length;
+        $('#seleccionarTodos').prop('checked', todasSeleccionadas);
+        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
+        verificarSelecciones();
+    });
+    
+    $('#btnLimpiarFiltros').off('click').on('click', function() {
+        // Limpiar campos de filtro
+        $('#tipoActividad').val('');
+        $('#diaSemana').val('');
+        $('#subtipo').val('');
+        $('#fechaInicio').val('');
+        $('#fechaTermino').val('');
+        $('#horaInicio').val('');
+        $('#horaTermino').val('');
+        
+        // Ocultar mensaje de sin resultados
+        $('#sinResultados').addClass('d-none');
+        
+        // Limpiar tabla de actividades
+        $('#tablaActividades tbody').empty();
+        
+        // Deshabilitar botones
+        $('#btnAsignarDocentes').prop('disabled', true);
+        $('#btnEliminarDocentes').prop('disabled', true);
+        
+        // Reiniciar lista de actividades seleccionadas
+        actividadesSeleccionadas = [];
+        
+        // Desmarcar todos los profesores
+        $('.docente-check').prop('checked', false);
+        $('#seleccionarTodos').prop('checked', false);
+        
+        // Reordenar después de limpiar
+        reordenarDocentesMasivo(); // AGREGAR ESTA LÍNEA
+        
+        verificarFiltros();
+    });
+    
+    // Agregar evento para validar filtros en tiempo real
+    $('#tipoActividad, #diaSemana, #fechaInicio, #fechaTermino, #horaInicio, #horaTermino').on('change', function() {
+        verificarFiltros();
+    });
+    
+    // Verificar filtros al inicio
+    verificarFiltros();
+}
+
+function verificarFiltros() {
+    const tipoActividad = $('#tipoActividad').val();
+    const diaSemana = $('#diaSemana').val();
+    const fechaInicio = $('#fechaInicio').val();
+    const fechaTermino = $('#fechaTermino').val();
+    const horaInicio = $('#horaInicio').val();
+    const horaTermino = $('#horaTermino').val();
+    
+    // Habilitar/deshabilitar el botón según si hay algún filtro
+    const hayFiltro = tipoActividad || diaSemana || fechaInicio || fechaTermino || horaInicio || horaTermino;
+    $('#btnVisualizar').prop('disabled', !hayFiltro);
+}
+
+function buscarActividades() {
+    // Obtener valores de los filtros
+    const tipoActividad = $('#tipoActividad').val();
+    const diaSemana = $('#diaSemana').val();
+    const fechaInicio = $('#fechaInicio').val();
+    const fechaTermino = $('#fechaTermino').val();
+    const horaInicio = $('#horaInicio').val();
+    const horaTermino = $('#horaTermino').val();
+    
+    // Validar que al menos un filtro esté presente
+    if (!tipoActividad && !diaSemana && !fechaInicio && !fechaTermino && !horaInicio && !horaTermino) {
+        mostrarNotificacionMasiva('Debe seleccionar al menos un filtro para buscar actividades', 'warning');
         return;
     }
+	
+	   mostrarNotificacionMasiva('Buscando actividades...', 'info', 1000);
     
-    if (salas.length === 0) {
-        container.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> No hay salas disponibles con estos criterios.</div>';
-        return;
-    }
+    // Obtener el ID del curso actual
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
     
-    var html = '<div class="list-group list-group-flush">';
-    
-    for (var i = 0; i < salas.length; i++) {
-        var sala = salas[i];
-        html += '<div class="list-group-item d-flex justify-content-between align-items-center py-2">' +
-                    '<div>' +
-                        '<strong>' + sala.nombre + '</strong>' +
-                        '<br><small class="text-muted">' + (sala.idSala) + '</small>' +
-                    '</div>' +
-                    '<span class="badge bg-primary rounded-pill">' + sala.capacidad + '</span>' +
-                '</div>';
-    }
-    
-    html += '</div>';
-    html += '<div class="mt-2"><small class="text-muted"><strong>Total:</strong> ' + salas.length + ' salas disponibles</small></div>';
-    
-    container.innerHTML = html;
-}
-
-/**
- * Obtener la fecha de la actividad actual
- * AJUSTADO para salas2.php - obtiene la fecha de la fila seleccionada
- */
-function obtenerFechaActividad() {
-    // Obtener el ID de la actividad actual del modal
-    var idPlanClase = document.getElementById('idplanclases').value;
-    
-    if (!idPlanClase) {
-        console.warn('⚠️ No hay idplanclases en el modal');
-        return null;
-    }
-    
-    // Buscar la fila en la tabla con este ID
-    var fila = document.querySelector('tr[data-id="' + idPlanClase + '"]');
-    if (!fila) {
-        console.warn('⚠️ No se encontró la fila para idplanclases:', idPlanClase);
-        return null;
-    }
-    
-    // La fecha está en la segunda celda (índice 1)
-    var celdaFecha = fila.cells[1];
-    if (!celdaFecha) {
-        console.warn('⚠️ No se encontró la celda de fecha');
-        return null;
-    }
-    
-    var fechaTexto = celdaFecha.textContent.trim();
-    console.log('📅 Fecha obtenida de la tabla:', fechaTexto);
-    
-    // Convertir DD/MM/YYYY a YYYY-MM-DD
-    return parsearFechaParaConsulta(fechaTexto);
-}
-
-/**
- * Obtener los horarios de inicio y término de la actividad
- * AJUSTADO para salas2.php - obtiene los horarios de la fila seleccionada
- */
-function obtenerHorariosActividad() {
-    // Obtener el ID de la actividad actual del modal
-    var idPlanClase = document.getElementById('idplanclases').value;
-    
-    if (!idPlanClase) {
-        console.warn('⚠️ No hay idplanclases en el modal');
-        return { inicio: null, termino: null };
-    }
-    
-    // Buscar la fila en la tabla con este ID
-    var fila = document.querySelector('tr[data-id="' + idPlanClase + '"]');
-    if (!fila) {
-        console.warn('⚠️ No se encontró la fila para idplanclases:', idPlanClase);
-        return { inicio: null, termino: null };
-    }
-    
-    // El horario está en la tercera celda (índice 2) con formato "HH:MM - HH:MM"
-    var celdaHorario = fila.cells[2];
-    if (!celdaHorario) {
-        console.warn('⚠️ No se encontró la celda de horario');
-        return { inicio: null, termino: null };
-    }
-    
-    var horarioTexto = celdaHorario.textContent.trim();
-    console.log('🕒 Horario obtenido de la tabla:', horarioTexto);
-    
-    // Parsear formato "15:00 - 16:30"
-    var partes = horarioTexto.split(' - ');
-    if (partes.length !== 2) {
-        console.warn('⚠️ Formato de horario no válido:', horarioTexto);
-        return { inicio: null, termino: null };
-    }
-    
-    // Agregar segundos si no los tiene (HH:MM -> HH:MM:00)
-    var inicio = partes[0].includes(':') && partes[0].split(':').length === 2 ? 
-                 partes[0] + ':00' : partes[0];
-    var termino = partes[1].includes(':') && partes[1].split(':').length === 2 ? 
-                  partes[1] + ':00' : partes[1];
-    
-    return {
-        inicio: inicio,
-        termino: termino
+    // Crear objeto con los filtros
+    const filtros = {
+        idcurso: idCurso,
+        tipoActividad: tipoActividad,
+        diaSemana: diaSemana,
+        subtipo: '', // Ya no usas subtipo en los filtros actuales
+        fechaInicio: fechaInicio,
+        fechaTermino: fechaTermino,
+        horaInicio: horaInicio,
+        horaTermino: horaTermino
     };
+    
+    // Realizar solicitud AJAX
+       $.ajax({
+        url: 'buscar_actividades.php',
+        type: 'POST',
+        dataType: 'json',
+        data: filtros,
+        success: function(response) {
+            if (response.success) {
+                mostrarActividades(response.actividades);
+                actividadesSeleccionadas = response.actividades.map(act => act.idplanclases);
+                
+                // Habilitar/deshabilitar botones según resultados
+                const hayActividades = response.actividades.length > 0;
+                $('#btnAsignarDocentes').prop('disabled', !hayActividades);
+                $('#btnEliminarDocentes').prop('disabled', !hayActividades);
+                
+                if (!hayActividades) {
+                    $('#sinResultados').removeClass('d-none');
+                } else {
+                    $('#sinResultados').addClass('d-none');
+                    
+                    // IMPORTANTE: Siempre desmarcar todos los docentes al buscar
+                    $('.docente-check').prop('checked', false);
+                    $('#seleccionarTodos').prop('checked', false);
+                    reordenarDocentesMasivo();
+                    verificarSelecciones();
+                }
+            } else {
+                mostrarNotificacionMasiva(response.message || 'Error al buscar actividades', 'danger');
+            }
+        },
+        error: function() {
+            mostrarNotificacionMasiva('Error de comunicación con el servidor', 'danger');
+        }
+    });
 }
 
-if (typeof calcularAlumnosPorSalaOriginal === 'undefined' && typeof calcularAlumnosPorSala !== 'undefined') {
-    window.calcularAlumnosPorSalaOriginal = calcularAlumnosPorSala;
+function mostrarActividades(actividades) {
+    const tbody = $('#tablaActividades tbody');
+    tbody.empty();
+    
+    if (actividades.length === 0) {
+        return;
+    }
+    
+    actividades.forEach(act => {
+        // Formatear fecha
+        const fecha = new Date(act.pcl_Fecha);
+        const fechaFormateada = fecha.toLocaleDateString('es-ES');
+        
+        // Formatear horas
+        const horaInicio = act.pcl_Inicio ? act.pcl_Inicio.substring(0, 5) : '';
+        const horaTermino = act.pcl_Termino ? act.pcl_Termino.substring(0, 5) : '';
+        
+		// Día de la semana en español
+    const diaSemana = fecha.toLocaleDateString('es-ES', { weekday: 'long' });
+	
+        // Crear fila
+        const fila = `
+            <tr data-id="${act.idplanclases}">
+                <td>${fechaFormateada}</td>
+				<td>${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)}</td>
+                <td>${horaInicio}</td>
+                <td>${horaTermino}</td>
+                <td>${act.pcl_tituloActividad || ''}</td>
+                <td>${act.pcl_TipoSesion}${act.pcl_SubTipoSesion ? ' (' + act.pcl_SubTipoSesion + ')' : ''}</td>
+            </tr>
+        `;
+        
+        tbody.append(fila);
+    });
 }
 
-console.log('✅ Sistema de salas disponibles inicializado correctamente');
+function verificarSelecciones() {
+    const docentesSeleccionados = $('.docente-check:checked').length > 0;
+    const hayActividades = actividadesSeleccionadas.length > 0;
+    
+    $('#btnAsignarDocentes, #btnEliminarDocentes').prop('disabled', !hayActividades || !docentesSeleccionados);
+}
 
+function gestionarDocentes(accion) {
+    // Verificar que haya actividades seleccionadas
+    if (actividadesSeleccionadas.length === 0) {
+        mostrarNotificacionMasiva('No hay actividades seleccionadas', 'warning');
+        return;
+    }
+    
+    // Obtener docentes seleccionados
+    const docentesSeleccionados = [];
+    $('.docente-check:checked').each(function() {
+        docentesSeleccionados.push({
+            rut: $(this).data('rut'),
+            nombre: $(this).closest('.docente-row').find('p.mb-0').text(),
+            cargo: $(this).closest('.docente-row').find('small.text-muted').text()
+        });
+    });
+    
+    if (docentesSeleccionados.length === 0) {
+        mostrarNotificacionMasiva('No hay docentes seleccionados', 'warning');
+        return;
+    }
+    
+    // Llenar el modal con la información
+    $('#accionTitulo').text(accion === 'asignar' ? 'Asignación' : 'Eliminación');
+    $('#accionDescripcion').text(
+        accion === 'asignar' ? 
+        'Se asignarán los docentes seleccionados a todas las actividades listadas' : 
+        'Se eliminarán los docentes seleccionados de todas las actividades listadas'
+    );
+    $('#numActividades').text(actividadesSeleccionadas.length);
+    $('#numDocentes').text(docentesSeleccionados.length);
+    
+     const actividadesPreview = $('#actividadesPreview');
+    actividadesPreview.empty();
+    
+    // Primero, encontrar las filas de las actividades seleccionadas
+    $('#tablaActividades tbody tr').each(function() {
+        const row = $(this);
+        const idActividad = parseInt(row.data('id'));
+        
+        // Verificar si esta actividad está seleccionada
+        if (actividadesSeleccionadas.includes(idActividad)) {
+            const fecha = row.find('td:eq(0)').text();
+			const dia = row.find('td:eq(1)').text();
+            const horaInicio = row.find('td:eq(2)').text();
+            const horaTermino = row.find('td:eq(3)').text();
+            const titulo = row.find('td:eq(4)').text();
+            
+            
+            // Crear la fila para el preview
+            const previewRow = `
+                <tr>
+                    <td>${fecha}</td>
+                    <td>${dia}</td>
+                    <td>${horaInicio} a las ${horaTermino}</td>
+                    <td>${titulo || 'Sin título'}</td>
+                </tr>
+            `;
+            actividadesPreview.append(previewRow);
+        }
+    });
+    
+    // Si no encuentra actividades de esta forma, intentar otra aproximación
+    if (actividadesPreview.find('tr').length === 0) {
+        // Mensaje de debug para ver qué está pasando
+        console.log('Actividades seleccionadas:', actividadesSeleccionadas);
+        console.log('Filas encontradas:', $('#tablaActividades tbody tr').length);
+        
+        // Agregar una fila de aviso
+        actividadesPreview.append(`
+            <tr>
+                <td colspan="4" class="text-center text-muted">
+                    Error al cargar las actividades. IDs: ${actividadesSeleccionadas.join(', ')}
+                </td>
+            </tr>
+        `);
+    }
+    
+    // Llenar tabla de docentes
+    const docentesPreview = $('#docentesPreview');
+    docentesPreview.empty();
+    
+    docentesSeleccionados.forEach(docente => {
+        const row = `
+            <tr>
+                <td>${docente.nombre}</td>
+                <td>${docente.cargo}</td>
+            </tr>
+        `;
+        docentesPreview.append(row);
+    });
+    
+    // Mostrar el modal
+    const modal = new bootstrap.Modal(document.getElementById('previsualizacionModal'));
+    modal.show();
+    
+    // Configurar el botón de confirmar
+    $('#confirmarAccion').off('click').on('click', function() {
+        modal.hide();
+        procesarAsignacion(accion, docentesSeleccionados.map(d => d.rut));
+    });
+}
+
+// En la función procesarAsignacion, asegúrate de que esté así:
+function procesarAsignacion(accion, docentesRuts) {
+    // Obtener el ID del curso actual
+    const urlParams = new URLSearchParams(window.location.search);
+    const idCurso = urlParams.get('curso');
+    
+    // Preparar datos para enviar
+    const datos = {
+        idcurso: idCurso,
+        actividades: actividadesSeleccionadas,
+        docentes: docentesRuts,
+        accion: accion
+    };
+    
+    // Debug
+    console.log('Datos a enviar:', datos);
+    
+    // Mostrar indicador de carga y guardar la referencia
+    let toastCarga = mostrarNotificacionMasiva('Procesando... Por favor espere.', 'info');
+    
+    // Deshabilitar botones para evitar múltiples clicks
+    $('#confirmarAccion').prop('disabled', true);
+    $('#btnAsignarDocentes').prop('disabled', true);
+    $('#btnEliminarDocentes').prop('disabled', true);
+    
+    // Realizar solicitud AJAX
+    $.ajax({
+        url: 'procesar_asignacion_masiva.php',
+        type: 'POST',
+        dataType: 'json',
+        data: JSON.stringify(datos),
+        contentType: 'application/json',
+        success: function(response) {
+            console.log('Respuesta:', response);
+            
+            // Cerrar el toast de carga de forma segura
+            if (toastCarga) {
+                // Forzar el cierre del toast
+                $(toastCarga).remove();
+            }
+            
+            // Cerrar el modal de previsualización
+            const modal = bootstrap.Modal.getInstance(document.getElementById('previsualizacionModal'));
+            if (modal) modal.hide();
+            
+            // Mostrar resultado
+            if (response.success) {
+                mostrarNotificacionMasiva(
+                    `${accion === 'asignar' ? 'Asignación' : 'Desvinculación'} completada correctamente. 
+                    ${response.operaciones || 0} operaciones realizadas.`, 
+                    'success'
+                );
+                
+                // Actualizar la vista después de un breve retraso
+                setTimeout(() => {
+                    $('#btnVisualizar').click();
+                }, 1500);
+            } else {
+                mostrarNotificacionMasiva(response.message || 'Error al procesar la solicitud', 'danger');
+            }
+        },
+        error: function(xhr, status, error) {
+            // Cerrar el toast de carga
+            if (toastCarga) {
+                $(toastCarga).remove();
+            }
+            
+            console.error("Error AJAX:", xhr.responseText);
+            mostrarNotificacionMasiva('Error de comunicación con el servidor: ' + (error || status), 'danger');
+        },
+        complete: function() {
+            // Asegurarse de que el toast de carga se cierre
+            if (toastCarga) {
+                $(toastCarga).remove();
+            }
+            
+            // Rehabilitar los botones
+            $('#confirmarAccion').prop('disabled', false);
+            $('#btnAsignarDocentes').prop('disabled', false);
+            $('#btnEliminarDocentes').prop('disabled', false);
+        }
+    });
+}
+
+function mostrarNotificacionMasiva(mensaje, tipo = 'success', duracion = 3000) {
+    // Buscar o crear el contenedor específico para el asignador masivo
+    let toastContainer = document.querySelector('.toast-container-masivo');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container-masivo position-fixed bottom-0 end-0 p-3';
+        toastContainer.style.zIndex = '1055';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Determinar si es un mensaje de carga
+    const esCarga = tipo === 'info' && mensaje.toLowerCase().includes('procesando');
+    
+    // Determinar el ícono según el tipo
+    let iconHtml = '';
+    if (esCarga) {
+        iconHtml = '<div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Cargando...</span></div>';
+    } else {
+        const iconos = {
+            'success': 'check-circle',
+            'danger': 'exclamation-circle',
+            'warning': 'exclamation-triangle',
+            'info': 'info-circle'
+        };
+        iconHtml = `<i class="bi bi-${iconos[tipo] || 'info-circle'} me-2"></i>`;
+    }
+    
+    // Crear el toast
+    const toastId = 'toast-masivo-' + Date.now();
+    const toastHTML = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${tipo} border-0" role="alert" aria-live="assertive" aria-atomic="true" data-tipo="${tipo}">
+            <div class="d-flex">
+                <div class="toast-body">
+                    ${iconHtml}
+                    ${mensaje}
+                </div>
+                ${!esCarga ? '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>' : ''}
+            </div>
+        </div>
+    `;
+    
+    // Añadir al contenedor
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    // Mostrar el toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: !esCarga,  // No auto-ocultar si es carga
+        delay: duracion
+    });
+    toast.show();
+    
+    // Si NO es un toast de carga, eliminarlo después de ocultar
+    if (!esCarga) {
+        toastElement.addEventListener('hidden.bs.toast', function() {
+            toastElement.remove();
+        });
+    }
+    
+    return toastElement;
+}
+
+function reordenarDocentesMasivo() {
+    const container = document.getElementById('listaDocentes');
+    if (!container) return;
+    
+    const docenteRows = Array.from(container.querySelectorAll('.docente-row'));
+    
+    // Separar en dos grupos
+    const selected = [];
+    const notSelected = [];
+    
+    docenteRows.forEach(row => {
+        const checkbox = row.querySelector('.docente-check');
+        if (checkbox && checkbox.checked) {
+            selected.push(row);
+        } else {
+            notSelected.push(row);
+        }
+    });
+    
+    // Mantener el orden alfabético en los no seleccionados
+    notSelected.sort((a, b) => {
+        const nameA = a.querySelector('p.mb-0').textContent.toLowerCase();
+        const nameB = b.querySelector('p.mb-0').textContent.toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    // Reconstruir el contenedor
+    container.innerHTML = '';
+    
+    // Agregar primero los seleccionados, luego los no seleccionados
+    selected.forEach(row => container.appendChild(row));
+    notSelected.forEach(row => container.appendChild(row));
+}
+
+// ===========================================
+// 12. FUNCIONES PARA CREAR DOCENTE
+// ===========================================
+
+function inicializarCrearDocente() {
+	
+	$('#nuevo-docente-btn').off('click').on('click', function() {
+    const modal = new bootstrap.Modal(document.getElementById('nuevoDocenteModal'));
+    modal.show();
+});
+	
+    // Event listener para el botón guardar
+    $('#btnGuardarDocente').off('click').on('click', guardar_docente);
+    
+    // Event listener para validar RUT mientras se escribe
+    $('#rut_docente').off('input').on('input', function() {
+        checkRut(this);
+    });
+    
+    // Event listener para habilitar/deshabilitar unidad externa
+    $('#unidad_academica').off('change').on('change', function() {
+        habilitar_unidad(this);
+    });
+}
+
+function checkRut(rut) {
+    // Despejar Puntos
+    var valor = rut.value.replace('.','');
+    // Despejar Guión
+    valor = valor.replace('-','');
+    
+    // Aislar Cuerpo y Digito Verificador
+    cuerpo = valor.slice(0,-1);
+    dv = valor.slice(-1).toUpperCase();
+    
+    // Formatear RUN
+    rut.value = cuerpo + '-'+ dv
+    
+    // Si no cumple con el minimo ej. (n.nnn.nnn)
+    if(cuerpo.length < 7) { 
+        rut.setCustomValidity("RUT Incompleto"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Calcular Digito Verificador
+    suma = 0;
+    multiplo = 2;
+    
+    // Para cada digito del Cuerpo
+    for(i=1;i<=cuerpo.length;i++) {
+        // Obtener su Producto con el Múltiplo Correspondiente
+        index = multiplo * valor.charAt(cuerpo.length - i);
+        
+        // Sumar al Contador General
+        suma = suma + index;
+        
+        // Consolidar Múltiplo dentro del rango [2,7]
+        if(multiplo < 7) { multiplo = multiplo + 1; } else { multiplo = 2; }
+    }
+    
+    // Calcular Digito Verificador en base al Módulo 11
+    dvEsperado = 11 - (suma % 11);
+    
+    // Casos Especiales (0 y K)
+    dv = (dv == 'K')?10:dv;
+    dv = (dv == 0)?11:dv;
+    
+    // Validar que el Cuerpo coincide con su Digito Verificador
+    if(dvEsperado != dv) { 
+        rut.setCustomValidity("RUT Inválido"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Validar RUTs repetidos o inválidos
+    if(cuerpo == '0000000000' || cuerpo == '00000000' ||
+       cuerpo == '11111111' || cuerpo == '1111111' ||
+       cuerpo == '22222222' || cuerpo == '2222222' ||
+       cuerpo == '33333333' || cuerpo == '3333333' ||
+       cuerpo == '44444444' || cuerpo == '4444444' ||
+       cuerpo == '55555555' || cuerpo == '5555555' ||
+       cuerpo == '66666666' || cuerpo == '6666666' ||
+       cuerpo == '77777777' || cuerpo == '7777777' ||
+       cuerpo == '88888888' || cuerpo == '8888888' ||
+       cuerpo == '99999999' || cuerpo == '9999999') {
+        rut.setCustomValidity("RUT Inválido"); 
+        $('#flag').val('false'); 
+        return false;
+    }
+    
+    // Si todo sale bien, eliminar errores (decretar que es válido)
+    rut.setCustomValidity('');
+    $('#flag').val('true');
+}
+
+function habilitar_unidad(sel) {
+    var depto = sel.value;
+    
+    if(depto == 'Unidad Externa') {
+        document.getElementById("unidad_externa").disabled = false;
+        document.getElementById("unidad_externa").required = true;
+        document.getElementById("unidad_externa").placeholder = 'Unidad Externa *';
+    } else {
+        document.getElementById("unidad_externa").disabled = true;
+        document.getElementById("unidad_externa").required = false;
+        document.getElementById("unidad_externa").placeholder = 'Unidad Externa';
+    }
+}
+
+function guardar_docente() {
+    var curso = $("#curso").val(); 
+    var rut = $("#rut_docente").val(); 
+    var flag = $("#flag").val();
+    var unidad = $("#unidad_academica").val(); 
+    
+    var largo_rut = rut.length;
+    
+    if($("#unidad_externa").val() != '') {
+        var uE = $("#unidad_externa").val();
+    } else {
+        var uE = "Sin Unidad"; 
+    }
+    
+    var nombres = $("#nombres").val(); 
+    var paterno = $("#paterno").val(); 
+    var materno = $("#materno").val(); 
+    var email = $("#email").val(); 
+    var funcion = $("#funcion").val();
+    
+    if(flag == 'true') {
+        if(rut != '' && largo_rut >= 9 && unidad != '' && uE != '' && nombres != '' && paterno != '' && email != '' && funcion != '') {
+            // Mostrar loading en el botón
+            const $btnGuardar = $('#btnGuardarDocente');
+            const textoOriginal = $btnGuardar.html();
+            $btnGuardar.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Guardando...');
+            
+            $.ajax({
+                dataType: "json",
+                data: {
+                    "curso": curso,
+                    "rut_docente": rut,
+                    "unidad_academica": unidad,
+                    "unidad_externa": uE,
+                    "nombres": nombres,
+                    "paterno": paterno,
+                    "materno": materno,
+                    "email": email,
+                    "funcion": funcion
+                },
+                url: 'guardar_docente_nuevo.php', 
+                type: 'POST',
+                success: function(respuesta) {
+                    // Restaurar botón
+                    $btnGuardar.prop('disabled', false).html(textoOriginal);
+                    
+                    if(respuesta.success) {
+                        // Cerrar el modal de nuevo docente
+                        const modalElement = document.getElementById('nuevoDocenteModal');
+                        const modal = bootstrap.Modal.getInstance(modalElement);
+                        if (modal) modal.hide();
+                        
+                        // Mostrar notificación de éxito
+                        mostrarToast('Docente agregado correctamente', 'success');
+                        
+                        // Recargar la pestaña de docentes
+                        $('#docente-tab').click();
+                        
+                        // Limpiar el formulario para la próxima vez
+                        $('#nuevoDocenteForm')[0].reset();
+                        $('#unidad_externa').prop('disabled', true);
+                    } else {
+                        // Mostrar error
+                        mostrarToast(respuesta.message || 'Error al agregar docente', 'danger');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Restaurar botón
+                    $btnGuardar.prop('disabled', false).html(textoOriginal);
+                    
+                    console.error('Error:', xhr.responseText);
+                    mostrarToast('Error de comunicación con el servidor', 'danger');
+                }
+            });
+        } else {
+            mostrarToast('Por favor complete todos los campos obligatorios', 'warning');
+        }
+    } else {
+        mostrarToast('El formato del RUT no es válido', 'warning');
+    }
+}
+
+// ===========================================
+// 13. INICIALIZACIÓN DEL DOCUMENTO
+// ===========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    generateFullCalendar();
+    loadActivityTypes();
+    
+    // Inicializar tooltips de Bootstrap
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+    
+    // Obtener el ID del curso de la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const cursoId = urlParams.get('curso');
+
+    // Agregar evento para cargar salas
+    document.getElementById('salas-tab').addEventListener('click', function() {
+        fetch('salas2.php?curso=' + cursoId)
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('salas-list').innerHTML = html;
+            })
+            .catch(error => {
+                document.getElementById('salas-list').innerHTML = '<div class="alert alert-danger">Error al cargar la información de salas</div>';
+            });
+    });
+	
+	 // Nuevo: Limpiar alertas al cerrar modal de salas
+    var salaModal = document.getElementById('salaModal');
+    if (salaModal) {
+        salaModal.addEventListener('hidden.bs.modal', function() {
+            limpiarAlertasBloques();
+        });
+    }
+	
+	 setTimeout(function() {
+        verificarDependencias();
+    }, 1000);
+	
+	 var alumnosPorSala = document.getElementById('alumnosPorSala');
+    if (alumnosPorSala) {
+        alumnosPorSala.addEventListener('input', function() {
+            // Delay para evitar múltiples consultas
+            clearTimeout(window.timeoutSalas);
+            window.timeoutSalas = setTimeout(actualizarSalasDisponibles, 500);
+        });
+    }
+    
+    // Actualizar salas cuando cambie el campus
+    var campus = document.getElementById('campus');
+    if (campus) {
+        campus.addEventListener('change', actualizarSalasDisponibles);
+    }
+    
+    // Actualizar salas cuando se cargue el modal (si es necesario)
+    var modalSalas = document.getElementById('salaModal');
+    if (modalSalas) {
+        modalSalas.addEventListener('shown.bs.modal', function() {
+            // Delay para asegurar que todos los campos estén cargados
+            setTimeout(actualizarSalasDisponibles, 1000);
+        });
+    }
+	
+	// Agregar evento para cargar docente
+    document.getElementById('docente-tab').addEventListener('click', function() {
+    const docentesList = document.getElementById('docentes-list');
+    
+    // Mostrar spinner de carga
+    docentesList.innerHTML = '<div class="text-center p-5"><i class="bi bi-arrow-repeat spinner"></i><p>Cargando...</p></div>';
+    
+    fetch('1_asignar_docente.php?idcurso=' + cursoId)
+        .then(response => response.text())
+        .then(html => {
+            docentesList.innerHTML = html;
+        })
+        .catch(error => {
+            docentesList.innerHTML = '<div class="alert alert-danger">Error al cargar los datos</div>';
+        });
+});
+
+document.getElementById('docente-masivo-tab').addEventListener('click', function() {
+    const docentesMasivoList = document.getElementById('docentes-masivo-list');
+    
+    // Mostrar spinner de carga
+    docentesMasivoList.innerHTML = '<div class="text-center p-5"><i class="bi bi-arrow-repeat spinner"></i><p>Cargando...</p></div>';
+    
+    fetch('asignacion_masiva_docentes.php?curso=' + cursoId)
+        .then(response => response.text())
+        .then(html => {
+            docentesMasivoList.innerHTML = html;
+            // IMPORTANTE: Inicializar los event listeners después de cargar el contenido
+            inicializarAsignadorMasivo();
+        })
+        .catch(error => {
+            docentesMasivoList.innerHTML = '<div class="alert alert-danger">Error al cargar los datos</div>';
+        });
+});
+	
+ // Validación en tiempo real del tiempo asignado
+    const hoursInput = document.getElementById('auto-hours');
+    const minutesInput = document.getElementById('auto-minutes');
+    
+    function validateInputs() {
+        const hours = parseInt(hoursInput.value) || 0;
+        const minutes = parseInt(minutesInput.value) || 0;
+        
+        if (!validateAutoTime(hours, minutes)) {
+            hoursInput.classList.add('is-invalid');
+            minutesInput.classList.add('is-invalid');
+        } else {
+            hoursInput.classList.remove('is-invalid');
+            minutesInput.classList.remove('is-invalid');
+        }
+    }
+    
+    if (hoursInput) hoursInput.addEventListener('input', validateInputs);
+    if (minutesInput) minutesInput.addEventListener('input', validateInputs);
+	
+	$('#autoaprendizajeModal').on('shown.bs.modal', function() {
+        const saveButton = document.getElementById('save-auto-btn');
+        const titleField = document.getElementById('auto-activity-title');
+        
+        // Verificar si el título está vacío
+        saveButton.disabled = titleField.value.trim() === '';
+        
+        // Foco en el campo del título
+        titleField.focus();
+    });
+	
+});
+
+// Asegurar que las variables de timeout estén disponibles globalmente
+if (typeof calcularAlumnosTimeout === 'undefined') {
+    window.calcularAlumnosTimeout = null;
+}
+
+console.log('✅ Sistema completo inicializado correctamente');
+
+let idActividadActual = null;
+
+function mostrarDetallesInconsistencia(idplanclases) {
+    idActividadActual = idplanclases;
+    
+    console.log("🔍 Iniciando análisis de inconsistencias para ID:", idplanclases);
+    
+    // Usar Bootstrap JavaScript API en lugar de jQuery
+    const modal = new bootstrap.Modal(document.getElementById('modalDetallesInconsistencia'));
+    modal.show();
+    
+    // Limpiar contenido anterior
+    document.getElementById('info-actividad').innerHTML = '';
+    document.getElementById('contenido-detalles-inconsistencia').innerHTML = `
+        <div class="text-center p-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando detalles...</span>
+            </div>
+            <p class="mt-2 text-muted">Analizando inconsistencias...</p>
+        </div>
+    `;
+    
+    // Preparar datos para envío
+    const requestData = {
+        action: 'obtener_detalles_inconsistencia',
+        idplanclases: idplanclases
+    };
+    
+    console.log("📤 Enviando datos:", requestData);
+    
+    // Hacer petición AJAX con fetch API (JavaScript nativo)
+    fetch('salas2.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        console.log("📡 Respuesta recibida, status:", response.status);
+        console.log("📡 Headers:", response.headers);
+        
+        // Verificar si la respuesta es exitosa
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        // Verificar el content-type
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            // Si no es JSON, obtener el texto para debugging
+            return response.text().then(text => {
+                console.error("❌ Respuesta no es JSON. Content-Type:", contentType);
+                console.error("❌ Contenido recibido:", text.substring(0, 500));
+                throw new Error(`Respuesta no es JSON. Content-Type: ${contentType}. Contenido: ${text.substring(0, 100)}...`);
+            });
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        console.log("✅ Datos JSON parseados:", data);
+        
+        if (data.success) {
+            mostrarDetallesCompletos(data);
+        } else {
+            mostrarErrorDetalles(data.error || 'Error desconocido del servidor', data.debug_info);
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error completo:', error);
+        console.error('❌ Stack trace:', error.stack);
+        
+        let mensajeError = 'Error de comunicación: ' + error.message;
+        
+        // Detectar errores comunes
+        if (error.message.includes('Unexpected token')) {
+            mensajeError += '\n\n🔍 Posibles causas:\n';
+            mensajeError += '• Error fatal en PHP\n';
+            mensajeError += '• Problemas de sintaxis en el servidor\n';
+            mensajeError += '• Headers incorrectos\n';
+            mensajeError += '\n📋 Revisa los logs del servidor para más detalles.';
+        }
+        
+        mostrarErrorDetalles(mensajeError);
+    });
+}
+
+function mostrarDetallesCompletos(data) {
+    console.log("✅ Mostrando detalles completos:", data);
+    
+    const actividad = data.actividad;
+    const salas = data.salas;
+    
+    // Mostrar información de la actividad
+    document.getElementById('info-actividad').innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Actividad:</strong> ${actividad.pcl_tituloActividad}<br>
+                <strong>Código-Sección:</strong> ${actividad.pcl_AsiCodigo}-${actividad.pcl_Seccion}
+            </div>
+            <div class="col-md-6">
+                <strong>Fecha:</strong> ${new Date(actividad.pcl_Fecha).toLocaleDateString('es-CL')}<br>
+                <strong>Horario:</strong> ${actividad.pcl_Inicio.substring(0,5)} - ${actividad.pcl_Termino.substring(0,5)}
+            </div>
+        </div>
+    `;
+    
+    // Mostrar detalles de cada sala
+    let htmlSalas = `
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 10%">Sala</th>
+                        <th style="width: 15%">Estado Asignación</th>
+                        <th style="width: 20%">Resultado Verificación</th>
+                        <th style="width: 25%">Detalles de Reserva</th>
+                        <th style="width: 30%">Comentarios/Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    salas.forEach(sala => {
+        const verificacion = sala.verificacion;
+        let badgeVerificacion = '';
+        let detallesReserva = '';
+        let estadoClass = '';
+        
+        if (verificacion.encontrado) {
+            if (verificacion.metodo === 'paso1') {
+                badgeVerificacion = '<span class="badge bg-success">🎯 Encontrada (ID Repetición)</span>';
+                estadoClass = 'table-success';
+            } else {
+                badgeVerificacion = '<span class="badge bg-warning">🔍 Encontrada (Búsqueda Alternativa)</span>';
+                estadoClass = 'table-warning';
+            }
+            
+            if (sala.info_reserva) {
+                const reserva = sala.info_reserva;
+                detallesReserva = `
+                    <small>
+                        <strong>Fecha:</strong> ${reserva.re_FechaReserva}<br>
+                        <strong>Horario:</strong> ${reserva.re_HoraReserva} - ${reserva.re_HoraTermino}<br>
+                        <strong>Curso:</strong> ${reserva.re_labelCurso}<br>
+                        <strong>Creada:</strong> ${new Date(reserva.re_RegFecha).toLocaleString('es-CL')}
+                    </small>
+                `;
+            }
+        } else {
+            badgeVerificacion = '<span class="badge bg-danger">❌ NO ENCONTRADA</span>';
+            estadoClass = 'table-danger';
+            detallesReserva = '<span class="text-danger"><strong>Sin reserva confirmada</strong></span>';
+        }
+        
+        htmlSalas += `
+            <tr class="${estadoClass}">
+                <td class="text-center">
+                    <strong>${sala.idSala}</strong>
+                </td>
+                <td>
+                    <span class="badge bg-info">Estado 3</span><br>
+                    <small>Asignada</small>
+                </td>
+                <td>
+                    ${badgeVerificacion}<br>
+                    <small class="text-muted">${verificacion.detalle}</small>
+                </td>
+                <td>
+                    ${detallesReserva}
+                </td>
+                <td>
+                    ${sala.comentario_asignacion ? `
+                        <strong>Asignación:</strong><br>
+                        <small>${sala.comentario_asignacion.substring(0, 100)}${sala.comentario_asignacion.length > 100 ? '...' : ''}</small><br>
+                    ` : ''}
+                    <small class="text-muted">
+                        <strong>Usuario:</strong> ${sala.usuario_asignacion || 'N/A'}<br>
+                        <strong>Fecha:</strong> ${sala.fecha_asignacion ? new Date(sala.fecha_asignacion).toLocaleString('es-CL') : 'N/A'}
+                    </small>
+                </td>
+            </tr>
+        `;
+    });
+    
+    htmlSalas += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    // Agregar resumen
+    const totalSalas = salas.length;
+    const salasEncontradas = salas.filter(s => s.verificacion.encontrado).length;
+    const salasInconsistentes = totalSalas - salasEncontradas;
+    
+    htmlSalas += `
+        <div class="alert alert-info mt-3">
+            <h6><i class="bi bi-bar-chart"></i> Resumen</h6>
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <span class="badge bg-secondary fs-6">${totalSalas}</span><br>
+                    <small>Total Salas</small>
+                </div>
+                <div class="col-md-3">
+                    <span class="badge bg-success fs-6">${salasEncontradas}</span><br>
+                    <small>Con Reserva</small>
+                </div>
+                <div class="col-md-3">
+                    <span class="badge bg-danger fs-6">${salasInconsistentes}</span><br>
+                    <small>Inconsistentes</small>
+                </div>
+                <div class="col-md-3">
+                    <span class="badge bg-warning fs-6">${Math.round((salasInconsistentes/totalSalas)*100)}%</span><br>
+                    <small>% Problemas</small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('contenido-detalles-inconsistencia').innerHTML = htmlSalas;
+}
+
+function mostrarErrorDetalles(error, debugInfo = null) {
+    console.error("❌ Mostrando error:", error, debugInfo);
+    
+    let htmlError = `
+        <div class="alert alert-danger">
+            <h6><i class="bi bi-exclamation-triangle"></i> Error al cargar detalles</h6>
+            <p>${error}</p>
+    `;
+    
+    if (debugInfo) {
+        htmlError += `
+            <hr>
+            <h6>Información de debug:</h6>
+            <small>
+                <strong>Archivo:</strong> ${debugInfo.file || 'N/A'}<br>
+                <strong>Línea:</strong> ${debugInfo.line || 'N/A'}<br>
+                <strong>ID Actividad:</strong> ${debugInfo.idplanclases || idActividadActual || 'N/A'}
+            </small>
+        `;
+    }
+    
+    htmlError += `
+            <hr>
+            <div class="mt-2">
+                <button class="btn btn-sm btn-outline-danger" onclick="mostrarDetallesInconsistencia(${idActividadActual})">
+                    <i class="bi bi-arrow-clockwise"></i> Reintentar
+                </button>
+                <button class="btn btn-sm btn-outline-info" onclick="mostrarLogsTecnicos()">
+                    <i class="bi bi-info-circle"></i> Ver logs técnicos
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('contenido-detalles-inconsistencia').innerHTML = htmlError;
+}
+
+function mostrarLogsTecnicos() {
+    // Mostrar información técnica para debugging
+    const info = {
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        timestamp: new Date().toISOString(),
+        idActividad: idActividadActual
+    };
+    
+    Swal.fire({
+        title: 'Información Técnica',
+        html: `
+            <div class="text-start">
+                <h6>Para reporte de error:</h6>
+                <div class="bg-light p-2 small">
+                    <strong>ID Actividad:</strong> ${info.idActividad}<br>
+                    <strong>URL:</strong> ${info.url}<br>
+                    <strong>Timestamp:</strong> ${info.timestamp}<br>
+                    <strong>Navegador:</strong> ${info.userAgent}
+                </div>
+                <p class="mt-2 small text-muted">
+                    Copia esta información al reportar el error a soporte técnico.
+                </p>
+            </div>
+        `,
+        width: '600px',
+        confirmButtonText: 'Cerrar'
+    });
+}
+
+function contactarAreaSalas() {
+    Swal.fire({
+        icon: 'info',
+        title: 'Contactar Área de Salas',
+        html: `
+            <div class="text-start">
+                <p><strong>Contactos recomendados:</strong></p>
+                <ul>
+                    <li><strong>Email:</strong> salas@uchile.cl</li>
+                    <li><strong>Teléfono:</strong> +56 2 2978 6000</li>
+                    <li><strong>Oficina:</strong> Edificio Institucional, Piso 3</li>
+                </ul>
+                <p class="mt-3"><strong>Información a proporcionar:</strong></p>
+                <ul>
+                    <li>ID Actividad: ${idActividadActual}</li>
+                    <li>Salas inconsistentes detectadas</li>
+                    <li>Solicitar verificación de reservas</li>
+                </ul>
+            </div>
+        `,
+        confirmButtonText: 'Entendido',
+        width: '500px'
+    });
+}
+
+function modificarSalaDesdeInconsistencia() {
+    // Cerrar modal actual
+    const modal = bootstrap.Modal.getInstance(document.getElementById('modalDetallesInconsistencia'));
+    modal.hide();
+    
+    if (idActividadActual) {
+        // Esperar a que se cierre el modal anterior
+        setTimeout(() => {
+            modificarSala(idActividadActual);
+        }, 300);
+    }
+}
+
+// ✅ INICIALIZAR TOOLTIPS CUANDO SE ABRE EL MODAL (JavaScript nativo)
+document.addEventListener('DOMContentLoaded', function() {
+    const modalElement = document.getElementById('modalDetallesInconsistencia');
+    if (modalElement) {
+        modalElement.addEventListener('shown.bs.modal', function () {
+            // Inicializar tooltips para el contenido dinámico
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    }
+});
 </script>
 
 

@@ -109,7 +109,7 @@ if($rut!='' && $control_profe > 0){
 								
 								 // Consulta para obtener total de horas
 									$query_horas = "SELECT sum(`horas`) as total_horas 
-													FROM `docenteclases` 
+													FROM `docenteclases_copy` 
 													WHERE `idCurso` = $_GET[idcurso] 
 													AND `rutDocente`='$fila_profesores[rut]' 
 													AND vigencia=1";

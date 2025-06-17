@@ -163,7 +163,7 @@ function validarAntesGuardar($conn, $data) {
 }
 
 function estaDisponible($conn, $idSala, $fecha, $horaInicio, $horaFin) {
-    $queryReserva = "SELECT * FROM reserva 
+    $queryReserva = "SELECT * FROM reserva_2 
                      WHERE re_idSala = ?
                      AND re_FechaReserva = ?
                      AND ((re_HoraReserva <= ? AND re_HoraTermino > ?) 

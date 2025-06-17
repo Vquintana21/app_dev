@@ -65,6 +65,10 @@ if($rut!='' && $control_profe > 0)
                         <i class="fas fa-id-card me-2"></i>
                         Rutificador
                     </a>
+					
+					 <button type="button" onclick="volverYRecargarTabla()" class="btn btn-secondary ms-2">
+    <i class="fas fa-arrow-left me-2"></i>Volver
+</button>
                 </div>
             </div>
         </div>

@@ -325,7 +325,7 @@ $foto_docente = InfoDocenteUcampus($rut);
 
 					<h5 class="card-title">¿Necesitas ayuda de aulas docentes?</h5>
 					
-					informa sobre tu problema a correo de aulas <a target="_blank" href="mailto:felpilla@gmail.com"> aulas@uchile.cl</a>
+					informa sobre tu problema a correo de aulas <a target="_blank" href="mailto:felpilla@gmail.com"> gestionaulas.med@uchile.cl </a>
 
 
                 </div>

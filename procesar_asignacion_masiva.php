@@ -35,7 +35,7 @@ try {
        // foreach ($actividades as $idplanclases) {
        //     $idplanclases = (int)$idplanclases;
        //     
-       //     $queryDesactivar = "UPDATE docenteclases 
+       //     $queryDesactivar = "UPDATE docenteclases_copy 
        //                        SET vigencia = 0,
        //                            fechaModificacion = NOW(),
        //                            usuarioModificacion = 'asignacion_masiva'
@@ -54,7 +54,7 @@ try {
                 $rutDocente = mysqli_real_escape_string($conn, $rutDocente);
                 
                 // Verificar si ya existe el registro
-                $verificarExistencia = "SELECT idDocenteClases FROM docenteclases 
+                $verificarExistencia = "SELECT idDocenteClases FROM docenteclases_copy 
                                        WHERE idPlanClases = $idplanclases 
                                        AND rutDocente = '$rutDocente'
                                        AND idCurso = $idCurso";
@@ -63,7 +63,7 @@ try {
                 if (mysqli_num_rows($resultVerificacion) > 0) {
                     // El registro existe, actualizarlo a vigencia=1
                     $filaExistente = mysqli_fetch_assoc($resultVerificacion);
-                    $query = "UPDATE docenteclases 
+                    $query = "UPDATE docenteclases_copy 
                              SET vigencia = 1, 
                                  fechaModificacion = NOW(), 
                                  usuarioModificacion = 'asignacion_masiva' 
@@ -73,13 +73,13 @@ try {
                     // Obtener la duración de la actividad
                     $queryHoras = "SELECT 
                                      TIME_TO_SEC(TIMEDIFF(pcl_Termino, pcl_Inicio))/3600 as duracion_horas
-                                  FROM planclases 
+                                  FROM a_planclases 
                                   WHERE idplanclases = $idplanclases";
                     $resultHoras = mysqli_query($conn, $queryHoras);
                     $filaHoras = mysqli_fetch_assoc($resultHoras);
                     $horas = $filaHoras ? $filaHoras['duracion_horas'] : 0;
                     
-                    $query = "INSERT INTO docenteclases 
+                    $query = "INSERT INTO docenteclases_copy 
                              (rutDocente, idPlanClases, idCurso, horas, vigencia, 
                              fechaModificacion, usuarioModificacion, unidadAcademica)
                              VALUES ('$rutDocente', $idplanclases, $idCurso, $horas, 1, 
@@ -101,7 +101,7 @@ try {
                 $idplanclases = (int)$idplanclases;
                 $rutDocente = mysqli_real_escape_string($conn, $rutDocente);
                 
-                $query = "UPDATE docenteclases 
+                $query = "UPDATE docenteclases_copy 
                          SET vigencia = 0, 
                              fechaModificacion = NOW(), 
                              usuarioModificacion = 'asignacion_masiva' 

@@ -35,7 +35,7 @@ $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
     // Consulta para obtener total de horas
     $query_horas = "SELECT sum(`horas`) as total_horas 
-                   FROM `docenteclases` 
+                   FROM `docenteclases_copy` 
                    WHERE `idCurso` = ? 
                    AND `rutDocente` = ? 
                    AND vigencia = 1";

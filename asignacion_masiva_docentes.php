@@ -66,7 +66,7 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                 <option value="">Todos los días</option>
                                 <?php
                                 // Consultar tipos de actividad disponibles en el curso
-                                $tipos_query = "SELECT DISTINCT dia FROM planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso'";
+                                $tipos_query = "SELECT DISTINCT dia FROM a_planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso'";
                                 $result_tipos = mysqli_query($conn, $tipos_query);
                                 while($tipo = mysqli_fetch_assoc($result_tipos)) {
                                     echo '<option value="'.htmlspecialchars($tipo['dia']).'">'.
@@ -81,7 +81,7 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                 <option value="">Todas</option>
                                 <?php
                                 // Consultar pcl_Inicio disponibles en el curso
-                                $tipos_query = "SELECT DISTINCT pcl_Inicio FROM planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso' order by pcl_Inicio asc;";
+                                $tipos_query = "SELECT DISTINCT pcl_Inicio FROM a_planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso' order by pcl_Inicio asc;";
                                 $result_tipos = mysqli_query($conn, $tipos_query);
                                 while($tipo = mysqli_fetch_assoc($result_tipos)) {
                                     echo '<option value="'.htmlspecialchars($tipo['pcl_Inicio']).'">'.
@@ -96,7 +96,7 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                 <option value="">Todas</option>
                                 <?php
                                 // Consultar pcl_Termino disponibles en el curso
-                                $tipos_query = "SELECT DISTINCT pcl_Termino FROM planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso' order by pcl_Inicio asc;";
+                                $tipos_query = "SELECT DISTINCT pcl_Termino FROM a_planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso' order by pcl_Inicio asc;";
                                 $result_tipos = mysqli_query($conn, $tipos_query);
                                 while($tipo = mysqli_fetch_assoc($result_tipos)) {
                                     echo '<option value="'.htmlspecialchars($tipo['pcl_Termino']).'">'.

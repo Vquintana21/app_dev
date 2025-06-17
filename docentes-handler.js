@@ -1,4 +1,4 @@
-// docentes-handler.js
+// docentes-handler.js - Versión mejorada con mejor manejo de errores
 
 // Funciones globales
 
@@ -35,35 +35,52 @@ function reloadDocentesTable() {
     const urlParams = new URLSearchParams(window.location.search);
     const cursoId = urlParams.get('curso');
     
-    console.log('Recargando tabla de docentes, curso ID:', cursoId); // Debug
+    console.log('Recargando tabla de docentes, curso ID:', cursoId);
     
     if (!cursoId) {
         console.error('No se encontró el ID del curso');
         return Promise.reject('No se encontró el ID del curso');
     }
     
-    // Buscar la tabla específicamente dentro del contenedor de docentes
     const docentesContainer = document.getElementById('docentes-list');
     if (!docentesContainer) {
         console.error('No se encontró el contenedor de docentes');
         return Promise.reject('No se encontró el contenedor de docentes');
     }
     
-    return fetch('get_docentes_table.php?idcurso=' + cursoId)
-        .then(response => response.text())
-        .then(html => {
-            // Buscar el tbody específicamente dentro del contenedor de docentes
-            const tableBody = docentesContainer.querySelector('table tbody');
-            if (tableBody) {
-                console.log('Actualizando tbody de la tabla'); // Debug
-                tableBody.innerHTML = html;
-                return true; // Éxito
-            } else {
-                console.error('No se encontró el tbody de la tabla');
-                // Intentar recargar todo el contenedor
-                $('#docente-tab').click();
-                return false;
+    // ? CAMBIO AQUÍ: Usar el archivo correcto para cursos clínicos
+    return fetch('get_docentes_table_clinico.php?idcurso=' + cursoId)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+            return response.text();
+        })
+        .then(html => {
+            // ? CAMBIO AQUÍ: Reemplazar todo el contenedor, no solo el tbody
+            console.log('Actualizando contenedor completo de docentes');
+            docentesContainer.innerHTML = html;
+            
+            // ? AGREGAR: Reinicializar funcionalidades después del reemplazo
+            setTimeout(() => {
+                if (typeof setupHorasDirectasClinico === 'function') {
+                    setupHorasDirectasClinico();
+                    console.log('? Horas directas reinicializadas');
+                }
+                
+                if (typeof inicializarBusquedaDocentesClinico === 'function') {
+                    inicializarBusquedaDocentesClinico();
+                    console.log('? Búsqueda de docentes reinicializada');
+                }
+                
+                // Reinicializar el select2 si existe
+                if (typeof window.initializeDocenteSelect === 'function') {
+                    window.initializeDocenteSelect();
+                    console.log('? Select2 reinicializado');
+                }
+            }, 300);
+            
+            return true;
         })
         .catch(error => {
             console.error('Error al recargar la tabla:', error);
@@ -78,16 +95,26 @@ function guardarNuevoDocente() {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else {
+            return response.text().then(text => {
+                console.error('Respuesta no es JSON:', text);
+                throw new Error('La respuesta del servidor no es JSON válido');
+            });
+        }
+    })
     .then(data => {
         if (data.success) {
-            // Mostrar toast de procesando
             showNotification('Actualizando lista de docentes...', 'primary', true);
             
-            // Llamar a la función de recarga y esperar que termine
             reloadDocentesTable()
                 .then(() => {
-                    // Mostrar éxito cuando la tabla se haya actualizado
                     showNotification('Docente agregado correctamente', 'success');
                 })
                 .catch(() => {
@@ -98,13 +125,12 @@ function guardarNuevoDocente() {
         }
     })
     .catch(error => {
-        showNotification('Error al procesar la solicitud', 'danger');
+        showNotification('Error al procesar la solicitud: ' + error.message, 'danger');
         console.error('Error:', error);
     });
 }
 
 function initializeNewDocenteForm() {
-    // Inicializar validación de RUT
     const rutInput = document.getElementById('rut_docente');
     if (rutInput) {
         rutInput.addEventListener('input', function() {
@@ -112,7 +138,6 @@ function initializeNewDocenteForm() {
         });
     }
 
-    // Manejar el envío del formulario
     const form = document.getElementById('nuevo-docente-form');
     if (form) {
         form.addEventListener('submit', function(e) {
@@ -122,11 +147,74 @@ function initializeNewDocenteForm() {
     }
 }
 
+// Función mejorada para asignar docente
+function asignarDocente(rutDocente, cursoId) {
+    return new Promise((resolve, reject) => {
+        // Validar parámetros
+        if (!rutDocente || !cursoId) {
+            reject(new Error('Faltan parámetros requeridos'));
+            return;
+        }
+
+        // Configurar datos
+        const formData = new FormData();
+        formData.append('rut_docente', rutDocente);
+        formData.append('idcurso', cursoId);
+        formData.append('funcion', '4');
+
+        // Realizar petición usando fetch en lugar de jQuery
+        fetch('asignar_docente.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            console.log('Response headers:', response.headers);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            // Verificar el tipo de contenido
+            const contentType = response.headers.get('content-type');
+            console.log('Content-Type:', contentType);
+            
+            if (contentType && contentType.includes('application/json')) {
+                return response.json();
+            } else {
+                // Si no es JSON, obtener el texto para depuración
+                return response.text().then(text => {
+                    console.error('Respuesta del servidor (no JSON):', text);
+                    // Intentar parsear como JSON de todos modos
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        throw new Error(`Respuesta no es JSON válido. Contenido: ${text.substring(0, 200)}...`);
+                    }
+                });
+            }
+        })
+        .then(data => {
+            console.log('Datos recibidos:', data);
+            if (data && data.success) {
+                resolve(data);
+            } else {
+                reject(new Error(data?.message || 'Error desconocido en la respuesta del servidor'));
+            }
+        })
+        .catch(error => {
+            console.error('Error en asignarDocente:', error);
+            reject(error);
+        });
+    });
+}
+
 // Hacer las funciones accesibles globalmente
 window.reloadDocentesTable = reloadDocentesTable;
 window.showNotification = showNotification;
 window.guardarNuevoDocente = guardarNuevoDocente;
 window.initializeNewDocenteForm = initializeNewDocenteForm;
+window.asignarDocente = asignarDocente;
 
 // Código que se ejecuta cuando el DOM está listo
 document.addEventListener('DOMContentLoaded', function() {
@@ -135,7 +223,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!docenteSelect.length) return;
 
-        // Destruir instancia previa si existe
         if (docenteSelect.hasClass('select2-hidden-accessible')) {
             docenteSelect.select2('destroy');
         }
@@ -176,97 +263,137 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        // Manejar el cambio de selección
         docenteSelect.on('change', function() {
             $('#boton_agregar').prop('disabled', !$(this).val());
         });
     }
     
-    // Agregar evento al boton de asignar docente
-    $(document).off('click', '#boton_agregar').on('click', '#boton_agregar', function() {
-        const rutDocente = $('#docente').val();
-        const cursoId = new URLSearchParams(window.location.search).get('curso');
+    // EVENTO MEJORADO para asignar docente
+    // Reemplaza el evento del botón asignar en tu docentes-handler.js
 
-        if (!rutDocente || !cursoId) {
-            showNotification('Por favor seleccione un docente', 'danger');
-            return;
-        }
+$(document).off('click', '#boton_agregar').on('click', '#boton_agregar', function() {
+    const rutDocente = $('#docente').val();
+    const cursoId = new URLSearchParams(window.location.search).get('curso');
 
-        const $button = $(this);
-        $button.prop('disabled', true)
-               .html('<span class="spinner-border spinner-border-sm"></span> Asignando...');
+    if (!rutDocente || !cursoId) {
+        showNotification('Por favor seleccione un docente', 'danger');
+        return;
+    }
 
-        $.post('asignar_docente.php', {
+    const $button = $(this);
+    $button.prop('disabled', true)
+           .html('<span class="spinner-border spinner-border-sm"></span> Asignando...');
+
+    // Usar jQuery AJAX con mejor manejo de errores
+    $.ajax({
+        url: 'asignar_docente.php',
+        type: 'POST',
+        dataType: 'json', // Especificar que esperamos JSON
+        data: {
             rut_docente: rutDocente,
             idcurso: cursoId,
             funcion: '4'
-        })
-        .done(function(response) {
-            // Mostrar toast de procesando
+        },
+        timeout: 10000, // 10 segundos de timeout
+        beforeSend: function() {
+            console.log('Enviando datos:', {
+                rut_docente: rutDocente,
+                idcurso: cursoId,
+                funcion: '4'
+            });
+        }
+    })
+    .done(function(response, textStatus, xhr) {
+        console.log('Respuesta recibida:', response);
+        console.log('Status:', xhr.status);
+        console.log('Content-Type:', xhr.getResponseHeader('Content-Type'));
+        
+        if (response && response.success) {
             showNotification('Actualizando lista de docentes...', 'primary', true);
             
-            // Llamar a la función de recarga y esperar que termine
             reloadDocentesTable()
                 .then(() => {
-                    // Mostrar éxito cuando la tabla se haya actualizado
                     showNotification('Docente asignado correctamente', 'success');
                 })
                 .catch(() => {
                     showNotification('Docente asignado, pero hubo un problema al actualizar la vista', 'warning');
-                })
-                .finally(() => {
-                    // Resetear el select2
-                    $('#docente').val(null).trigger('change');
-                    // Restaurar el botón
-                    $button.prop('disabled', false)
-                           .html('<i class="bi bi-plus-circle"></i> Asignar Docente');
                 });
-        })
-        .fail(function(xhr, status, error) {
-            console.error('Error al asignar docente:', error);
-            showNotification('Error al asignar docente', 'danger');
-            $button.prop('disabled', false)
-                   .html('<i class="bi bi-plus-circle"></i> Asignar Docente');
+        } else {
+            const mensaje = response && response.message ? response.message : 'Error desconocido al asignar docente';
+            showNotification(mensaje, 'danger');
+        }
+    })
+    .fail(function(xhr, status, error) {
+        console.error('Error completo:', {
+            status: status,
+            error: error,
+            responseText: xhr.responseText,
+            statusCode: xhr.status,
+            contentType: xhr.getResponseHeader('Content-Type')
         });
+        
+        let mensaje = 'Error al asignar docente';
+        
+        if (xhr.responseText) {
+            try {
+                const errorResponse = JSON.parse(xhr.responseText);
+                mensaje = errorResponse.message || mensaje;
+            } catch (e) {
+                console.error('Respuesta no es JSON válido:', xhr.responseText.substring(0, 200));
+                mensaje = 'Error del servidor: Respuesta inválida';
+            }
+        } else if (status === 'timeout') {
+            mensaje = 'Tiempo de espera agotado. Intente nuevamente.';
+        } else if (status === 'error') {
+            mensaje = 'Error de conexión con el servidor';
+        }
+        
+        showNotification(mensaje, 'danger');
+    })
+    .always(function() {
+        // Restaurar el botón sin importar el resultado
+        $('#docente').val(null).trigger('change');
+        $button.prop('disabled', false)
+               .html('<i class="bi bi-plus-circle"></i> Asignar Docente');
     });
+});
 
     // Manejar la carga del formulario de nuevo docente
     $(document).on('click', '#nuevo-docente-btn', function(e) {
         e.preventDefault();
         const docentesList = $('#docentes-list');
         
-        // Mostrar indicador de carga
         docentesList.html('<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div></div>');
         
-        // Obtener el ID del curso de la URL
         const urlParams = new URLSearchParams(window.location.search);
         const cursoId = urlParams.get('curso');
         
-        // Cargar el formulario de nuevo docente
         fetch('2_crear_docente.php?idcurso=' + cursoId)
-            .then(response => response.text())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
             .then(html => {
                 docentesList.html(html);
                 initializeNewDocenteForm();
             })
             .catch(error => {
-                docentesList.html('<div class="alert alert-danger">Error al cargar el formulario</div>');
+                docentesList.html('<div class="alert alert-danger">Error al cargar el formulario: ' + error.message + '</div>');
                 console.error('Error:', error);
             });
     });
 
-    // Inicializar Select2 cuando se muestra el tab
     $('#docente-tab').on('shown.bs.tab', function(e) {
-        console.log('Tab docente mostrado'); // Debug
+        console.log('Tab docente mostrado');
         setTimeout(initializeDocenteSelect, 100);
     });
 
-    // Inicializar inmediatamente si estamos en la pestaña de docentes
     if ($('#docente-tab').hasClass('active')) {
         initializeDocenteSelect();
     }
 
-    // Observar cambios en el contenedor de docentes
     const observer = new MutationObserver(function(mutations) {
         mutations.forEach(function(mutation) {
             if (mutation.addedNodes.length) {
@@ -286,6 +413,5 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Hacer también initializeDocenteSelect disponible globalmente
     window.initializeDocenteSelect = initializeDocenteSelect;
 });

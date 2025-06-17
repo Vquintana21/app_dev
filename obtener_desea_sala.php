@@ -26,7 +26,7 @@ try {
             
             // Obtener datos básicos de planclases
             $query = "SELECT pcl_DeseaSala, pcl_campus, pcl_nSalas 
-                     FROM planclases 
+                     FROM a_planclases 
                      WHERE idplanclases = ?";
             
             $stmt = $conn->prepare($query);
@@ -61,7 +61,7 @@ try {
                            (SELECT COUNT(*) FROM asignacion_piloto 
                             WHERE idplanclases = p.idplanclases 
                             AND idEstado = 3) as salas_asignadas
-                           FROM planclases p 
+                           FROM a_planclases p 
                            WHERE p.idplanclases = ?";
             
             $stmtBasicos = $conn->prepare($queryBasicos);

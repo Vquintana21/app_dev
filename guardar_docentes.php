@@ -20,7 +20,7 @@ try {
     }
 
     // Primero desactivar todos los docentes existentes
-     $queryDesactivar = "UPDATE docenteclases SET vigencia = 0 WHERE idPlanClases = ?";
+     $queryDesactivar = "UPDATE docenteclases_copy SET vigencia = 0 WHERE idPlanClases = ?";
      $stmtDesactivar = $conn->prepare($queryDesactivar);
      if (!$stmtDesactivar) {
          throw new Exception('Error preparando query de desactivación: ' . $conn->error);
@@ -31,7 +31,7 @@ try {
     // Procesar cada docente
     foreach ($docentesSeleccionados as $rutDocente) {
         // Verificar si ya existe
-        $queryVerificar = "SELECT idDocenteClases FROM docenteclases WHERE rutDocente = ? AND idPlanClases = ?";
+        $queryVerificar = "SELECT idDocenteClases FROM docenteclases_copy WHERE rutDocente = ? AND idPlanClases = ?";
         $stmtVerificar = $conn->prepare($queryVerificar);
         if (!$stmtVerificar) {
             throw new Exception('Error preparando query de verificación: ' . $conn->error);
@@ -58,7 +58,7 @@ try {
         if ($resultadoVerificar->num_rows > 0) {
             // Actualizar registro existente
             $row = $resultadoVerificar->fetch_assoc();
-            $queryActualizar = "UPDATE docenteclases SET 
+            $queryActualizar = "UPDATE docenteclases_copy SET 
                                vigencia = 1,
                                horas = ?,
                                unidadAcademica = ?,
@@ -73,7 +73,7 @@ try {
             $stmtActualizar->execute();
         } else {
             // Insertar nuevo registro
-            $queryInsertar = "INSERT INTO docenteclases 
+            $queryInsertar = "INSERT INTO docenteclases_copy 
                             (rutDocente, idPlanClases, idCurso, horas, unidadAcademica, vigencia, 
                              usuarioModificacion, fechaModificacion)
                             VALUES (?, ?, ?, ?, ?, 1, 'sistemadpi', NOW())";

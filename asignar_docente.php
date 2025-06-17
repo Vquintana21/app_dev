@@ -1,100 +1,246 @@
 <?php
-header('Content-Type: application/json; charset=UTF-8');
-mb_internal_encoding('UTF-8');
+// asignar_docente.php - Versión con corrección de encoding
+
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Función para limpiar caracteres problemáticos
+function limpiarTexto($texto) {
+    if ($texto === null) return null;
+    
+    // Convertir a UTF-8 válido
+    $texto = mb_convert_encoding($texto, 'UTF-8', 'UTF-8');
+    
+    // Eliminar caracteres de control y caracteres no válidos
+    $texto = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $texto);
+    
+    // Eliminar caracteres Unicode problemáticos
+    $texto = preg_replace('/[\x{FFF0}-\x{FFFF}]/u', '', $texto);
+    
+    return trim($texto);
+}
+
+// Función para JSON seguro
+function jsonSeguro($data) {
+    // Limpiar recursivamente todos los strings en el array
+    array_walk_recursive($data, function(&$item) {
+        if (is_string($item)) {
+            $item = limpiarTexto($item);
+        }
+    });
+    
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    
+    if ($json === false) {
+        error_log("ERROR JSON: " . json_last_error_msg());
+        error_log("Datos problemáticos: " . print_r($data, true));
+        
+        // Fallback: crear JSON básico manualmente
+        return json_encode([
+            'success' => isset($data['success']) ? $data['success'] : false,
+            'message' => 'Respuesta procesada con encoding limitado',
+            'error' => 'Problema de codificación de caracteres'
+        ]);
+    }
+    
+    return $json;
+}
+
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        error_log("ERROR FATAL en asignar_docente.php: " . print_r($error, true));
+        
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=UTF-8');
+            echo jsonSeguro([
+                'success' => false,
+                'message' => 'Error fatal del servidor'
+            ]);
+        }
+    }
+});
+
+function logDebug($message, $data = null) {
+    $log = "[" . date('Y-m-d H:i:s') . "] ASIGNAR_DOCENTE: " . $message;
+    if ($data !== null) {
+        $log .= " | Data: " . print_r($data, true);
+    }
+    error_log($log);
+}
+
+function sendResponse($success, $message, $data = null) {
+    logDebug("Enviando respuesta", ['success' => $success, 'message' => $message]);
+    
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=UTF-8');
+        header('Cache-Control: no-cache, must-revalidate');
+    }
+    
+    $response = [
+        'success' => $success,
+        'message' => limpiarTexto($message),
+        'timestamp' => date('Y-m-d H:i:s')
+    ];
+    
+    if ($data !== null) {
+        $response['data'] = $data;
+    }
+    
+    $jsonResponse = jsonSeguro($response);
+    logDebug("JSON generado", ['length' => strlen($jsonResponse), 'content' => substr($jsonResponse, 0, 200)]);
+    
+    echo $jsonResponse;
+    exit;
+}
 
 try {
-    require_once("conexion.php");
-
-    if (!isset($conexion3)) {
-        throw new Exception("No hay conexión a la base de datos");
+    logDebug("=== INICIO SCRIPT ===");
+    
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        sendResponse(false, 'Método no permitido');
     }
-
-    $rut_docente = isset($_POST['rut_docente']) ? $_POST['rut_docente'] : null;
+    
+    logDebug("Incluyendo conexion.php");
+    ob_start();
+    require_once("conexion.php");
+    $conexion_output = ob_get_clean();
+    
+    if (!empty($conexion_output)) {
+        logDebug("Output de conexion.php", $conexion_output);
+    }
+    
+    if (!isset($conexion3) || !$conexion3 || !mysqli_ping($conexion3)) {
+        sendResponse(false, "Error de conexión a la base de datos");
+    }
+    
+    logDebug("Conexión BD OK");
+    
+    $rut_docente = isset($_POST['rut_docente']) ? trim($_POST['rut_docente']) : null;
     $idcurso = isset($_POST['idcurso']) ? (int)$_POST['idcurso'] : null;
     $funcion = isset($_POST['funcion']) ? (int)$_POST['funcion'] : null;
-
+    
+    logDebug("Parámetros recibidos", [
+        'rut_docente' => $rut_docente,
+        'idcurso' => $idcurso,
+        'funcion' => $funcion
+    ]);
+    
     if (!$rut_docente || !$idcurso || !$funcion) {
-        throw new Exception("Datos incompletos - RUT: $rut_docente, Curso: $idcurso, Función: $funcion");
+        sendResponse(false, "Datos incompletos - RUT: $rut_docente, Curso: $idcurso, Función: $funcion");
     }
-
-    // Obtener el departamento del docente desde spre_bancodocente
+    
+    // Buscar departamento con encoding seguro
+    logDebug("Buscando departamento del docente");
     $docente_query = "SELECT Departamento FROM spre_bancodocente WHERE rut = ?";
-    $stmt = $conexion3->prepare($docente_query);
-    if ($stmt === false) {
-        throw new Exception("Error en preparar consulta de docente: " . $conexion3->error);
+    
+    if (!($stmt = $conexion3->prepare($docente_query))) {
+        sendResponse(false, "Error en preparar consulta de docente: " . $conexion3->error);
     }
-
+    
     $stmt->bind_param("s", $rut_docente);
-    $stmt->execute();
+    
+    if (!$stmt->execute()) {
+        $stmt->close();
+        sendResponse(false, "Error al ejecutar consulta de docente: " . $stmt->error);
+    }
+    
     $result = $stmt->get_result();
     $departamento = null;
     
     if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
-        $departamento = $row['Departamento'];
+        $departamento = limpiarTexto($row['Departamento']); // LIMPIAR AQUÍ
+        logDebug("Departamento encontrado (limpio)", $departamento);
+    } else {
+        logDebug("No se encontró departamento para el docente");
     }
     $stmt->close();
-
-    // Verificar si ya existe el docente en el curso
+    
+    // Verificar si ya existe
     $check_query = "SELECT idProfesoresCurso FROM spre_profesorescurso 
                     WHERE rut = ? AND idcurso = ? AND Vigencia = '1' AND idTipoParticipacion NOT IN (8,10)";
-    $stmt = $conexion3->prepare($check_query);
-    if ($stmt === false) {
-        throw new Exception("Error en preparar consulta de verificación: " . $conexion3->error);
-    }
-
-    $stmt->bind_param("si", $rut_docente, $idcurso);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($result->num_rows > 0) {
-        $stmt->close();
-        throw new Exception("El docente ya está asignado a este curso");
-    }
-    $stmt->close();
-
-    // Insertar en spre_profesorescurso con la unidad académica
-    $query = "INSERT INTO spre_profesorescurso 
-              (rut, idcurso, idTipoParticipacion, Vigencia, FechaValidacion, 
-               UsuarioValidacion, activo, unidad_academica_docente) 
-              VALUES (?, ?, ?, '1', NOW(), 'sistema', '1', ?)";
-              
-    $stmt = $conexion3->prepare($query);
-    if ($stmt === false) {
-        throw new Exception("Error en preparar consulta de inserción: " . $conexion3->error);
+    
+    if (!($stmt = $conexion3->prepare($check_query))) {
+        sendResponse(false, "Error en preparar consulta de verificación: " . $conexion3->error);
     }
     
-    $stmt->bind_param("siis", $rut_docente, $idcurso, $funcion, $departamento);
+    $stmt->bind_param("si", $rut_docente, $idcurso);
     
     if (!$stmt->execute()) {
-        throw new Exception("Error al insertar: " . $stmt->error);
+        $stmt->close();
+        sendResponse(false, "Error al ejecutar verificación: " . $stmt->error);
     }
-
+    
+    $result = $stmt->get_result();
+    if ($result->num_rows > 0) {
+        $stmt->close();
+        sendResponse(false, "El docente ya está asignado a este curso");
+    }
     $stmt->close();
     
-    echo json_encode([
-        'success' => true,
-        'message' => 'Docente asignado correctamente',
-        'data' => [
+    // Insertar docente
+    logDebug("Iniciando inserción de docente");
+    $conexion3->autocommit(false);
+    
+    try {
+        $query = "INSERT INTO spre_profesorescurso 
+                  (rut, idcurso, idTipoParticipacion, Vigencia, FechaValidacion, 
+                   UsuarioValidacion, activo, unidad_academica_docente) 
+                  VALUES (?, ?, ?, '1', NOW(), 'sistema', '1', ?)";
+        
+        if (!($stmt = $conexion3->prepare($query))) {
+            throw new Exception("Error preparando inserción: " . $conexion3->error);
+        }
+        
+        $stmt->bind_param("siis", $rut_docente, $idcurso, $funcion, $departamento);
+        
+        if (!$stmt->execute()) {
+            throw new Exception("Error ejecutando inserción: " . $stmt->error);
+        }
+        
+        $insertId = $conexion3->insert_id;
+        $stmt->close();
+        
+        $conexion3->commit();
+        $conexion3->autocommit(true);
+        
+        logDebug("Docente insertado exitosamente", ['id' => $insertId]);
+        
+        // Respuesta exitosa con datos limpios
+        sendResponse(true, 'Docente asignado correctamente', [
+            'id' => $insertId,
             'rut' => $rut_docente,
             'curso' => $idcurso,
             'funcion' => $funcion,
-            'unidad_academica' => $departamento
-        ]
-    ]);
-
-} catch (Exception $e) {
-    error_log("Error en asignar_docente.php: " . $e->getMessage());
+            'unidad_academica' => $departamento // Ya está limpio
+        ]);
+        
+    } catch (Exception $e) {
+        $conexion3->rollback();
+        $conexion3->autocommit(true);
+        sendResponse(false, "Error al insertar docente: " . $e->getMessage());
+    }
     
-    http_response_code(200);
-    echo json_encode([
-        'success' => false,
-        'message' => $e->getMessage(),
-        'post_data' => $_POST
-    ]);
+} catch (Exception $e) {
+    logDebug("ERROR GENERAL", $e->getMessage());
+    sendResponse(false, "Error del servidor: " . $e->getMessage());
+    
+} catch (Error $e) {
+    logDebug("ERROR FATAL", $e->getMessage());
+    sendResponse(false, "Error crítico del servidor");
+    
+} finally {
+    logDebug("=== FIN SCRIPT ===");
+    if (isset($conexion3) && $conexion3) {
+        $conexion3->close();
+    }
 }
 
-if (isset($conexion3)) {
-    $conexion3->close();
-}
+sendResponse(false, "Error: El script no envió respuesta válida");
 ?>
