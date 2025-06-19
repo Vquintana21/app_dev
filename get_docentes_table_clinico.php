@@ -28,8 +28,14 @@ if (!isset($conn)) {
   <div class="container py-4"> 
 
  <div class="card mb-4">
-            <div class="card-body text-center">
-               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
+            <div class="card-body">
+               <h4 class="text-center"> <i class="bi bi-person-raised-hand"></i> Instrucciones equipo docente</h4>
+			   
+			   <ul>
+				   <li>Si no encuentra al funcionario en el buscador, lo puede agregar en “Nuevo Docente”. 
+				   <li>Si se requiere cambio de pec o coordinador del curso, lo debe solicitar a la dirección de escuela.
+				   <li>El total de horas directas en docencia lo debe ingresar manualmente.
+			   </ul>
                 
             </div>
         </div>

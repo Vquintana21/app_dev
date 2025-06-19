@@ -361,10 +361,7 @@ $conn->close();
                 <div class="card-header">
 				<h5 class="card-title"><i class="bi bi-pencil"></i> Editar información </h5>
 				 <div class="card mb-4">
-            <div class="card-body text-center">
-               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
-                
-            </div>
+            <?php include 'estadisticas_regulares.php'; ?>
         </div>
 		
                     <ul class="nav nav-tabs nav-tabs-bordered d-flex" id="borderedTabJustified" role="tablist">
@@ -1187,6 +1184,12 @@ function generateCalendar(activitiesForMonth, calendarBody, currentMonth) {
 }
 
 function generateFullCalendar() {
+	
+	console.log('🔍 DEBUG: Todas las actividades cargadas:', planClases);
+    const autoaprendizajeActivities = planClases.filter(a => a.pcl_TipoSesion === 'Autoaprendizaje');
+    console.log('📚 Actividades de autoaprendizaje encontradas:', autoaprendizajeActivities);
+    
+	
     const months = getMonthRange();
     const container = document.getElementById('calendar-container');
     container.innerHTML = '';

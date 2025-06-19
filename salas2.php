@@ -199,6 +199,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pcl_movilidadReducida = 'N';
             $pcl_Cercania = 'N';
         }
+		
+		$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+		  error_log("🎮 nAlumnosReal calculado: " . $nAlumnosReal);
         
         // Preparar observaciones para planclases
         $observacionesPlanclases = "";
@@ -213,17 +216,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                   pcl_DeseaSala = ?,
                                   pcl_movilidadReducida = ?,
                                   pcl_Cercania = ?,
+								  pcl_alumnos = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isissisi", 
+        $stmt->bind_param("isississi", 
             $data['nSalas'], 
             $data['campus'], 
             $requiereSala,
             $pcl_movilidadReducida,
             $pcl_Cercania,
+			$nAlumnosReal,
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -232,6 +237,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$stmt->execute()) {
             throw new Exception("Error actualizando planclases: " . $stmt->error);
         }
+		
+		  error_log("se actualizo planclase con nalumnos saja junta.");
         
         if ($requiereSala == 0) {
             // Si NO requiere sala, liberar asignaciones
@@ -270,8 +277,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $usuario = 'sistema';
         }
         
-		$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
-		  error_log("🎮 nAlumnosReal calculado: " . $nAlumnosReal);
+		
 		
         error_log("🔍 Usuario configurado: '" . $usuario . "'");
         
@@ -484,97 +490,30 @@ case 'modificar':
             
             $stmtInsert = $conn->prepare($queryInsert);
             $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
-            $nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
-            
-            // ===== DEBUG ANTES DEL BIND_PARAM =====
-            error_log("🔍 === DEBUG CASE MODIFICAR - BIND_PARAM ===");
-            
-            // Extraer valores a variables individuales
-            $param1 = $data['idplanclases'];                // int
-            $param2 = $nAlumnosReal;                         // int  
-            $param3 = $dataPlanclases['pcl_TipoSesion'];     // string
-            $param4 = $data['campus'];                       // string
-            $param5 = $dataPlanclases['pcl_Fecha'];          // string
-            $param6 = $dataPlanclases['pcl_Inicio'];         // string
-            $param7 = $dataPlanclases['pcl_Termino'];        // string
-            $param8 = $dataPlanclases['cursos_idcursos'];    // int
-            $param9 = $dataPlanclases['pcl_AsiCodigo'];      // string
-            $param10 = $dataPlanclases['pcl_Seccion'];       // int
-            $param11 = $dataPlanclases['pcl_AsiNombre'];     // string
-            $param12 = $observacionesAsignacion;            // string
-            $param13 = $pcl_Cercania;                       // string
-            $param14 = $juntaSeccion;                       // int
-            $param15 = $usuario;                            // string
-            
-            // Debug de tipos y valores
-            error_log("🔍 Parámetro 1 (idplanclases): " . var_export($param1, true) . " - Tipo: " . gettype($param1));
-            error_log("🔍 Parámetro 2 (nAlumnosReal): " . var_export($param2, true) . " - Tipo: " . gettype($param2));
-            error_log("🔍 Parámetro 3 (pcl_TipoSesion): " . var_export($param3, true) . " - Tipo: " . gettype($param3));
-            error_log("🔍 Parámetro 4 (campus): " . var_export($param4, true) . " - Tipo: " . gettype($param4));
-            error_log("🔍 Parámetro 5 (pcl_Fecha): " . var_export($param5, true) . " - Tipo: " . gettype($param5));
-            error_log("🔍 Parámetro 6 (pcl_Inicio): " . var_export($param6, true) . " - Tipo: " . gettype($param6));
-            error_log("🔍 Parámetro 7 (pcl_Termino): " . var_export($param7, true) . " - Tipo: " . gettype($param7));
-            error_log("🔍 Parámetro 8 (cursos_idcursos): " . var_export($param8, true) . " - Tipo: " . gettype($param8));
-            error_log("🔍 Parámetro 9 (pcl_AsiCodigo): " . var_export($param9, true) . " - Tipo: " . gettype($param9));
-            error_log("🔍 Parámetro 10 (pcl_Seccion): " . var_export($param10, true) . " - Tipo: " . gettype($param10));
-            error_log("🔍 Parámetro 11 (pcl_AsiNombre): " . var_export($param11, true) . " - Tipo: " . gettype($param11));
-            error_log("🔍 Parámetro 12 (observacionesAsignacion): " . var_export($param12, true) . " - Tipo: " . gettype($param12));
-            error_log("🔍 Parámetro 13 (pcl_Cercania): " . var_export($param13, true) . " - Tipo: " . gettype($param13));
-            error_log("🔍 Parámetro 14 (juntaSeccion): " . var_export($param14, true) . " - Tipo: " . gettype($param14));
-            error_log("🔍 Parámetro 15 (usuario): " . var_export($param15, true) . " - Tipo: " . gettype($param15));
-            
-            // Verificar cadena de tipos
-            $tiposString = "iissssississis";
-            error_log("🔍 Cadena de tipos: '$tiposString' - Longitud: " . strlen($tiposString));
-            error_log("🔍 Total parámetros: 15");
-            
-            // Verificar que ningún parámetro sea null
-            $parametros = [$param1, $param2, $param3, $param4, $param5, $param6, $param7, $param8, $param9, $param10, $param11, $param12, $param13, $param14, $param15];
-            foreach ($parametros as $i => $param) {
-                if ($param === null) {
-                    error_log("❌ PARÁMETRO " . ($i + 1) . " ES NULL!");
-                }
-                if (!isset($param)) {
-                    error_log("❌ PARÁMETRO " . ($i + 1) . " NO ESTÁ DEFINIDO!");
-                }
-            }
+			$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
             
             for ($i = 0; $i < $diff; $i++) {
-                error_log("🔍 Intentando bind_param iteración $i");
-                
-                $result = $stmtInsert->bind_param(
-                    "iissssississis",  // 15 caracteres
-                    $param1,   // 1 - idplanclases (int)
-                    $param2,   // 2 - nAlumnosReal (int)
-                    $param3,   // 3 - pcl_TipoSesion (string)
-                    $param4,   // 4 - campus (string)
-                    $param5,   // 5 - pcl_Fecha (string)
-                    $param6,   // 6 - pcl_Inicio (string)
-                    $param7,   // 7 - pcl_Termino (string)
-                    $param8,   // 8 - cursos_idcursos (int)
-                    $param9,   // 9 - pcl_AsiCodigo (string)
-                    $param10,  // 10 - pcl_Seccion (int)
-                    $param11,  // 11 - pcl_AsiNombre (string)
-                    $param12,  // 12 - observacionesAsignacion (string)
-                    $param13,  // 13 - pcl_Cercania (string)
-                    $param14,  // 14 - juntaSeccion (int)
-                    $param15   // 15 - usuario (string)
-                );
-                
-                if (!$result) {
-                    error_log("❌ bind_param falló en iteración $i: " . $stmtInsert->error);
-                    throw new Exception("Error en bind_param iteración $i: " . $stmtInsert->error);
+                $stmtInsert->bind_param(
+					"iissssississis",  // 15 caracteres
+					$data['idplanclases'],               // 1
+					$nAlumnosReal,      // 2
+					$dataPlanclases['pcl_TipoSesion'],   // 3
+					$data['campus'],                     // 4
+					$dataPlanclases['pcl_Fecha'],        // 5
+					$dataPlanclases['pcl_Inicio'],       // 6
+					$dataPlanclases['pcl_Termino'],      // 7
+					$dataPlanclases['cursos_idcursos'],  // 8
+					$dataPlanclases['pcl_AsiCodigo'],    // 9
+					$dataPlanclases['pcl_Seccion'],      // 10
+					$dataPlanclases['pcl_AsiNombre'],    // 11
+					$observacionesAsignacion,            // 12
+					$pcl_Cercania,                       // 13 (string)
+					$juntaSeccion,                       // 14
+					$usuario                             // 15
+				);
+                $stmtInsert->execute();
                 }
-                
-                if (!$stmtInsert->execute()) {
-                    error_log("❌ execute falló en iteración $i: " . $stmtInsert->error);
-                    throw new Exception("Error ejecutando INSERT iteración $i: " . $stmtInsert->error);
-                }
-                
-                error_log("✅ bind_param y execute exitosos en iteración $i");
-            }
-            error_log("🔍 === FIN DEBUG CASE MODIFICAR ===");
-        } elseif ($diff < 0) {
+            } elseif ($diff < 0) {
                 // Eliminar asignaciones sobrantes
                 $stmt = $conn->prepare("DELETE FROM asignacion_piloto 
                                       WHERE idplanclases = ? AND idEstado = 0 
@@ -1435,13 +1374,42 @@ $result = $stmt->get_result();
 
 
 <div class="container py-4">
-        <!-- Información del curso -->
-        <div class="card mb-4">
-            <div class="card-body text-center">
-               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
-                
-            </div>
-        </div>
+        <!-- Información del curso -->       
+		
+		<div class="card mb-4 border-warning shadow-lg">
+    <div class="card-body">
+        <h4 class="text-center text-warning fw-bold mb-4">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> Instrucciones Importantes para Uso de Salas
+        </h4>
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+                <i class="bi bi-clipboard-check text-primary me-2"></i>
+                <strong>Toda actividad tipo clase</strong> se solicitará automáticamente. El resto de las actividades los debe solicitar pinchando en <strong>“Solicitar”</strong>.
+            </li>
+            <li class="list-group-item">
+                <i class="bi bi-pencil-square text-success me-2"></i>
+                Si al enviar la solicitud cometió un error o si le asignaron salas y alguna no les sirve, o les falta otra sala, puede pinchar en <strong>“Modificar”</strong>.
+            </li>
+            <li class="list-group-item">
+                <i class="bi bi-people text-info me-2"></i>
+                Si el curso posee más de una sección y necesitan <strong>juntarlas</strong> para una evaluación u otra actividad, sólo se puede solicitar desde la <strong>sección 1</strong>. Al solicitar sala, pinche en <strong>“Quiero juntar todas las secciones del curso”</strong> (se sumarán automáticamente el total de estudiantes).  Si la actividad es tipo clase, pinche en “Modificar” y luego podrá pinchar en la misma opción.
+            </li>
+            <li class="list-group-item">
+                <i class="bi bi-pc-display-horizontal text-dark me-2"></i>
+                Si desea usar los <strong>laboratorios de computación</strong>, primero debe indicar si quiere 1 ó las 2 salas y luego, si está disponible, pinchar en ¿Desea reservar sala(s) de computación para esta actividad?. Una vez que guarde la solicitud quedará asignada de forma automática (siempre que en otro curso en ese mismo instante no lo haya hecho un poco antes).
+            </li>
+            <li class="list-group-item">
+                <i class="bi bi-universal-access text-secondary me-2"></i>
+                Si existen estudiantes con problemas de <strong>movilidad reducida</strong>, lo debe informar al CEA para que ellos lo o la contacten y quede ingresado en el sistema de la unidad de aulas para que estén al tanto.
+            </li>
+            <li class="list-group-item">
+                <i class="bi bi-box-arrow-left text-danger me-2"></i>
+                Finalmente, si tiene asignada una o más salas y ya no la utilizará, debe pinchar en <strong>“Liberar”</strong> y aparecerá una ventana para que elija cuál sala liberar.
+            </li>
+        </ul>
+    </div>
+</div>
+
 		
 
         <!-- Filtros y selección -->

@@ -16,8 +16,13 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
     <div class="container py-4">
         <!-- Información del curso -->
         <div class="card mb-4">
-            <div class="card-body text-center">
-               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
+            <div class="card-body">
+               <h4 class="text-center"> <i class="bi bi-person-raised-hand"></i> Instrucciones asignar docentes masivamente</h4>
+			   
+			   <ul>
+				   <li>En esta pestaña podrá asignar uno o varios docentes a una o varias actividades según lo que haya filtrado en el paso 1. 
+				   <li>Tenga cuidado, si asignó por error a muchas actividades a alguien, lo deberá borrar uno por uno en la pestaña de calendario.
+			   </ul>
                 
             </div>
         </div>

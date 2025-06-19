@@ -1247,10 +1247,10 @@ function configurarValidacionTiempoReal() {
     }
 	
 	 
-    if (!dateInput.hasAttribute('data-dia-validation-configured')) {
-        dateInput.addEventListener('change', validarDiaClase);
-        dateInput.setAttribute('data-dia-validation-configured', 'true');
-    }
+    //if (!dateInput.hasAttribute('data-dia-validation-configured')) {
+    //    dateInput.addEventListener('change', validarDiaClase);
+    //    dateInput.setAttribute('data-dia-validation-configured', 'true');
+    //}
 }
 
 // Funciones auxiliares para mostrar/ocultar errores de campo
@@ -1857,7 +1857,9 @@ async function guardarSala() {
             mostrarNotificacion('Solicitud de sala procesada correctamente', 'success');
             
             // Recargar la página para ver los cambios
-            setTimeout(() => location.reload(), 1500);
+            setTimeout(() => {
+    recargarTablaSalasClinico();
+}, 800);
         } else {
             throw new Error(data.error || 'Error desconocido del servidor');
         }
@@ -2521,8 +2523,10 @@ async function liberarSala(idAsignacion) {
             
             showNotification('Sala liberada correctamente', 'success');
             
-            // Recargar la página para ver los cambios
-            setTimeout(() => location.reload(), 1500);
+setTimeout(() => {
+                recargarTablaSalasClinico();
+            }, 800);
+			
         } else {
             showNotification('Error al liberar la sala', 'danger');
         }
@@ -2594,7 +2598,9 @@ async function guardarSala() {
             mostrarNotificacion('Solicitud procesada correctamente', 'success');
             
             // Recargar la página para ver los cambios
-            setTimeout(() => location.reload(), 1500);
+           setTimeout(() => {
+    recargarTablaSalasClinico();
+}, 800);
         } else {
             throw new Error(data.error || 'Error desconocido del servidor');
         }
@@ -3416,6 +3422,603 @@ function volverYRecargarTabla() {
         console.log('🔄 Ejecutando recarga...');
         recargarSoloTablaDocentes();
     }, 500); // Más tiempo para que se cierre el modal
+}
+
+// nuevas funcionalidades
+
+// ===== VARIABLES GLOBALES =====
+
+let actividadActualInconsistencia = null;
+
+// ===== FUNCIONES PRINCIPALES =====
+
+function solicitarSala(idPlanClase) {
+    cargarDatosSolicitud(idPlanClase, 'solicitar');
+}
+
+function modificarSala(idPlanClase) {
+    cargarDatosSolicitud(idPlanClase, 'modificar');
+}
+
+async function cargarDatosSolicitud(idPlanClase, action) {
+    try {
+        // Resetear cache de secciones
+        datosSeccionesCache = null;
+        
+        // Determinar la acción correcta según el estado
+        let actionToUse = action;
+        if (action === 'modificar') {
+            const response = await fetch('salas_clinico.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'obtener_datos_solicitud',
+                    idPlanClase: idPlanClase
+                })
+            });
+            
+            const data = await response.json();
+            if (data.estado === 3) {
+                actionToUse = 'modificar_asignada';
+            }
+        }
+        
+        // Configurar modal
+        document.getElementById('idplanclases').value = idPlanClase;
+        document.getElementById('action').value = actionToUse;
+        document.getElementById('salaModalTitle').textContent = 
+            actionToUse === 'solicitar' ? 'Solicitar Sala' : 'Modificar Sala';
+        
+        // Verificar secciones disponibles
+        await verificarSecciones(idPlanClase);
+        
+        // Cargar datos existentes si es modificación
+        if (actionToUse !== 'solicitar') {
+            await cargarDatosExistentes(idPlanClase);
+        } else {
+            // Para solicitudes nuevas, cargar cupo del curso
+            await cargarCupoCurso(idPlanClase);
+        }
+        
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('salaModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('Error al cargar los datos de la solicitud', 'danger');
+    }
+}
+
+async function verificarSecciones(idPlanClase) {
+    try {
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'verificar_secciones',
+                idPlanClase: idPlanClase
+            })
+        });
+        
+        const data = await response.json();
+        const opcionDiv = document.getElementById('opcionJuntarSecciones');
+        
+        if (data.mostrarOpcion) {
+            datosSeccionesCache = {
+                totalSecciones: data.totalSecciones,
+                cupoTotal: data.cupoTotal,
+                seccionActual: data.seccionActual
+            };
+            
+            document.getElementById('infoSecciones').innerHTML = 
+                `Este curso tiene <strong>${data.totalSecciones} secciones</strong> con un total de <strong>${data.cupoTotal} alumnos</strong>. 
+                 Actualmente está viendo la sección <strong>${data.seccionActual}</strong>.`;
+            
+            opcionDiv.style.display = 'block';
+        } else {
+            opcionDiv.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error verificando secciones:', error);
+        document.getElementById('opcionJuntarSecciones').style.display = 'none';
+    }
+}
+
+async function cargarCupoCurso(idPlanClase) {
+    try {
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'obtener_cupo_curso',
+                idPlanClase: idPlanClase
+            })
+        });
+        
+        const data = await response.json();
+        if (data.cupo) {
+            document.getElementById('alumnosTotales').value = data.cupo;
+            calcularAlumnosPorSala();
+        }
+    } catch (error) {
+        console.error('Error cargando cupo:', error);
+    }
+}
+
+async function cargarDatosExistentes(idPlanClase) {
+    try {
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'obtener_datos_solicitud',
+                idPlanClase: idPlanClase
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('campus').value = data.pcl_campus || '';
+            document.getElementById('nSalas').value = data.pcl_nSalas || 1;
+            document.getElementById('alumnosTotales').value = data.pcl_alumnos || 0;
+            
+            // Mostrar observaciones históricas
+            const textoObservaciones = document.getElementById('textoObservacionesHistoricas');
+            if (data.observaciones && data.observaciones.trim() !== '') {
+                textoObservaciones.textContent = data.observaciones;
+            } else {
+                textoObservaciones.textContent = 'No hay observaciones previas registradas.';
+            }
+            
+            calcularAlumnosPorSala();
+        }
+    } catch (error) {
+        console.error('Error cargando datos existentes:', error);
+    }
+}
+
+function recalcularAlumnos() {
+    const juntarCheckbox = document.getElementById('juntarSecciones');
+    const alumnosTotalesInput = document.getElementById('alumnosTotales');
+    
+    if (juntarCheckbox.checked && datosSeccionesCache) {
+        alumnosTotalesInput.value = datosSeccionesCache.cupoTotal;
+    } else {
+        // Recargar cupo original del curso
+        const idPlanClase = document.getElementById('idplanclases').value;
+        cargarCupoCurso(idPlanClase);
+    }
+    calcularAlumnosPorSala();
+}
+
+function calcularAlumnosPorSala() {
+    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
+    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
+    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
+    document.getElementById('alumnosPorSala').value = alumnosPorSala;
+}
+
+async function guardarSala() {
+    const form = document.getElementById('salaForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    
+    const formData = new FormData(form);
+    const datos = Object.fromEntries(formData.entries());
+    
+    // Agregar información sobre juntar secciones
+    const juntarCheckbox = document.getElementById('juntarSecciones');
+    if (juntarCheckbox && juntarCheckbox.checked) {
+        datos.juntarSecciones = '1';
+        datos.alumnosTotales = document.getElementById('alumnosTotales').value;
+        if (datosSeccionesCache) {
+            datos.totalSecciones = datosSeccionesCache.totalSecciones;
+            datos.cupoTotal = datosSeccionesCache.cupoTotal;
+        }
+    }
+    
+    mostrarNotificacion('Procesando solicitud...', 'info');
+    
+    try {
+        console.log('📤 Datos a enviar:', JSON.stringify(datos, null, 2));
+        
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(datos)
+        });
+        
+        if (!response.ok) {
+            const responseText = await response.text();
+            console.error('Error en la respuesta:', responseText);
+            throw new Error(`Error del servidor: ${response.status}`);
+        }
+        
+        const responseText = await response.text();
+        console.log('📥 Respuesta (texto):', responseText);
+        
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('Error parseando JSON:', parseError);
+            throw new Error(`Respuesta inválida del servidor. Detalles: ${responseText.substring(0, 200)}`);
+        }
+        
+        if (data.success) {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('salaModal'));
+            modal.hide();
+            
+            mostrarNotificacion(data.message || 'Solicitud procesada correctamente', 'success');
+            setTimeout(() => {
+    recargarTablaSalasClinico();
+}, 800);
+        } else {
+            throw new Error(data.error || 'Error desconocido del servidor');
+        }
+    } catch (error) {
+        console.error('Error completo:', error);
+        mostrarNotificacion(`Error: ${error.message}`, 'danger');
+    }
+}
+
+// ===== NUEVAS FUNCIONES PARA GESTIÓN DE RESERVAS =====
+
+async function mostrarModalLiberarSalas(idPlanClase) {
+    try {
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'obtener_salas_asignadas',
+                idPlanClase: idPlanClase
+            })
+        });
+        
+        const datos = await response.json();
+        
+        if (datos.salas && datos.salas.length > 0) {
+            const tbody = document.getElementById('listaSalasAsignadas');
+            tbody.innerHTML = '';
+            
+            datos.salas.forEach(sala => {
+                // Determinar icono y clase según estado de reserva
+                let iconoReserva = '';
+                let claseReserva = '';
+                let textoReserva = '';
+                
+                switch(sala.estadoReserva) {
+                    case 'confirmada':
+                        iconoReserva = '✓';
+                        claseReserva = 'text-success';
+                        textoReserva = 'Reserva confirmada';
+                        break;
+                    case 'encontrada_alt':
+                        iconoReserva = '🔍';
+                        claseReserva = 'text-warning';
+                        textoReserva = 'Reserva encontrada (alt)';
+                        break;
+                    case 'sin_reserva':
+                    default:
+                        iconoReserva = '❌';
+                        claseReserva = 'text-danger';
+                        textoReserva = 'Sin reserva';
+                        break;
+                }
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><strong>${sala.idSala}</strong></td>
+                    <td>
+                        <span class="${claseReserva}">${iconoReserva} ${textoReserva}</span>
+                        <br><small class="text-muted">${sala.detalleVerificacion}</small>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" 
+                                onclick="liberarSala(${sala.idAsignacion})">
+                            <i class="bi bi-x-circle"></i> Liberar
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            const modal = new bootstrap.Modal(document.getElementById('liberarSalaModal'));
+            modal.show();
+        } else {
+            mostrarNotificacion('No hay salas asignadas para liberar', 'warning');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('Error al cargar las salas asignadas', 'danger');
+    }
+}
+
+async function liberarSala(idAsignacion) {
+    if (!confirm('¿Está seguro que desea liberar esta sala? Esta acción también eliminará la reserva correspondiente.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'liberar',
+                idAsignacion: idAsignacion
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const modalLiberar = bootstrap.Modal.getInstance(document.getElementById('liberarSalaModal'));
+            if (modalLiberar) modalLiberar.hide();
+            
+            mostrarNotificacion(data.message || 'Sala liberada correctamente', 'success');
+           setTimeout(() => {
+                recargarTablaSalasClinico();
+            }, 800);
+        } else {
+            mostrarNotificacion(data.error || 'Error al liberar la sala', 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarNotificacion('Error al procesar la solicitud', 'danger');
+    }
+}
+
+async function mostrarDetallesInconsistencia(idplanclases) {
+    try {
+        actividadActualInconsistencia = idplanclases;
+        
+        // Mostrar modal con loading
+        const modal = new bootstrap.Modal(document.getElementById('inconsistenciaModal'));
+        modal.show();
+        
+        // Hacer la consulta
+        const response = await fetch('salas_clinico.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'obtener_detalles_inconsistencia',
+                idplanclases: idplanclases
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Error del servidor: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            mostrarResultadosInconsistencia(data.salas);
+        } else {
+            throw new Error(data.error || 'Error obteniendo detalles');
+        }
+        
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('contenido-detalles-inconsistencia').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Error:</strong> ${error.message}
+            </div>
+        `;
+    }
+}
+
+function mostrarResultadosInconsistencia(salas) {
+    let htmlSalas = `
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <th style="width: 10%">Sala</th>
+                        <th style="width: 15%">Estado Asignación</th>
+                        <th style="width: 20%">Resultado Verificación</th>
+                        <th style="width: 25%">Detalles de Reserva</th>
+                        <th style="width: 30%">Comentarios/Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    salas.forEach(sala => {
+        const verificacion = sala.verificacion;
+        let badgeVerificacion = '';
+        let detallesReserva = '';
+        let estadoClass = '';
+        
+        if (verificacion.encontrado) {
+            if (verificacion.metodo === 'paso1') {
+                badgeVerificacion = '<span class="badge bg-success">🎯 Encontrada (ID Repetición)</span>';
+                estadoClass = 'table-success';
+            } else {
+                badgeVerificacion = '<span class="badge bg-warning">🔍 Encontrada (Búsqueda Alternativa)</span>';
+                estadoClass = 'table-warning';
+            }
+            
+            if (sala.info_reserva) {
+                const reserva = sala.info_reserva;
+                detallesReserva = `
+                    <small>
+                        <strong>Fecha:</strong> ${reserva.re_FechaReserva}<br>
+                        <strong>Horario:</strong> ${reserva.re_HoraReserva} - ${reserva.re_HoraTermino}<br>
+                        <strong>Curso:</strong> ${reserva.re_labelCurso}<br>
+                        <strong>Creada:</strong> ${new Date(reserva.re_RegFecha).toLocaleString('es-CL')}
+                    </small>
+                `;
+            }
+        } else {
+            badgeVerificacion = '<span class="badge bg-danger">❌ NO ENCONTRADA</span>';
+            estadoClass = 'table-danger';
+            detallesReserva = '<span class="text-danger"><strong>Sin reserva confirmada</strong></span>';
+        }
+        
+        htmlSalas += `
+            <tr class="${estadoClass}">
+                <td class="text-center">
+                    <strong>${sala.idSala}</strong>
+                </td>
+                <td>
+                    <span class="badge bg-info">Estado 3</span><br>
+                    <small>Asignada</small>
+                </td>
+                <td>
+                    ${badgeVerificacion}<br>
+                    <small class="text-muted">${verificacion.detalle}</small>
+                </td>
+                <td>
+                    ${detallesReserva}
+                </td>
+                <td>
+                    ${sala.comentario_asignacion ? `
+                        <strong>Asignación:</strong><br>
+                        <small>${sala.comentario_asignacion.substring(0, 100)}${sala.comentario_asignacion.length > 100 ? '...' : ''}</small><br>
+                    ` : ''}
+                    <small class="text-muted">
+                        <strong>Usuario:</strong> ${sala.usuario_asignacion || 'N/A'}<br>
+                        <strong>Fecha:</strong> ${sala.fecha_asignacion ? 
+                            new Date(sala.fecha_asignacion).toLocaleString('es-CL') : 'N/A'}
+                    </small>
+                </td>
+            </tr>
+        `;
+    });
+    
+    htmlSalas += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    document.getElementById('contenido-detalles-inconsistencia').innerHTML = htmlSalas;
+}
+
+function contactarAreaSalas() {
+    // Función para contactar al área de salas
+    const mensaje = `Estimado equipo de Gestión de Salas,
+
+Se ha detectado una inconsistencia en las reservas para la actividad ID: ${actividadActualInconsistencia || 'N/A'}.
+
+Algunas salas aparecen como asignadas en el sistema de actividades pero no se encuentran las reservas correspondientes en el sistema de salas.
+
+Por favor, verificar y coordinar la sincronización de ambos sistemas.
+
+Gracias por su atención.`;
+
+    const mailtoLink = `mailto:salas@uchile.cl?subject=Inconsistencia en Reservas - Actividad ${actividadActualInconsistencia}&body=${encodeURIComponent(mensaje)}`;
+    window.open(mailtoLink);
+}
+
+function modificarSalaDesdeInconsistencia() {
+    if (actividadActualInconsistencia) {
+        // Cerrar modal de inconsistencias
+        const modalInconsistencia = bootstrap.Modal.getInstance(document.getElementById('inconsistenciaModal'));
+        if (modalInconsistencia) modalInconsistencia.hide();
+        
+        // Abrir modal de modificación
+        setTimeout(() => {
+            modificarSala(actividadActualInconsistencia);
+        }, 500);
+    }
+}
+
+// ===== FUNCIÓN DE NOTIFICACIONES =====
+function mostrarNotificacion(mensaje, tipo = 'info') {
+    // Crear o reutilizar contenedor de notificaciones
+    let contenedor = document.getElementById('notificaciones-container');
+    if (!contenedor) {
+        contenedor = document.createElement('div');
+        contenedor.id = 'notificaciones-container';
+        contenedor.style.position = 'fixed';
+        contenedor.style.top = '20px';
+        contenedor.style.right = '20px';
+        contenedor.style.zIndex = '9999';
+        contenedor.style.maxWidth = '400px';
+        document.body.appendChild(contenedor);
+    }
+    
+    // Crear notificación
+    const notificacion = document.createElement('div');
+    notificacion.className = `alert alert-${tipo} alert-dismissible fade show`;
+    notificacion.innerHTML = `
+        ${mensaje}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+    
+    contenedor.appendChild(notificacion);
+    
+    // Auto-eliminar después de 5 segundos
+    setTimeout(() => {
+        if (notificacion && notificacion.parentNode) {
+            notificacion.remove();
+        }
+    }, 5000);
+}
+
+// ===== INICIALIZACIÓN =====
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ Salas Clínico - Sistema de reservas cargado correctamente');
+});
+
+function recargarTablaSalasClinico() {
+    console.log('🔄 Recargando tabla de salas clínicas...');
+    
+    const cursoId = new URLSearchParams(window.location.search).get('curso');
+    const salasList = document.getElementById('salas-list');
+    
+    if (!salasList) {
+        console.error('❌ No se encontró el contenedor salas-list');
+        return;
+    }
+    
+    // Mostrar indicador de carga
+    salasList.innerHTML = `
+        <div class="text-center p-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Actualizando...</span>
+            </div>
+            <p class="mt-2">Actualizando gestión de salas...</p>
+        </div>
+    `;
+    
+    // Realizar la petición AJAX
+    fetch('salas_clinico.php?curso=' + cursoId)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Error en la respuesta del servidor');
+            }
+            return response.text();
+        })
+        .then(html => {
+            salasList.innerHTML = html;
+            console.log('✅ Tabla de salas recargada exitosamente');
+            
+            // Reinicializar componentes después de cargar
+            setTimeout(() => {
+                if (typeof reinicializarFuncionalidades === 'function') {
+                    reinicializarFuncionalidades();
+                }
+            }, 300);
+        })
+        .catch(error => {
+            console.error('❌ Error al recargar tabla de salas:', error);
+            salasList.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Error al actualizar: ${error.message}
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Recargar página
+                    </button>
+                </div>
+            `;
+        });
 }
 
 </script>
