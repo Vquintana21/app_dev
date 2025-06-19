@@ -1135,36 +1135,53 @@ $result = $stmt->get_result();
   <div class="container py-4"> 
 
 
-<div class="card mb-4 border-warning shadow-lg">
-    <div class="card-body">
-        <h4 class="text-center text-warning fw-bold mb-4">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i> Instrucciones Importantes para Uso de Salas
-        </h4>
-        <ul class="list-group list-group-flush">
-            <li class="list-group-item">
-                <i class="bi bi-clipboard-check text-primary me-2"></i>
-                <strong>Toda actividad tipo clase</strong> se solicitará automáticamente. El resto de las actividades los debe solicitar pinchando en <strong>“Solicitar”</strong>.
-            </li>
-            <li class="list-group-item">
-                <i class="bi bi-pencil-square text-success me-2"></i>
-                Si al enviar la solicitud cometió un error o si le asignaron salas y alguna no les sirve, o les falta otra sala, puede pinchar en <strong>“Modificar”</strong>.
-            </li>
-            <li class="list-group-item">
-                <i class="bi bi-people text-info me-2"></i>
-                Si el curso posee más de una sección y necesitan <strong>juntarlas</strong> para una evaluación u otra actividad, sólo se puede solicitar desde la <strong>sección 1</strong>. Al solicitar sala, pinche en <strong>“Quiero juntar todas las secciones del curso”</strong> (se sumarán automáticamente el total de estudiantes).  Si la actividad es tipo clase, pinche en “Modificar” y luego podrá pinchar en la misma opción.
-            </li>
-            
-            <li class="list-group-item">
-                <i class="bi bi-universal-access text-secondary me-2"></i>
-                Si existen estudiantes con problemas de <strong>movilidad reducida</strong>, lo debe informar al CEA para que ellos lo o la contacten y quede ingresado en el sistema de la unidad de aulas para que estén al tanto.
-            </li>
-            <li class="list-group-item">
-                <i class="bi bi-box-arrow-left text-danger me-2"></i>
-                Finalmente, si tiene asignada una o más salas y ya no la utilizará, debe pinchar en <strong>“Liberar”</strong> y aparecerá una ventana para que elija cuál sala liberar.
-            </li>
-        </ul>
+<!-- ===== VERSIÓN SÚPER SIMPLE CON BOOTSTRAP ===== -->
+
+<div class="accordion mb-4" id="accordionInstrucciones">
+    <div class="accordion-item border-warning">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed bg-warning bg-opacity-10 text-warning fw-bold" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#collapseInstrucciones"
+                    aria-expanded="false" 
+                    aria-controls="collapseInstrucciones">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Instrucciones Importantes para Uso de Salas
+            </button>
+        </h2>
+        <div id="collapseInstrucciones" 
+             class="accordion-collapse collapse" 
+             data-bs-parent="#accordionInstrucciones">
+            <div class="accordion-body">
+                <ul class="list-group list-group-flush">
+                <li class="list-group-item">
+                    <i class="bi bi-clipboard-check text-primary me-2"></i>
+                    Toda actividad tipo <strong>clase</strong> se solicitará automáticamente. El resto de las actividades los debe solicitar pinchando en <strong>"Solicitar"</strong>.
+                </li>
+                <li class="list-group-item">
+                    <i class="bi bi-pencil-square text-success me-2"></i>
+                    Si al enviar la solicitud cometió un error o si le asignaron salas y alguna no les sirve, o les falta otra sala, puede pinchar en <strong>"Modificar"</strong>.
+                </li>
+                <li class="list-group-item">
+                    <i class="bi bi-people text-info me-2"></i>
+                    Si el curso posee más de una sección y necesitan juntarlas para una evaluación u otra actividad, para cualquier sección puede pinchar en <strong>"Juntar todas las secciones"</strong> (se sumarán automáticamente el total de estudiantes). Si la actividad es tipo <strong>clase</strong>, pinche en <strong>"Modificar"</strong> y luego podrá pinchar en la misma opción.
+                </li>            
+                <li class="list-group-item">
+                    <i class="bi bi-box-arrow-left text-danger me-2"></i>
+                    Finalmente, si tiene asignada una o más salas y ya no la utilizará, debe pinchar en <strong>"Liberar"</strong>, y aparecerá una ventana para que elija cuál sala liberar.
+                </li>
+            </ul>
+        </div>
     </div>
 </div>
+</div>
+
+
+
+
+
+
 
 <div class="card">
     <div class="card-header">

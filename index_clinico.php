@@ -343,14 +343,7 @@ $conn->close();
                     <div class="col-12">
                         <div class="card">
     <div class="card-header">
-        <h5 class="card-title">Editar información</h5>
-        <!-- Bordered Tabs Justified -->
-		 <div class="card mb-4">
-            <div class="card-body text-center">
-               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
-                
-            </div>
-        </div>
+        <h5 class="card-title">Editar información</h5>        
         <ul class="nav nav-tabs nav-tabs-bordered d-flex" id="borderedTabJustified" role="tablist">
             <li class="nav-item flex-fill" role="presentation">
                 <button class="nav-link w-100 active" id="home-tab" data-bs-toggle="tab" data-bs-target="#bordered-justified-home" type="button" role="tab" aria-controls="home" aria-selected="true"><i class="bi bi-calendar4-week"></i> Calendario </button>
@@ -374,12 +367,7 @@ $conn->close();
         <div class="tab-pane fade show active" id="bordered-justified-home" role="tabpanel" aria-labelledby="home-tab">
             <div class="card-body">
                               
-                                	 <div class="card mb-4">
-            <div class="card-body text-center">
-               <h4> <i class="bi bi-person-raised-hand"></i> Instrucciones</h4>
-                
-            </div>
-        </div>
+                                	
                                  <!-- Botón para agregar actividad -->
 								 <hr>
                                 <div class="row mb-4">
@@ -587,8 +575,8 @@ $conn->close();
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     
 	 <script src="validarRUT.js"></script>
-	   <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
-  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+	  <script src="assets/vendor/apexcharts/apexcharts.min.js"></script> 
+   <!-- <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>-->
   <script src="assets/vendor/chart.js/chart.umd.js"></script>
   <script src="assets/vendor/echarts/echarts.min.js"></script>
   <script src="assets/vendor/quill/quill.js"></script>
@@ -4021,12 +4009,93 @@ function recargarTablaSalasClinico() {
         });
 }
 
+function toggleManual() {
+    const elemento = document.getElementById('testManual');
+    if (elemento.classList.contains('show')) {
+        elemento.classList.remove('show');
+        console.log('Cerrado manualmente');
+    } else {
+        elemento.classList.add('show');
+        console.log('Abierto manualmente');
+    }
+}
+
+// Diagnóstico avanzado
+function diagnosticoAvanzado() {
+    const resultado = document.getElementById('resultadoDiagnostico');
+    let html = '<h6>Análisis:</h6><ul>';
+    
+    // 1. Verificar event listeners múltiples
+    const botones = document.querySelectorAll('[data-bs-toggle="collapse"]');
+    html += `<li>Botones con data-bs-toggle: ${botones.length}</li>`;
+    
+    // 2. Verificar CSS transitions
+    const elemento = document.getElementById('testConLog');
+    const style = window.getComputedStyle(elemento);
+    html += `<li>Transition: ${style.transition}</li>`;
+    
+    // 3. Verificar si hay CSS que interfiere
+    if (style.display === 'none' && !elemento.classList.contains('show')) {
+        html += '<li class="text-success">✅ Estados CSS correctos</li>';
+    } else {
+        html += '<li class="text-danger">❌ Estados CSS incorrectos</li>';
+    }
+    
+    // 4. Verificar JavaScript errors
+    html += '<li>Revisa la consola (F12) por errores JavaScript</li>';
+    
+    // 5. Test de event listeners
+    html += '<li>Agregando event listener de prueba...</li>';
+    
+    // Agregar listener manual para detectar problemas
+    botones.forEach((boton, index) => {
+        boton.addEventListener('click', function(e) {
+            console.log(`Click en botón ${index}:`, e.target);
+            console.log('Target:', this.getAttribute('data-bs-target'));
+        });
+    });
+    
+    html += '</ul>';
+    
+    // SOLUCIÓN TEMPORAL
+    html += `
+    <div class="alert alert-warning mt-3">
+        <h6>🔧 SOLUCIÓN TEMPORAL:</h6>
+        <p>Agrega este CSS a tu página:</p>
+        <code>
+        .collapse.show { display: block !important; }<br>
+        .collapse:not(.show) { display: none !important; }
+        </code>
+    </div>
+    `;
+    
+    resultado.innerHTML = html;
+}
+
+// Log de eventos Bootstrap
+document.addEventListener('DOMContentLoaded', function() {
+    const collapses = document.querySelectorAll('.collapse');
+    collapses.forEach(collapse => {
+        collapse.addEventListener('show.bs.collapse', function() {
+            console.log('Bootstrap evento: MOSTRANDO', this.id);
+        });
+        collapse.addEventListener('shown.bs.collapse', function() {
+            console.log('Bootstrap evento: MOSTRADO', this.id);
+        });
+        collapse.addEventListener('hide.bs.collapse', function() {
+            console.log('Bootstrap evento: OCULTANDO', this.id);
+        });
+        collapse.addEventListener('hidden.bs.collapse', function() {
+            console.log('Bootstrap evento: OCULTADO', this.id);
+        });
+    });
+});
 </script>
 
 <!-- Justo antes del cierre del body -->
 
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="docentes-handler.js"></script>
+<script src="docentes_helper_clinico.js"></script>
 
 
 <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 11"></div>

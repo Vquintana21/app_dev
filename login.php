@@ -1,7 +1,7 @@
  <?php
 header ('Content-type: text/html; charset=utf-8');
 error_reporting(0);
-include_once 'dbconfig.php';
+include_once 'conexion.php';
 session_start();
 $rut = $_SESSION['sesion_idLogin'];
 $name = $_SESSION['sesion_usuario']; 
@@ -10,7 +10,7 @@ $queda= array("Á","É","Í","Ó","Ú");
 $nombre = str_replace($viene, $queda, $name);
 $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
 
-$res_pregrado = mysqli_query($con_plan,"SELECT * FROM `pm_EstudianteCarrera` where `rutEstudiante`='$rut_niv' and idEstadoEstudiante in (3,15) and TipoCarrera='Pregrado' and rutEstudiante not in ('017517415K','016784781K')");
+$res_pregrado = mysqli_query($conexion3,"SELECT * FROM `pm_EstudianteCarrera` where `rutEstudiante`='$rut_niv' and idEstadoEstudiante in (3,15) and TipoCarrera='Pregrado' and rutEstudiante not in ('017517415K','016784781K')");
 $numpregrado = mysqli_num_rows($res_pregrado);
 ?>
 <!DOCTYPE html>
@@ -148,50 +148,7 @@ footer {
     
 <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css" integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
 
-  <!-- Navigation -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-    <div class="container">
-      <a class="navbar-brand" href="#"><h5><i class="fas fa-chalkboard-teacher"></i> Calendario Académico</h5></a>
-      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarResponsive" aria-controls="navbarResponsive" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarResponsive">
-        <ul class="navbar-nav ml-auto">
-          <?php 
-        	if(empty($rut)){
-		?>  
-           <li class="nav-item active">
-            <a class="nav-link" href="login/login.php">
-              <span class="sr-only"></span>
-             <i class="fas fa-key"></i> 
-             ingresar
-            </a>
-          </li>
-          <?php 
-        	}elseif(!empty($rut) && $numpregrado==0){
-		?> 
-          <li class="nav-item active">
-            <a class="nav-link" href="sugerencias" target="_blank">
-              <span class="sr-only">(current)</span>
-              <i class="fas fa-exclamation-triangle"></i>
-              Reportar Problema
-            </a>
-          </li>
-          <?php 
-        	}
-		?> 
-           <li class="nav-item active">
-            <a class="nav-link" href="login/close.php">
-              <span class="sr-only">(current)</span>
-              <i class="fas fa-door-open"></i>
-              Salir
-            </a>
-          </li>
-           
-        </ul>
-      </div>
-    </div>
-  </nav>
+  
   <div class="container login-container">
 
   <?php   

@@ -10,7 +10,7 @@ try {
     }
 
     $idplanclases = (int)$_POST['idplanclases'];
-    $activityTitle = isset($_POST['activity-title']) ? mysqli_real_escape_string($conn, $_POST['activity-title']) : '';
+    $activityTitle = isset($_POST['activity-title']) ? trim($_POST['activity-title']) : '';
     $horasNoPresenciales = isset($_POST['horasNoPresenciales']) ? mysqli_real_escape_string($conn, $_POST['horasNoPresenciales']) : '00:00:00';
 
     // Query de actualización

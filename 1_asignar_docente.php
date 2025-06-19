@@ -38,6 +38,19 @@ $ValidarProfe = "SELECT * FROM spre_profesorescurso WHERE idcurso='$_GET[idcurso
 $ValidarQuery = mysqli_query($conexion3,$ValidarProfe);
 $control_profe = mysqli_num_rows($ValidarQuery);
 
+function decimalAHorasMinutos($decimal) {
+    $horas = floor($decimal);
+    $minutos = round(($decimal - $horas) * 60);
+    
+    // Ajustar si el redondeo hace que los minutos lleguen a 60
+    if ($minutos >= 60) {
+        $horas += 1;
+        $minutos = 0;
+    }
+    
+    return sprintf("%02d:%02d", $horas, $minutos);
+}
+
 if($rut!='' && $control_profe > 0){
 ?>
 
@@ -170,7 +183,7 @@ if($rut!='' && $control_profe > 0){
                                 </td>
 								 <td class="text-center">
 									<?php if($horas_formateadas > 0): ?>
-										<span class="badge bg-primary"><?php echo $horas_formateadas; ?> hrs</span>
+										<span class="badge bg-primary"><?php echo decimalAHorasMinutos($horas_formateadas); ?> hrs</span>
 									<?php else: ?>
 										<span class="badge bg-secondary">0 hrs</span>
 									<?php endif; ?>

@@ -1376,12 +1376,24 @@ $result = $stmt->get_result();
 <div class="container py-4">
         <!-- Información del curso -->       
 		
-		<div class="card mb-4 border-warning shadow-lg">
-    <div class="card-body">
-        <h4 class="text-center text-warning fw-bold mb-4">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i> Instrucciones Importantes para Uso de Salas
-        </h4>
-        <ul class="list-group list-group-flush">
+	<div class="accordion mb-4" id="accordionInstrucciones">
+    <div class="accordion-item border-warning">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed bg-warning bg-opacity-10 text-warning fw-bold" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#collapseInstrucciones"
+                    aria-expanded="false" 
+                    aria-controls="collapseInstrucciones">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Instrucciones Importantes para Uso de Salas
+            </button>
+        </h2>
+        <div id="collapseInstrucciones" 
+             class="accordion-collapse collapse" 
+             data-bs-parent="#accordionInstrucciones">
+            <div class="accordion-body">
+                <ul class="list-group list-group-flush">
             <li class="list-group-item">
                 <i class="bi bi-clipboard-check text-primary me-2"></i>
                 <strong>Toda actividad tipo clase</strong> se solicitará automáticamente. El resto de las actividades los debe solicitar pinchando en <strong>“Solicitar”</strong>.
@@ -1407,6 +1419,8 @@ $result = $stmt->get_result();
                 Finalmente, si tiene asignada una o más salas y ya no la utilizará, debe pinchar en <strong>“Liberar”</strong> y aparecerá una ventana para que elija cuál sala liberar.
             </li>
         </ul>
+    </div>
+</div>
     </div>
 </div>
 
@@ -1646,7 +1660,7 @@ $result = $stmt->get_result();
         <?php elseif($solicitadas): ?>
             <span class="badge bg-info">Solicitada</span>
             
-        <?php elseif($row['pedir_sala'] == 0): ?>
+        <?php elseif(!$requiereSala): ?>
             <span class="badge bg-dark">Actividad no requiere sala</span>
             
         <?php else: ?>
@@ -1660,7 +1674,7 @@ $result = $stmt->get_result();
         <?php
         echo '<div class="btn-group-vertical btn-group-sm">';
 
-        if ($row['pcl_DeseaSala'] == 0) {
+        if (!$requiereSala) {
             echo '<span class="badge bg-info"><i class="bi bi-x-circle"></i> Sin Acciones</span>';
             
         } elseif ($tieneInconsistencias) {
@@ -1720,11 +1734,7 @@ $result = $stmt->get_result();
                 <h5 class="modal-title" id="salaModalTitle">Gestionar Sala</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-info" role="alert">
-                    <i class="bi bi-info-circle"></i>
-                    Con el objetivo de ayudarle con el envío de solicitudes a la unidad de aulas, en las actividades de tipo Clase teórica hemos dispuesto la función de asignación automática de salas. En esta versión todas las solicitudes de este tipo de actividad se cargan por defecto y puede modificarla solo en el caso de ser necesario.
-                </div>
+            <div class="modal-body">                
 
                 <form id="salaForm">
                     <input type="hidden" id="idplanclases" name="idplanclases">
@@ -1753,7 +1763,7 @@ $result = $stmt->get_result();
             <i class="bi bi-building me-1"></i>
             Información de salas
         </label>
-        <a href="https://dpi.med.uchile.cl/CALENDARIO/salas.php" target="_blank" 
+        <a href="salas_UGA.php" target="_blank" 
            class="btn btn-outline-primary btn-sm">
             <i class="bi bi-box-arrow-up-right me-1"></i>
             Ver salas
@@ -1800,12 +1810,12 @@ $result = $stmt->get_result();
 						<label for="alumnosPorSala" class="form-label">N° de alumnos por sala</label>
 						<div class="input-group">
 							<input type="number" class="form-control" id="alumnosPorSala" name="alumnosPorSala" 
-								   placeholder="Ingrese cantidad" min="1" onchange="actualizarSalasDisponibles()">
-							<button class="btn btn-outline-success" type="button" id="btnSalasDisponibles" 
+								   placeholder="Ingrese cantidad" min="1" onchange="actualizarSalasDisponibles()" readonly>
+							<!-- <button class="btn btn-outline-success" type="button" id="btnSalasDisponibles" 
 									onclick="mostrarSalasDisponibles()" style="display: none;">
 								<i class="bi bi-building"></i> 
 								<span id="numeroSalasDisponibles">0</span> disponibles
-							</button>
+							</button> -->
 						</div>
 						<div class="form-text">
 							<small class="text-muted">Este valor se calcula automáticamente según el número total de alumnos y salas requeridas.</small>

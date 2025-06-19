@@ -23,7 +23,7 @@ try {
         : null;
     
     $cursos_idcursos = (int)$_POST['cursos_idcursos'];
-    $titulo = mysqli_real_escape_string($conn, $_POST['activity-title']);
+    $titulo = trim($_POST['activity-title']);
     $tipo = mysqli_real_escape_string($conn, $_POST['type']);
     $subtipo = isset($_POST['subtype']) ? mysqli_real_escape_string($conn, $_POST['subtype']) : null;
     $fecha = mysqli_real_escape_string($conn, $_POST['date']);

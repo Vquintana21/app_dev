@@ -281,65 +281,10 @@ $conn->close();
 <body class="toggle-sidebar">
 
  <!-- ======= Header ======= -->
-  <header id="header" class="header fixed-top d-flex align-items-center">
-    <div class="d-flex align-items-center justify-content-between">
-      <a href="inicio.php" class="logo d-flex align-items-center">
-        <img src="assets/img/logo.png" alt="">
-        <span class="d-none d-lg-block">Calendario Académico</span>
-      </a>
-      <i class="bi bi-list toggle-sidebar-btn"></i>
-    </div>
-    
-    <nav class="header-nav ms-auto">
-      <ul class="d-flex align-items-center">
-        <li class="nav-item d-block d-lg-none">
-          <a class="nav-link nav-icon search-bar-toggle " href="#">
-            <i class="bi bi-search"></i>
-          </a>
-        </li>
-        <li class="nav-item dropdown pe-3">
-		<?php $foto = InfoDocenteUcampus($rut); ?>
-          <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-            <img src="<?php echo $foto; ?>" alt="Profile" class="rounded-circle">
-            <span class="d-none d-md-block dropdown-toggle ps-2"><?php echo $funcionario; ?></span>
-          </a>
-          <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
-            <li class="dropdown-header">
-              <h6><?php echo $funcionario; ?></h6>
-              <span>Editor </span>
-            </li>
-            <li>
-              <a class="dropdown-item d-flex align-items-center text-danger" href="#">
-                <i class="bi bi-box-arrow-right"></i>
-                <span>Cerrar sesión</span>
-              </a>
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </nav>
-  </header>
+  <?php include 'nav_superior.php'; ?>
   
     <!-- ======= Sidebar ======= -->
-  <aside id="sidebar" class="sidebar">
-    <ul class="sidebar-nav" id="sidebar-nav">
-      <li class="nav-item">
-        <a class="nav-link " href="inicio.php">
-          <i class="bi bi-grid"></i>
-          <span>Inicio</span>
-        </a>
-      </li>
-	   <li class="nav-item">
-        <a class="nav-link " href="index.php?curso=<?php echo $idCurso; ?>">
-		
-		
-		
-          <i class="bi bi-grid"></i>
-          <span>Calendario</span>
-        </a>
-      </li>
-    </ul>
-  </aside>
+ <?php include 'nav_lateral.php'; ?>
 
  <main id="main" class="main">
     <div class="pagetitle">
@@ -361,7 +306,7 @@ $conn->close();
                 <div class="card-header">
 				<h5 class="card-title"><i class="bi bi-pencil"></i> Editar información </h5>
 				 <div class="card mb-4">
-            <?php include 'estadisticas_regulares.php'; ?>
+            <?php //  include 'estadisticas_regulares.php'; ?>
         </div>
 		
                     <ul class="nav nav-tabs nav-tabs-bordered d-flex" id="borderedTabJustified" role="tablist">
@@ -587,7 +532,7 @@ $conn->close();
 	   
 	 <script src="validarRUT.js"></script>
   <script src="assets/vendor/apexcharts/apexcharts.min.js"></script>
-  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+ <!--  <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>-->
   <script src="assets/vendor/chart.js/chart.umd.js"></script>
   <script src="assets/vendor/echarts/echarts.min.js"></script>
   <script src="assets/vendor/quill/quill.js"></script>
@@ -1736,10 +1681,20 @@ function procesarGuardado() {
     formData.append('mandatory', document.getElementById('mandatory').checked);
     formData.append('is_evaluation', document.getElementById('is-evaluation').checked);
     
-    // Si teníamos el tipo anterior, incluirlo para referencia
-    const tipoActual = document.querySelector('#modal-tipo-actividad').textContent || '';
-    if (tipoActual) {
-        formData.append('tipo_anterior', tipoActual);
+    // ✅ NUEVA LÓGICA: Verificar si hay cambio de tipo y docentes seleccionados
+    const tipoActual = document.querySelector('#modal-tipo-actividad').textContent.trim() || '';
+    const tipoNuevo = tipoActividad;
+    const huboChangioTipo = tipoActual !== tipoNuevo;
+    
+    console.log('🔍 Verificando cambio de tipo:', {
+        tipoActual: tipoActual,
+        tipoNuevo: tipoNuevo,
+        huboChangeio: huboChangioTipo
+    });
+    
+    // Si hubo cambio de tipo, incluir tipo anterior para referencia
+    if (huboChangioTipo && tipoActual) {
+       formData.append('tipo_anterior', tipoActual);
     }
 
     // Verificar si la actividad requiere docentes
@@ -1758,6 +1713,29 @@ function procesarGuardado() {
     document.querySelectorAll('.docente-check:checked').forEach(checkbox => {
         docentesSeleccionados.push(checkbox.dataset.rut);
     });
+    
+    console.log('👥 Docentes seleccionados:', docentesSeleccionados);
+    
+    // Verificar si el nuevo tipo permite docentes
+    const infoTipoActividad = tiposSesion.find(t => t.tipo_sesion === tipoNuevo);
+    const tipoPermiteDocentes = infoTipoActividad && infoTipoActividad.docentes === "1";
+    
+    console.log('📋 Info del tipo:', {
+        infoTipoActividad: infoTipoActividad,
+        permiteDocentes: tipoPermiteDocentes
+    });
+    
+    // ✅ SI HAY CAMBIO DE TIPO Y EL NUEVO PERMITE DOCENTES, ENVIAR DOCENTES
+    if (huboChangioTipo && tipoPermiteDocentes && docentesSeleccionados.length > 0) {
+        formData.append('docentes_seleccionados', JSON.stringify(docentesSeleccionados));
+        console.log('✅ Enviando docentes seleccionados por cambio de tipo');
+    }
+    
+    // ✅ TAMBIÉN ENVIAR SI NO HAY CAMBIO DE TIPO PERO SÍ HAY DOCENTES SELECCIONADOS
+    else if (!huboChangioTipo && tipoPermiteDocentes && docentesSeleccionados.length > 0) {
+        formData.append('docentes_seleccionados', JSON.stringify(docentesSeleccionados));
+        console.log('✅ Enviando docentes seleccionados (sin cambio de tipo)');
+    }
 
     // Primero guardar la actividad
     fetch('guardar_actividad.php', {
@@ -1896,7 +1874,11 @@ function procesarGuardado() {
             document.querySelector('.toast-container').innerHTML = '';
             
             // Toast de éxito
-            mostrarToast('Actividad guardada correctamente', 'success');
+            let mensaje = 'Actividad guardada correctamente';
+            if (huboChangioTipo && docentesSeleccionados.length > 0) {
+                mensaje += ` (${docentesSeleccionados.length} docentes asignados)`;
+            }
+            mostrarToast(mensaje, 'success');
             
             // Recargar página después de un breve retraso
             setTimeout(() => location.reload(), 2000);
@@ -2450,6 +2432,11 @@ function calcularAlumnosPorSala() {
     
     // Actualizar el campo de alumnos por sala
     const alumnosPorSalaInput = document.getElementById('alumnosPorSala');
+	
+	if (typeof actualizarSalasDisponibles === 'function') {
+        actualizarSalasDisponibles();
+    }
+	
     if (alumnosPorSalaInput) {
         alumnosPorSalaInput.value = alumnosPorSala;
         
@@ -3017,9 +3004,17 @@ function recargarTablaSalas() {
 }
 
 function setupModalListeners() {
-    const nSalasSelect = document.getElementById('nSalas');
+	
+	const nSalasSelect = document.getElementById('nSalas');
     const campusSelect = document.getElementById('campus');
     const alumnosTotalesInput = document.getElementById('alumnosTotales');
+	
+	const requiereSalaSelect = document.getElementById('requiereSala');
+if (requiereSalaSelect) {
+    requiereSalaSelect.removeEventListener('change', manejarCambioRequiereSala);
+    requiereSalaSelect.addEventListener('change', manejarCambioRequiereSala);
+}
+    
     
     // Event listener para número de salas
     if (nSalasSelect) {
@@ -3044,9 +3039,103 @@ function setupModalListeners() {
         console.log('⚡ Ejecutando cálculo inicial en setupModalListeners');
         calcularAlumnosPorSala();
         verificarCondicionesComputacion();
-        // NUEVA LÍNEA CRÍTICA:
+		 manejarCambioRequiereSala(); //
+        
         actualizarSalasDisponibles();
     }, 100);
+}
+
+function manejarCambioRequiereSala() {
+    console.log('🔄 Cambio en requiere sala detectado');
+    
+    const requiereSalaSelect = document.getElementById('requiereSala');
+    if (!requiereSalaSelect) {
+        console.warn('⚠️ Campo requiereSala no encontrado');
+        return;
+    }
+    
+    const requiere = requiereSalaSelect.value === '1';
+    console.log('🎯 Requiere sala:', requiere);
+    
+    // Lista de campos a controlar (siguiendo patrón existente)
+    const campos = ['campus', 'nSalas', 'movilidadReducida', 'observaciones'];
+    
+    // Habilitar/deshabilitar campos principales
+    campos.forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) {
+            campo.disabled = !requiere;
+            
+            // Limpiar observaciones si no requiere sala
+            if (id === 'observaciones' && !requiere) {
+                campo.value = "";
+                campo.placeholder = "No se requieren observaciones ya que no solicita sala";
+            } else if (id === 'observaciones' && requiere) {
+                campo.placeholder = "Por favor, describa su requerimiento con el mayor nivel de detalle posible...";
+            }
+        }
+    });
+    
+    // Controlar secciones especiales (aprovechando lógica existente)
+    const seccionComp = document.getElementById('seccion-computacion');
+    if (seccionComp) {
+        seccionComp.style.display = requiere ? 'block' : 'none';
+        
+        // Limpiar checkbox de computación
+        if (!requiere) {
+            const deseaComp = document.getElementById('deseaComputacion');
+            if (deseaComp) deseaComp.checked = false;
+        }
+    }
+    
+    // Controlar sección juntar secciones
+    const juntarSeccionesDiv = document.getElementById('juntarSeccionesDiv');
+    if (juntarSeccionesDiv) {
+        juntarSeccionesDiv.style.display = requiere ? 'block' : 'none';
+        
+        // Limpiar checkbox
+        if (!requiere) {
+            const juntarCheckbox = document.getElementById('juntarSecciones');
+            if (juntarCheckbox) juntarCheckbox.checked = false;
+        }
+    }
+    
+    // Controlar botón observaciones históricas
+    const btnObsHistoricas = document.querySelector('[data-bs-target="#observacionesHistoricas"]');
+    if (btnObsHistoricas) {
+        btnObsHistoricas.disabled = !requiere;
+    }
+    
+    // Estilo visual para campos readonly (mantener readonly pero cambiar apariencia)
+    const camposReadonly = ['alumnosTotales', 'alumnosPorSala'];
+    camposReadonly.forEach(id => {
+        const campo = document.getElementById(id);
+        if (campo) {
+            if (!requiere) {
+                campo.style.opacity = '0.5';
+                campo.style.backgroundColor = '#f8f9fa';
+            } else {
+                campo.style.opacity = '1';
+                campo.style.backgroundColor = '';
+            }
+        }
+    });
+    
+    // Recalcular alumnos por sala usando función existente
+    if (requiere) {
+        calcularAlumnosPorSala();
+    } else {
+        // Si no requiere sala, poner en 0
+        const alumnosPorSala = document.getElementById('alumnosPorSala');
+        if (alumnosPorSala) {
+            alumnosPorSala.value = '0';
+        }
+    }
+    
+    // Llamar verificación de computación (aprovecha función existente)
+    if (requiere) {
+        verificarCondicionesComputacion();
+    }
 }
 
 function manejarCambioSalas() {
@@ -5207,7 +5296,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- Justo antes del cierre del body -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="docentes-handler.js"></script>
+<script src="docentes_helper_regular.js"></script>
 
 
 <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 11"></div>

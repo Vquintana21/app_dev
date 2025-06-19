@@ -1,25 +1,35 @@
-<!DOCTYPE html>
-<html lang="en">
 <?php
-session_start(); 
 include("conexion.php");
-$rut = "016784781K";
+session_start();
+$rut = $_SESSION['sesion_idLogin'];
+$name = $_SESSION['sesion_usuario']; 
+$viene= array("Ã¡","Ã©","Ã","Ã³","Ãº");
+$queda= array("Á","É","Í","Ó","Ú");
+$nombre = str_replace($viene, $queda, $name);
+$rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
+
+if (empty($_SESSION['sesion_idLogin'])) {
+    header("Location: login.php");
+    exit; 
+}else{
+
+
 
 //idcurso
 //8858
 //8924
 
 //Consulta Funcionario
-$spre_personas = "SELECT * FROM spre_personas WHERE Rut='$rut' ";
+$spre_personas = "SELECT * FROM spre_personas WHERE Rut='$rut_niv' ";
 $spre_personasQ = mysqli_query($conexion3,$spre_personas);
 $fila_personas = mysqli_fetch_assoc($spre_personasQ);
 
 $funcionario = utf8_encode($fila_personas["Funcionario"]);
 
-function InfoDocenteUcampus($rut){
+function InfoDocenteUcampus($rut_niv){
 	
-	$rut_def = ltrim($rut, "0");
-	$cad = substr ($rut_def, 0, -1);
+	$rut_niv_def = ltrim($rut_niv, "0");
+	$cad = substr ($rut_niv_def, 0, -1);
 
 	$url = 'https://3da5f7dc59b7f086569838076e7d7df5:698c0edbf95ddbde@ucampus.uchile.cl/api/0/medicina_mufasa/personas?rut='.$cad;
 
@@ -27,7 +37,7 @@ function InfoDocenteUcampus($rut){
 	$ch = curl_init($url);
 
 	//PARÁMETROS
-	$parametros = "rut=$rut";
+	$parametros = "rut=$rut_niv";
 
 	//MAXIMO TIEMPO DE ESPERA DE RESPUESTA DEL SERVIDOR
 	curl_setopt($ch, CURLOPT_TIMEOUT, 20); 
@@ -57,9 +67,11 @@ function InfoDocenteUcampus($rut){
 
 }
 
-$foto_docente = InfoDocenteUcampus($rut);
+$foto_docente = InfoDocenteUcampus($rut_niv);
 
 ?>
+	<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -95,57 +107,10 @@ $foto_docente = InfoDocenteUcampus($rut);
 <body class="toggle-sidebar">
 
  <!-- ======= Header ======= -->
-  <header id="header" class="header fixed-top d-flex align-items-center">
-    <div class="d-flex align-items-center justify-content-between">
-      <a href="inicio.php" class="logo d-flex align-items-center">
-        <img src="assets/img/logo.png" alt="">
-        <span class="d-none d-lg-block">Calendario Académico</span>
-      </a>
-      <i class="bi bi-list toggle-sidebar-btn"></i>
-    </div>
-    
-    <nav class="header-nav ms-auto">
-      <ul class="d-flex align-items-center">
-        <li class="nav-item d-block d-lg-none">
-          <a class="nav-link nav-icon search-bar-toggle " href="#">
-            <i class="bi bi-search"></i>
-          </a>
-        </li>
-        <li class="nav-item dropdown pe-3">
-		<?php $foto = InfoDocenteUcampus($rut); ?>
-          <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
-            <img src="<?php echo $foto; ?>" alt="Profile" class="rounded-circle">
-            <span class="d-none d-md-block dropdown-toggle ps-2"><?php echo $funcionario; ?></span>
-          </a>
-          <ul class="dropdown-menu dropdown-menu-end dropdown-menu-arrow profile">
-            <li class="dropdown-header">
-              <h6><?php echo $funcionario; ?></h6>
-              <span>Editor </span>
-            </li>
-            <li>
-              <a class="dropdown-item d-flex align-items-center text-danger" href="#">
-                <i class="bi bi-box-arrow-right"></i>
-                <span>Cerrar sesión</span>
-              </a>
-            </li>
-          </ul>
-        </li>
-      </ul>
-    </nav>
-  </header>
+  <?php include 'nav_superior.php'; ?>
   
     <!-- ======= Sidebar ======= -->
-  <aside id="sidebar" class="sidebar">
-    <ul class="sidebar-nav" id="sidebar-nav">
-      <li class="nav-item">
-        <a class="nav-link " href="inicio.php">
-          <i class="bi bi-grid"></i>
-          <span>Inicio</span>
-        </a>
-      </li>
-	   
-    </ul>
-  </aside>
+ <?php include 'nav_lateral.php'; ?>
 
   <main id="main" class="main">
 
@@ -247,7 +212,7 @@ $foto_docente = InfoDocenteUcampus($rut);
 												INNER JOIN spre_periodo_calendario ON spre_periodo_calendario.periodo = spre_cursos.idperiodo
 												INNER JOIN spre_tipoparticipacion ON spre_tipoparticipacion.idTipoParticipacion = spre_profesorescurso.idTipoParticipacion
 												WHERE spre_profesorescurso.idTipoParticipacion IN ('1','2','3','8','10') 
-												AND rut='$rut' 
+												AND rut='$rut_niv' 
 												AND spre_profesorescurso.Vigencia='1' 
 												AND (spre_periodo_calendario.activo= 2 OR spre_periodo_calendario.anterior IN (1))
 												GROUP BY idcurso  
@@ -369,3 +334,6 @@ $foto_docente = InfoDocenteUcampus($rut);
 </body>
 
 </html>
+<?php
+}
+?>

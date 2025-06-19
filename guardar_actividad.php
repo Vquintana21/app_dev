@@ -14,7 +14,7 @@ try {
    $idplanclases = (int)$_POST['idplanclases'];
 
    // Obtener y sanitizar los valores
-   $titulo = isset($_POST['activity-title']) ? mysqli_real_escape_string($conn, $_POST['activity-title']) : '';
+   $titulo = isset($_POST['activity-title']) ? trim($_POST['activity-title']) : '';
    $tipo = isset($_POST['type']) ? mysqli_real_escape_string($conn, $_POST['type']) : '';
    $subtipo = isset($_POST['subtype']) ? mysqli_real_escape_string($conn, $_POST['subtype']) : '';
    $inicio = isset($_POST['start_time']) ? mysqli_real_escape_string($conn, $_POST['start_time']) : '';
@@ -168,6 +168,84 @@ try {
         $stmtUpdateVigencia->bind_param("i", $idplanclases);
         $stmtUpdateVigencia->execute();
         $stmtUpdateVigencia->close();
+    } else if ($permiteDocentesAnterior === 0 && $permiteDocentesNuevo === 1) {
+        // Verificar si hay docentes seleccionados desde el frontend
+        if (isset($_POST['docentes_seleccionados']) && !empty($_POST['docentes_seleccionados'])) {
+            $docentesSeleccionados = json_decode($_POST['docentes_seleccionados'], true);
+            
+            if (is_array($docentesSeleccionados) && count($docentesSeleccionados) > 0) {
+                // Calcular las horas de la actividad para asignar a cada docente
+                $time1 = strtotime($inicio);
+                $time2 = strtotime($termino);
+                $horasActividad = ($time2 - $time1) / 3600; // Convertir a horas
+                
+                // Obtener el ID del curso desde planclases
+                $queryCurso = "SELECT cursos_idcursos FROM a_planclases WHERE idplanclases = ?";
+                $stmtCurso = $conn->prepare($queryCurso);
+                $stmtCurso->bind_param("i", $idplanclases);
+                $stmtCurso->execute();
+                $resultCurso = $stmtCurso->get_result();
+                $rowCurso = $resultCurso->fetch_assoc();
+                $idCurso = $rowCurso['cursos_idcursos'];
+                $stmtCurso->close();
+                
+                // Insertar cada docente seleccionado
+                foreach ($docentesSeleccionados as $rutDocente) {
+                    // Obtener unidad académica del docente
+                    $queryUnidad = "SELECT unidad_academica_docente 
+                                   FROM spre_profesorescurso 
+                                   WHERE rut = ? AND idcurso = ? AND vigencia = 1 
+                                   LIMIT 1";
+                    $stmtUnidad = $conexion3->prepare($queryUnidad);
+                    $stmtUnidad->bind_param("si", $rutDocente, $idCurso);
+                    $stmtUnidad->execute();
+                    $resultUnidad = $stmtUnidad->get_result();
+                    $unidadAcademica = '';
+                    if ($rowUnidad = $resultUnidad->fetch_assoc()) {
+                        $unidadAcademica = $rowUnidad['unidad_academica_docente'];
+                    }
+                    $stmtUnidad->close();
+                    
+                    // Verificar si ya existe el registro
+                    $queryExiste = "SELECT idDocenteClases FROM docenteclases_copy 
+                                   WHERE rutDocente = ? AND idPlanClases = ? AND idCurso = ?";
+                    $stmtExiste = $conn->prepare($queryExiste);
+                    $stmtExiste->bind_param("sii", $rutDocente, $idplanclases, $idCurso);
+                    $stmtExiste->execute();
+                    $resultExiste = $stmtExiste->get_result();
+                    
+                    if ($resultExiste->num_rows > 0) {
+                        // Actualizar registro existente a vigencia = 1
+                        $rowExiste = $resultExiste->fetch_assoc();
+                        $queryUpdate = "UPDATE docenteclases_copy 
+                                       SET vigencia = 1, 
+                                           horas = ?,
+                                           unidadAcademica = ?,
+                                           fechaModificacion = NOW(),
+                                           usuarioModificacion = 'cambio_tipo_actividad'
+                                       WHERE idDocenteClases = ?";
+                        $stmtUpdate = $conn->prepare($queryUpdate);
+                        $stmtUpdate->bind_param("dsi", $horasActividad, $unidadAcademica, $rowExiste['idDocenteClases']);
+                        $stmtUpdate->execute();
+                        $stmtUpdate->close();
+                    } else {
+                        // Crear nuevo registro
+                        $queryInsert = "INSERT INTO docenteclases_copy 
+                                       (rutDocente, idPlanClases, idCurso, horas, vigencia, 
+                                        unidadAcademica, fechaModificacion, usuarioModificacion)
+                                       VALUES (?, ?, ?, ?, 1, ?, NOW(), 'cambio_tipo_actividad')";
+                        $stmtInsert = $conn->prepare($queryInsert);
+                        $stmtInsert->bind_param("siids", $rutDocente, $idplanclases, $idCurso, $horasActividad, $unidadAcademica);
+                        $stmtInsert->execute();
+                        $stmtInsert->close();
+                    }
+                    $stmtExiste->close();
+                }
+                
+                // Log para debug
+                error_log("✅ DOCENTES GUARDADOS: " . count($docentesSeleccionados) . " docentes asignados a actividad $idplanclases por cambio de tipo");
+            }
+        }
     }
 }
 

@@ -70,3 +70,304 @@
     transform: translateY(-50%);
     font-size: 10px;
 }
+
+/* ===== ESTILOS PARA SALAS CLÍNICO - SISTEMA DE RESERVAS ===== */
+
+/* Badges personalizados */
+.badge-secondary { background-color: #6c757d; }
+.badge-info { background-color: #0dcaf0; }
+.badge-success { background-color: #198754; }
+.badge-warning { background-color: #ffc107; color: #000; }
+.badge-danger { background-color: #dc3545; }
+
+/* Estados de filas según verificación de reservas */
+.estado-confirmada { 
+    background-color: #d1f2eb !important; 
+    border-left: 4px solid #28a745;
+}
+
+.estado-encontrada-alt { 
+    background-color: #fff3cd !important; 
+    border-left: 4px solid #ffc107;
+}
+
+.estado-sin-reserva, .estado-inconsistente { 
+    background-color: #f8d7da !important; 
+    border-left: 4px solid #dc3545;
+}
+
+/* Hover effects para filas */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.075) !important;
+}
+
+/* Estilos para el modal de inconsistencias */
+.modal-xl .modal-dialog {
+    max-width: 95%;
+}
+
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+/* Indicadores de estado en tabla */
+.badge-estado {
+    font-size: 0.75em;
+    padding: 0.25em 0.5em;
+    margin: 0.1em;
+    display: inline-block;
+}
+
+/* Estilos para verificación de reservas */
+.verificacion-ok {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.verificacion-warning {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.verificacion-error {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Contenedor de notificaciones */
+#notificaciones-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    max-width: 400px;
+}
+
+/* Animación para notificaciones */
+#notificaciones-container .alert {
+    margin-bottom: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Estilos para botones de acción */
+.btn-group .btn {
+    margin-right: 2px;
+}
+
+.btn-group .btn:last-child {
+    margin-right: 0;
+}
+
+/* Estilos para el estado de reservas en modal de liberación */
+.estado-reserva-confirmada {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.estado-reserva-alternativa {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.estado-reserva-sin {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Estilos para tabla de detalles de inconsistencias */
+.table-bordered th,
+.table-bordered td {
+    border: 1px solid #dee2e6;
+}
+
+.table-dark th {
+    background-color: #495057;
+    border-color: #495057;
+}
+
+/* Colores de estado para filas de tabla */
+.table-success {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+.table-warning {
+    background-color: rgba(255, 193, 7, 0.1) !important;
+}
+
+.table-danger {
+    background-color: rgba(220, 53, 69, 0.1) !important;
+}
+
+/* Estilos para loading spinner en modal */
+.spinner-border {
+    width: 2rem;
+    height: 2rem;
+}
+
+/* Espaciado para alertas en modales */
+.modal-body .alert {
+    margin-bottom: 1rem;
+}
+
+/* Estilos para texto de observaciones históricas */
+#observacionesHistoricas .border {
+    background-color: #f8f9fa;
+    border-color: #e9ecef;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .btn-group {
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        margin-right: 0;
+        margin-bottom: 2px;
+    }
+    
+    #notificaciones-container {
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+    
+    .modal-xl .modal-dialog {
+        max-width: 100%;
+        margin: 10px;
+    }
+}
+
+/* Estilos para badges de verificación */
+.badge.bg-success {
+    color: #fff;
+}
+
+.badge.bg-warning {
+    color: #000;
+}
+
+.badge.bg-danger {
+    color: #fff;
+}
+
+/* Estilos adicionales para mejores contrastes */
+.text-success {
+    color: #198754 !important;
+}
+
+.text-warning {
+    color: #f57c00 !important;
+}
+
+.text-danger {
+    color: #dc3545 !important;
+}
+
+/* Estilos para scroll smooth en tablas */
+.table-responsive {
+    scroll-behavior: smooth;
+}
+
+/* Indicador visual para filas con inconsistencias */
+.fila-inconsistente {
+    position: relative;
+}
+
+.fila-inconsistente::before {
+    content: "⚠";
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #dc3545;
+    font-weight: bold;
+    z-index: 1;
+}
+
+/* Estilos para el colapso de observaciones históricas */
+.collapse .border {
+    transition: all 0.3s ease;
+}
+
+.collapse.show .border {
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Mejoras visuales para los formularios */
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Estilos para alertas informativas */
+.alert-info {
+    background-color: #e7f3ff;
+    border-color: #b3d7ff;
+    color: #084298;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffecb5;
+    color: #664d03;
+}
+
+/* Centrado de contenido en celdas específicas */
+.text-center {
+    text-align: center !important;
+}
+
+/* Espaciado consistente para elementos de lista */
+.list-unstyled li {
+    margin-bottom: 0.25rem;
+}
+
+/* Estilos para mejorar la legibilidad de texto pequeño */
+small, .small {
+    font-size: 0.85em;
+    line-height: 1.4;
+}
+
+/* Estilos finales para elementos específicos de salas clínico */
+.salas-clinico-container {
+    min-height: 100vh;
+    background-color: #f8f9fa;
+}
+
+.card-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.card-body {
+    background-color: #ffffff;
+}
+
+/* Asegurar que los tooltips y popovers se vean correctamente */
+.tooltip, .popover {
+    z-index: 1070;
+}
