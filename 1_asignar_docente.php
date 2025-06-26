@@ -56,7 +56,7 @@ if($rut!='' && $control_profe > 0){
 
     
 
-    <div class="container py-4">  
+    <div class="container-fluid py-4">  
 	 <div class="card mb-4">
             <div class="card-body">
                <h4 class="text-center"> <i class="bi bi-person-raised-hand"></i> Instrucciones equipo docente</h4>

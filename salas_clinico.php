@@ -4,6 +4,7 @@
 ob_start();
 include("conexion.php");
 $error_output = ob_get_clean();
+require_once 'funciones_secciones.php';
 
 // Si hay errores de inclusión, los registramos pero no los mostramos
 if (!empty($error_output)) {
@@ -14,6 +15,45 @@ if (!empty($error_output)) {
 header('Content-Type: application/json');
 
 // ===== FUNCIONES AUXILIARES =====
+
+function obtenerAlumnosReales($data, $dataPlanclases) {
+    // Variables globales de conexiones
+    global $conn, $conexion3;
+    
+    try {
+        // PRIORIDAD 1: Si se está usando la función central (pcl_AulaDescripcion = '1')
+        if (isset($dataPlanclases['pcl_AulaDescripcion']) && $dataPlanclases['pcl_AulaDescripcion'] === '1') {
+            $alumnosCalculados = calcularAlumnosReales($dataPlanclases['idplanclases'], $conn, 'clinico');
+            
+            // Si la función central devuelve 0, usar fallback
+            if ($alumnosCalculados > 0) {
+                error_log("obtenerAlumnosReales CLÍNICO - Usando función central: $alumnosCalculados alumnos");
+                return $alumnosCalculados;
+            }
+        }
+        
+        // PRIORIDAD 2: Si se marcó "juntar secciones" en el modal actual
+        if (isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1') {
+            $alumnosModal = isset($data['alumnosTotales']) ? (int)$data['alumnosTotales'] : 0;
+            
+            if ($alumnosModal > 0) {
+                error_log("obtenerAlumnosReales CLÍNICO - Usando modal: $alumnosModal alumnos");
+                return $alumnosModal;
+            }
+        }
+        
+        // PRIORIDAD 3: Usar cupo individual por defecto
+        $alumnosIndividual = isset($dataPlanclases['pcl_alumnos']) ? (int)$dataPlanclases['pcl_alumnos'] : 0;
+        error_log("obtenerAlumnosReales CLÍNICO - Usando individual: $alumnosIndividual alumnos");
+        return $alumnosIndividual;
+        
+    } catch (Exception $e) {
+        error_log("Error en obtenerAlumnosReales CLÍNICO: " . $e->getMessage());
+        // Fallback en caso de error
+        return isset($dataPlanclases['pcl_alumnos']) ? (int)$dataPlanclases['pcl_alumnos'] : 0;
+    }
+}
+
 
 function verificarReservaCompleta($conn, $conexion3, $idplanclases) {
     try {
@@ -168,6 +208,13 @@ case 'solicitar':
         }
 		
 		  $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
+		  
+		  $juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
+        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'clinico');
+        
+        if (!$actualizacionOk) {
+            throw new Exception('Error actualizando pcl_AulaDescripcion en clínico');
+        }
         
         $idplanclases = (int)$data['idplanclases'];
         $nSalas = (int)$data['nSalas'];
@@ -318,6 +365,13 @@ case 'modificar':
         $conn->begin_transaction();
 		
 		 $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
+		 
+		 $juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
+        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'clinico');
+        
+        if (!$actualizacionOk) {
+            throw new Exception('Error actualizando pcl_AulaDescripcion en clínico');
+        }
         
         // ✅ LÓGICA EXACTA DE salas2.php
         $requiereSala = 1; // Clínicos siempre requieren sala
@@ -531,6 +585,13 @@ case 'modificar_asignada':
         }
         
         $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
+		
+		$juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
+        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'clinico');
+        
+        if (!$actualizacionOk) {
+            throw new Exception('Error actualizando pcl_AulaDescripcion en clínico');
+        }
         
         // Preparar observaciones para planclases
         $observacionesPlanclases = "";
@@ -719,6 +780,53 @@ case 'modificar_asignada':
         echo json_encode(['error' => $e->getMessage()]);
     }
     break;
+	
+	case 'obtener_estado_juntar_secciones':
+    try {
+        $idPlanClase = isset($data['idPlanClase']) ? (int)$data['idPlanClase'] : 0;
+        
+        if ($idPlanClase <= 0) {
+            throw new Exception('ID de planclase inválido');
+        }
+        
+        $estado = obtenerEstadoJuntarSecciones($idPlanClase, $conn, 'clinico');
+        
+        echo json_encode(array(
+            'success' => true,
+            'pcl_AulaDescripcion' => $estado ? '1' : '',
+            'juntarSecciones' => $estado
+        ));
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    }
+    break;
+
+// AGREGAR ESTE CASO NUEVO:
+case 'actualizar_pcl_aula_descripcion':
+    try {
+        $idPlanClase = isset($data['idPlanClase']) ? (int)$data['idPlanClase'] : 0;
+        $juntarSecciones = isset($data['juntarSecciones']) ? (bool)$data['juntarSecciones'] : false;
+        
+        if ($idPlanClase <= 0) {
+            throw new Exception('ID de planclase inválido');
+        }
+        
+        $resultado = actualizarPclAulaDescripcion($idPlanClase, $juntarSecciones, $conn, 'clinico');
+        
+        if ($resultado) {
+            echo json_encode(array('success' => true));
+        } else {
+            throw new Exception('Error al actualizar pcl_AulaDescripcion en clínico');
+        }
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    }
+    break;
+	
 
 // ===== NUEVO CASO: obtener_detalles_inconsistencia =====
 case 'obtener_detalles_inconsistencia':
@@ -851,41 +959,41 @@ case 'obtener_datos_solicitud':
     }
     break;
             
-            case 'obtener_cupo_curso':
-                try {
-                    // Obtener el ID del curso a partir del ID de plan de clases
-                    $stmt = $conn->prepare("SELECT cursos_idcursos FROM planclases_test WHERE idplanclases = ?");
-                    $stmt->bind_param("i", $data['idPlanClase']);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-                    $row = $result->fetch_assoc();
-                    
-                    if ($row) {
-                        $idCurso = $row['cursos_idcursos'];
-                        
-                        // Consultar el cupo del curso
-                        $stmtCupo = $conexion3->prepare("SELECT Cupo FROM spre_cursos WHERE idCurso = ?");
-                        $stmtCupo->bind_param("i", $idCurso);
-                        $stmtCupo->execute();
-                        $resultCupo = $stmtCupo->get_result();
-                        $cupoData = $resultCupo->fetch_assoc();
-                        
-                        if ($cupoData) {
-                            echo json_encode([
-                                'success' => true,
-                                'cupo' => $cupoData['Cupo']
-                            ]);
-                        } else {
-                            throw new Exception('No se encontró información de cupo para este curso');
-                        }
-                    } else {
-                        throw new Exception('No se encontró el curso para esta actividad');
-                    }
-                } catch (Exception $e) {
-                    http_response_code(500);
-                    echo json_encode(['error' => $e->getMessage()]);
-                }
-                break;
+case 'obtener_cupo_curso':
+    try {
+        $idPlanClase = isset($data['idPlanClase']) ? (int)$data['idPlanClase'] : 0;
+        
+        if ($idPlanClase <= 0) {
+            throw new Exception('ID de planclase inválido');
+        }
+        
+        // Verificar si debe usar cupo total o individual
+        $juntaSecciones = obtenerEstadoJuntarSecciones($idPlanClase, $conn, 'clinico');
+        
+        if ($juntaSecciones) {
+            // Usar función central para calcular cupo total
+            $cupoCalculado = calcularAlumnosReales($idPlanClase, $conn, 'clinico');
+        } else {
+            // Obtener cupo individual
+            $stmt = $conn->prepare("SELECT pcl_alumnos FROM dpimeduc_calendario.planclases_test WHERE idplanclases = ?");
+            $stmt->bind_param("i", $idPlanClase);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $data = $result->fetch_assoc();
+            $cupoCalculado = isset($data['pcl_alumnos']) ? (int)$data['pcl_alumnos'] : 0;
+        }
+        
+        echo json_encode(array(
+            'success' => true,
+            'cupo' => $cupoCalculado,
+            'juntaSecciones' => $juntaSecciones
+        ));
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(array('error' => $e->getMessage()));
+    }
+    break;
                 
 // ===== CASO MEJORADO: obtener_salas_asignadas =====
 case 'obtener_salas_asignadas':
@@ -996,9 +1104,15 @@ case 'liberar':
 				
 case 'verificar_secciones':
     try {
+        $idPlanClase = isset($data['idPlanClase']) ? (int)$data['idPlanClase'] : 0;
+        
+        if ($idPlanClase <= 0) {
+            throw new Exception('ID de planclase inválido');
+        }
+        
         // Obtener curso de la actividad
         $stmt = $conn->prepare("SELECT cursos_idcursos FROM planclases_test WHERE idplanclases = ?");
-        $stmt->bind_param("i", $data['idPlanClase']);
+        $stmt->bind_param("i", $idPlanClase);
         $stmt->execute();
         $result = $stmt->get_result();
         $planData = $result->fetch_assoc();
@@ -1015,28 +1129,23 @@ case 'verificar_secciones':
         $cursoData = $resultCurso->fetch_assoc();
         
         if ($cursoData) {
-            // Query exacta para contar secciones (la que ya tenían comentada)
-            $stmtCount = $conexion3->prepare("SELECT COUNT(*) as total, SUM(Cupo) as cupo_total 
-                                             FROM spre_cursos 
-                                             WHERE CodigoCurso = ? AND idperiodo = ?");
-            $stmtCount->bind_param("ss", $cursoData['CodigoCurso'], $cursoData['idperiodo']);
-            $stmtCount->execute();
-            $resultCount = $stmtCount->get_result();
-            $countData = $resultCount->fetch_assoc();
+            // Usar función central para obtener datos
+            $datosMultiples = obtenerDatosMultiplesSecciones($cursoData['CodigoCurso'], $cursoData['idperiodo'], $conexion3);
             
-            echo json_encode([
+            echo json_encode(array(
                 'success' => true,
-                'mostrarOpcion' => ($countData['total'] > 1),
-                'totalSecciones' => $countData['total'],
-                'cupoTotal' => $countData['cupo_total'],
-                'seccionActual' => $cursoData['Seccion']
-            ]);
+                'mostrarOpcion' => ($datosMultiples['total_secciones'] > 1),
+                'totalSecciones' => $datosMultiples['total_secciones'],
+                'cupoTotal' => $datosMultiples['cupo_total'],
+                'seccionActual' => $cursoData['Seccion'],
+                'secciones' => $datosMultiples['secciones']
+            ));
         } else {
-            echo json_encode(['success' => false, 'error' => 'No se encontró información del curso']);
+            echo json_encode(array('success' => false, 'error' => 'No se encontró información del curso'));
         }
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        echo json_encode(array('success' => false, 'error' => $e->getMessage()));
     }
     break;
 	
@@ -1132,7 +1241,7 @@ $result = $stmt->get_result();
     .estado-inconsistente { background-color: #f8d7da; }
 </style>
 
-  <div class="container py-4"> 
+  <div class="container-fluid py-4"> 
 
 
 <!-- ===== VERSIÓN SÚPER SIMPLE CON BOOTSTRAP ===== -->
@@ -1154,11 +1263,7 @@ $result = $stmt->get_result();
              class="accordion-collapse collapse" 
              data-bs-parent="#accordionInstrucciones">
             <div class="accordion-body">
-                <ul class="list-group list-group-flush">
-                <li class="list-group-item">
-                    <i class="bi bi-clipboard-check text-primary me-2"></i>
-                    Toda actividad tipo <strong>clase</strong> se solicitará automáticamente. El resto de las actividades los debe solicitar pinchando en <strong>"Solicitar"</strong>.
-                </li>
+                <ul class="list-group list-group-flush">                
                 <li class="list-group-item">
                     <i class="bi bi-pencil-square text-success me-2"></i>
                     Si al enviar la solicitud cometió un error o si le asignaron salas y alguna no les sirve, o les falta otra sala, puede pinchar en <strong>"Modificar"</strong>.

@@ -132,9 +132,11 @@ try {
         if ($totalAsignacionesActivas > 0) {
             $necesitaConfirmacion = true;
             if ($estados[3] > 0) {
-                $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se liberarán las <b>" . $estados[3] . " sala(s) asignada(s)</b> y se creará una asignación automática.";
+                //$mensajeConfirmacion = "Al cambiar a tipo 'Clase', se liberarán las <b>" . $estados[3] . " sala(s) asignada(s)</b> y se creará una asignación automática.";
+				$mensajeConfirmacion = "Actividad actualizada, no olvide revisar su solicitud de sala.";
             } else {
-                $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se eliminarán las solicitudes de sala existentes y se creará una asignación automática.";
+                //$mensajeConfirmacion = "Al cambiar a tipo 'Clase', se eliminarán las solicitudes de sala existentes y se creará una asignación automática.";
+				$mensajeConfirmacion = "Actividad actualizada, no olvide revisar su solicitud de sala.";
             }
         }
     }

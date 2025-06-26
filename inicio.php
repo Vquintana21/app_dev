@@ -1,5 +1,6 @@
 <?php
 include("conexion.php");
+include("login/control_sesion.php"); 
 session_start();
 $rut = $_SESSION['sesion_idLogin'];
 $name = $_SESSION['sesion_usuario']; 
@@ -9,7 +10,7 @@ $nombre = str_replace($viene, $queda, $name);
 $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
 
 if (empty($_SESSION['sesion_idLogin'])) {
-    header("Location: login.php");
+    header("Location: login/close.php");
     exit; 
 }else{
 
@@ -75,7 +76,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calendario Académico</title>
+    <title>Calendario académico - Facultad de Medicina</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 	
@@ -101,10 +102,26 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
   <!-- CSS personalizado -->
   <link href="estilo.css" rel="stylesheet">
   
+	<style>
+	/* Posicionamiento del submenú */
+.dropdown-submenu {
+  position: relative;
+}
 
+.dropdown-submenu > .dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -1px;
+}
+
+/* Opcional: mostrar submenú al pasar el mouse */
+.dropdown-submenu:hover > .dropdown-menu {
+  display: block;
+}
+	</style>
     
 </head>
-<body class="toggle-sidebar">
+<body >
 
  <!-- ======= Header ======= -->
   <?php include 'nav_superior.php'; ?>
@@ -115,7 +132,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
   <main id="main" class="main">
 
     <div class="pagetitle">
-      <h1>Gestión de docencia 2025.1</h1>
+      <h1><i class="bi bi-house-door"></i> Gestión de docencia - pregrado 2025.2</h1>
       <nav>
         <ol class="breadcrumb">
           <li class="breadcrumb-item"><a href="index.html">Inicio</a></li>
@@ -124,7 +141,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
     </div><!-- End Page Title -->
 
     <section class="section profile">
-		<div class="col-xl-12">
+		<!--<div class="col-xl-12">
 
           <div class="card">
             <div class="card-body profile-card pt-4 d-flex flex-column align-items-center">
@@ -135,7 +152,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
             </div>
           </div> 
 
-        </div>
+        </div>-->
 
       <div class="row">
         
@@ -167,7 +184,10 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 
                 <div class="tab-pane fade profile-overview" id="profile-overview">
                   <h5 class="card-title">¿Cómo usar la plataforma?</h5>
-                  <p class="small fst-italic">Sunt est soluta temporibus accusantium neque nam maiores cumque temporibus. Tempora libero non est unde veniam est qui dolor. Ut sunt iure rerum quae quisquam autem eveniet perspiciatis odit. Fuga sequi sed ea saepe at unde.</p>
+                  <p class="h6">
+				  La plataforma de calendario es la bitácora institucional oficial y única vía de solicitud de salas de las asignaturas asociadas a los diferentes planes de estudios de pregrado. Además, permite organizar los contenidos del curso en función de las fechas correspondiente al semestre/año en que se imparte y el docente responsable en cada una de las actividades calendarizadas. Por último, incluye el detalle de las horas directas efectuadas por cada docente.
+				   <a href="https://dpi.med.uchile.cl/test/calendarios/pages-faq.php"> Te invitamos a leer una guía sobre el uso de calendario. </a>
+				  </p>
 
                   <h5 class="card-title">Tutorial de uso de plataforma</h5>
 				  <!--<iframe width="50%" height="500" src="https://www.youtube.com/embed/p7U5yRgQ93A?si=hk9LyudYrBlD6a54" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>-->
@@ -183,7 +203,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 						  <div class="card">
 							<div class="card-body">
 							 <h5 class="card-title">Cursos activos 
-							 <span class="badge bg-success text-white"><i class="bi bi-check-circle me-1"></i> 2024.2 </span> y<span class="badge bg-light"><i class="bi bi-check-circle me-1"></i> 2024.1 </span>
+							 <span class="badge bg-success text-white"><i class="bi bi-check-circle me-1"></i> 2025.2 </span>
 							 </h5>
 
 							  <p>A continuación podrá revisar los cursos del periodo activo en los que usted participa. </p>
@@ -222,12 +242,12 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 									  
 									  while($fila_cursos = mysqli_fetch_assoc($cursosQuery)){
 									  // Separar el periodo en año y semestre
-    $periodo_parts = explode('.', $fila_cursos["idperiodo"]);
-    $anio = $periodo_parts[0];
-    $semestre = $periodo_parts[1];
-    
-    // Construir la URL de U-Cursos
-    $url_ucursos = "https://www.u-cursos.cl/medicina/{$anio}/{$semestre}/{$fila_cursos["codigoCurso"]}/1/historial";
+										$periodo_parts = explode('.', $fila_cursos["idperiodo"]);
+										$anio = $periodo_parts[0];
+										$semestre = $periodo_parts[1];
+										
+										// Construir la URL de U-Cursos
+										$url_ucursos = "https://www.u-cursos.cl/medicina/{$anio}/{$semestre}/{$fila_cursos["codigoCurso"]}/1/historial";
 ?> 
 								
 										  <tr>
@@ -286,7 +306,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 				   
 					<h5 class="card-title">¿No encontraste lo que buscabas?</h5>
 					
-					Informanos sobre tu problema <a target="_blank" href="https://dpi.med.uchile.cl/gestion/sugerencias/"> aquí </a> o escríbenos directamente a dpi.med@uchile.cl
+					Informanos sobre tu problema <a target="_blank" href="https://dpi.med.uchile.cl/gestion/sugerencias/"> aquí </a> o escríbenos directamente a dpi.med@uchile.cl 
 
 					<h5 class="card-title">¿Necesitas ayuda de aulas docentes?</h5>
 					

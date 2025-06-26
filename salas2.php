@@ -2,6 +2,7 @@
 
 ob_start();
 include("conexion.php");
+require_once 'funciones_secciones.php';
 $error_output = ob_get_clean();
 
 // Si hay errores de inclusión, los registramos pero no los mostramos
@@ -11,6 +12,27 @@ if (!empty($error_output)) {
 
 // Asegurarnos de que se envíe el header de contenido correcto
 header('Content-Type: application/json');
+
+function distribuirAlumnosEntreSalas($data, $dataPlanclases) {
+    // Obtener el total de alumnos usando la lógica existente
+    $alumnosTotales = obtenerAlumnosReales($data, $dataPlanclases);
+    
+    // Obtener número de salas solicitadas
+    $nSalas = isset($data['nSalas']) ? (int)$data['nSalas'] : 1;
+    
+    // Validación de seguridad
+    if ($nSalas == 0) {
+        $nSalas = 1;
+    }
+    
+    // Calcular alumnos por sala (redondear hacia arriba para no dejar alumnos sin sala)
+    $alumnosPorSala = (int)ceil($alumnosTotales / $nSalas);
+    
+    // Log para debugging
+    error_log("DISTRIBUCION ALUMNOS: Total=$alumnosTotales, Salas=$nSalas, Por sala=$alumnosPorSala");
+    
+    return $alumnosPorSala;
+}
 
 function estaDisponibleFinal($conn, $idSala, $fecha, $horaInicio, $horaFin) {
     $queryReserva = "SELECT * FROM reserva_2 
@@ -38,34 +60,43 @@ function estaDisponibleFinal($conn, $idSala, $fecha, $horaInicio, $horaFin) {
 
 
 function obtenerAlumnosReales($data, $dataPlanclases) {
-    // ✅ DEBUG EXHAUSTIVO
-    error_log("🔍 === DEBUG obtenerAlumnosReales ===");
-    error_log("🔍 data recibido: " . json_encode($data));
-    error_log("🔍 dataPlanclases['pcl_alumnos']: " . $dataPlanclases['pcl_alumnos']);
+    global $conn, $conexion3;
     
-    // Verificar cada campo individualmente
-    $tieneAlumnosPorSala = isset($data['alumnosPorSala']);
-    $alumnosPorSalaValue = $tieneAlumnosPorSala ? $data['alumnosPorSala'] : 'NO_EXISTE';
-    $estaVacio = empty($data['alumnosPorSala']);
-    
-    error_log("🔍 isset(data['alumnosPorSala']): " . ($tieneAlumnosPorSala ? 'TRUE' : 'FALSE'));
-    error_log("🔍 data['alumnosPorSala'] value: " . $alumnosPorSalaValue);
-    error_log("🔍 empty(data['alumnosPorSala']): " . ($estaVacio ? 'TRUE' : 'FALSE'));
-    
-    // Aplicar la lógica paso a paso
-    if ($tieneAlumnosPorSala && !$estaVacio) {
-        $nAlumnosPorSala = (int)$data['alumnosPorSala'];
-        error_log("🔍 USANDO FRONTEND: " . $nAlumnosPorSala);
-    } else {
-        $nAlumnosPorSala = $dataPlanclases['pcl_alumnos'];
-        error_log("🔍 USANDO BD (fallback): " . $nAlumnosPorSala);
+    try {
+        // PRIORIDAD 1: Si se está usando la función central
+        if (isset($dataPlanclases['pcl_AulaDescripcion']) && $dataPlanclases['pcl_AulaDescripcion'] === 'S') {
+            $alumnosCalculados = calcularAlumnosReales($dataPlanclases['idplanclases'], $conn, 'regular');
+            if ($alumnosCalculados > 0) {
+                error_log("obtenerAlumnosReales - Función central (SECCIONES JUNTAS): $alumnosCalculados");
+                return $alumnosCalculados;
+            }
+        }
+        
+        // PRIORIDAD 2: Si se marcó "juntar secciones" 
+        if (isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1') {
+            $alumnosModal = isset($data['alumnosTotales']) ? (int)$data['alumnosTotales'] : 0;
+            if ($alumnosModal > 0) {
+                error_log("obtenerAlumnosReales - Modal juntar: $alumnosModal");
+                return $alumnosModal;
+            }
+        }
+        
+        // ✅ NUEVA PRIORIDAD 3: Usar valor del modal si está disponible
+        if (isset($data['alumnosTotales']) && (int)$data['alumnosTotales'] > 0) {
+            $alumnosModal = (int)$data['alumnosTotales'];
+            error_log("obtenerAlumnosReales - Modal directo: $alumnosModal");
+            return $alumnosModal;
+        }
+        
+        // PRIORIDAD 4: Usar cupo individual por defecto
+        $alumnosIndividual = isset($dataPlanclases['pcl_alumnos']) ? (int)$dataPlanclases['pcl_alumnos'] : 0;
+        error_log("obtenerAlumnosReales - Individual: $alumnosIndividual");
+        return $alumnosIndividual;
+        
+    } catch (Exception $e) {
+        error_log("Error en obtenerAlumnosReales: " . $e->getMessage());
+        return isset($dataPlanclases['pcl_alumnos']) ? (int)$dataPlanclases['pcl_alumnos'] : 0;
     }
-    
-    // Debug final
-    error_log("🔍 RESULTADO FINAL: " . $nAlumnosPorSala);
-    error_log("🔍 === FIN DEBUG ===");
-    
-    return $nAlumnosPorSala;
 }
 
 function verificarReservaCompleta($conn, $idplanclases, $codigo_curso, $seccion, $fecha, $hora_inicio, $hora_termino, $idSala = null) {
@@ -188,7 +219,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Verificar si requiere sala
         $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
+		// valor de juntarSecciones
         $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
+		$juntaSeccionPlanclase = !empty($data['juntarSecciones']) ? 'S' : 'N'; // Para planclases
+		// boleano para verificaciones
+		$juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
+        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'clinico');
+        
+        if (!$actualizacionOk) {
+            throw new Exception('Error actualizando pcl_AulaDescripcion en clínico');
+        }
         
         // Procesar movilidad reducida y cercanía
         $movilidadReducida = isset($data['movilidadReducida']) ? $data['movilidadReducida'] : 'No';
@@ -200,7 +240,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pcl_Cercania = 'N';
         }
 		
-		$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+		$alumnosTotales = obtenerAlumnosReales($data, $dataPlanclases); // Para planclases
+		$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases); // Para asignacion_piloto
 		  error_log("🎮 nAlumnosReal calculado: " . $nAlumnosReal);
         
         // Preparar observaciones para planclases
@@ -217,18 +258,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                   pcl_movilidadReducida = ?,
                                   pcl_Cercania = ?,
 								  pcl_alumnos = ?,
+								  pcl_AulaDescripcion = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isississi", 
+        $stmt->bind_param("isississsi", 
             $data['nSalas'], 
             $data['campus'], 
             $requiereSala,
             $pcl_movilidadReducida,
             $pcl_Cercania,
-			$nAlumnosReal,
+			$alumnosTotales,
+			$juntaSeccionPlanclase,
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -356,6 +399,14 @@ case 'modificar':
         // Verificar si requiere sala
         $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
         $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
+		$juntaSeccionPlanclase = !empty($data['juntarSecciones']) ? 'S' : 'N'; // Para planclases
+		
+		$juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
+        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'clinico');
+        
+        if (!$actualizacionOk) {
+            throw new Exception('Error actualizando pcl_AulaDescripcion en clínico');
+        }
         
 	// Log 
         $juntarSeccionesValue = isset($data['juntarSecciones']) ? $data['juntarSecciones'] : 'NO_ENVIADO';
@@ -385,17 +436,19 @@ case 'modificar':
                                   pcl_DeseaSala = ?,
                                   pcl_movilidadReducida = ?,
                                   pcl_Cercania = ?,
+								  pcl_AulaDescripcion = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isissisi", 
+        $stmt->bind_param("isisssssi", 
             $data['nSalas'], 
             $data['campus'], 
             $requiereSala,
             $pcl_movilidadReducida,  // 'S' o 'N'
-            $pcl_Cercania,           // 1 o 0
+            $pcl_Cercania,           // 'S' o 'N'
+			$juntaSeccionPlanclase,
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -458,7 +511,8 @@ case 'modificar':
                 }
             }
 			
-			$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+			$alumnosTotales = obtenerAlumnosReales($data, $dataPlanclases); // Para planclases
+			$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases); // Para asignacion_piloto
             
             // ACTUALIZADA: Incluir cercanía en la actualización de asignacion_piloto
             $stmt = $conn->prepare("UPDATE asignacion_piloto 
@@ -490,11 +544,11 @@ case 'modificar':
             
             $stmtInsert = $conn->prepare($queryInsert);
             $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
-			$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+			$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases);
             
             for ($i = 0; $i < $diff; $i++) {
                 $stmtInsert->bind_param(
-					"iissssississis",  // 15 caracteres
+					"iissssississsis",  // 15 caracteres
 					$data['idplanclases'],               // 1
 					$nAlumnosReal,      // 2
 					$dataPlanclases['pcl_TipoSesion'],   // 3
@@ -537,6 +591,77 @@ case 'modificar':
 case 'modificar_asignada':
     try {
         $conn->begin_transaction();
+		
+		// Verificar que exista el parámetro requerido
+        if (!isset($data['idplanclases']) || empty($data['idplanclases'])) {
+            throw new Exception('ID de planclases no proporcionado');
+        }
+        
+        $idplanclases = intval($data['idplanclases']);
+        
+        // Verificación: Si tiene computación asignada, borrarla toda
+        $queryTieneComputacion = "SELECT COUNT(*) as count 
+                                  FROM asignacion_piloto 
+                                  WHERE idplanclases = ? 
+                                  AND idEstado = 3 
+                                  AND idSala IN ('computacion1', 'computacion2')";
+        
+        $stmtTieneComputacion = $conn->prepare($queryTieneComputacion);
+        if (!$stmtTieneComputacion) {
+            throw new Exception('Error preparando consulta de verificación: ' . $conn->error);
+        }
+        
+        $stmtTieneComputacion->bind_param("i", $idplanclases);
+        $stmtTieneComputacion->execute();
+        $result = $stmtTieneComputacion->get_result();
+        $tieneComputacion = $result->fetch_assoc()['count'] > 0;
+        $stmtTieneComputacion->close();
+        
+         if ($tieneComputacion) {
+            error_log("LIBERAR COMPUTACION - ID: " . $idplanclases);
+            
+            // ✅ 1. Borrar SOLO las reservas de computación
+            $queryBorrarReservas = "DELETE FROM reserva_2 
+                                    WHERE re_idRepeticion = ? 
+                                    AND re_idSala IN ('computacion1', 'computacion2')";
+            
+            $stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+            if ($stmtBorrarReservas) {
+                $stmtBorrarReservas->bind_param("i", $idplanclases);
+                $stmtBorrarReservas->execute();
+                $reservasBorradas = $stmtBorrarReservas->affected_rows;
+                $stmtBorrarReservas->close();
+            } else {
+                $reservasBorradas = 0;
+            }
+            
+            // ✅ 2. CAMBIAR asignaciones de computación: estado 3→1, idSala=''
+            $queryActualizarComputacion = "UPDATE asignacion_piloto 
+                                           SET idEstado = 1, 
+                                               idSala = '',
+                                               Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Computación liberada automáticamente')
+                                           WHERE idplanclases = ? 
+                                           AND idSala IN ('computacion1', 'computacion2')";
+            
+            $stmtActualizarComputacion = $conn->prepare($queryActualizarComputacion);
+            if ($stmtActualizarComputacion) {
+                $stmtActualizarComputacion->bind_param("i", $idplanclases);
+                $stmtActualizarComputacion->execute();
+                $asignacionesActualizadas = $stmtActualizarComputacion->affected_rows;
+                $stmtActualizarComputacion->close();
+            } else {
+                $asignacionesActualizadas = 0;
+            }
+            
+            error_log("COMPUTACION LIBERADA - Reservas borradas: $reservasBorradas, Asignaciones actualizadas: $asignacionesActualizadas");
+        }
+		
+		$juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
+        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'clinico');
+        
+        if (!$actualizacionOk) {
+            throw new Exception('Error actualizando pcl_AulaDescripcion en clínico');
+        }
         
         //  Procesar movilidad reducida y cercanía
         $movilidadReducida = isset($data['movilidadReducida']) ? $data['movilidadReducida'] : 'No';
@@ -549,6 +674,7 @@ case 'modificar_asignada':
         }
         
         $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
+		$juntaSeccionPlanclase = !empty($data['juntarSecciones']) ? 'S' : 'N'; // Para planclases
 		
 		// Log 
         $juntarSeccionesValue = isset($data['juntarSecciones']) ? $data['juntarSecciones'] : 'NO_ENVIADO';
@@ -567,16 +693,18 @@ case 'modificar_asignada':
                                   pcl_campus = ?,
                                   pcl_movilidadReducida = ?,
                                   pcl_Cercania = ?,
+								  pcl_AulaDescripcion = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isssssi", 
+        $stmt->bind_param("issssssi", 
             $data['nSalas'], 
             $data['campus'],
             $pcl_movilidadReducida,  // 'S' o 'N'
-            $pcl_Cercania,           // 1 o 0
+            $pcl_Cercania,           // 'S' o 'N'
+			$juntaSeccionPlanclase,
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -606,7 +734,8 @@ case 'modificar_asignada':
             $observacionModificacion = date('Y-m-d H:i:s') . " - MODIFICACIÓN DE ASIGNADA: " . $data['observaciones'];
         }
 		
-		$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+		$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases);
+		
         
         // ACTUALIZADA: Cambiar TODAS las asignaciones de estado 3 a estado 1 e incluir cercanía
         $stmt = $conn->prepare("UPDATE asignacion_piloto 
@@ -643,7 +772,8 @@ case 'modificar_asignada':
             
             $stmtInsert = $conn->prepare($queryInsert);
             $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
-			$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+			$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases);
+			$alumnosTotales = obtenerAlumnosReales($data, $dataPlanclases); // Para planclases
             $comentarioNuevo = date('Y-m-d H:i:s') . " - NUEVA SALA AGREGADA EN MODIFICACIÓN";
             if (!empty($observacionModificacion)) {
                 $comentarioNuevo = $observacionModificacion . "\n" . $comentarioNuevo;
@@ -709,12 +839,58 @@ case 'modificar_asignada':
         echo json_encode(['error' => $e->getMessage()]);
     }
     break;
+	
+	case 'obtener_estado_juntar_secciones':
+    try {
+        $idPlanClase = isset($data['idPlanClase']) ? (int)$data['idPlanClase'] : 0;
+        
+        if ($idPlanClase <= 0) {
+            throw new Exception('ID de planclase inválido');
+        }
+        
+        $estado = obtenerEstadoJuntarSecciones($idPlanClase, $conn, 'regular');
+        
+        echo json_encode(array(
+            'success' => true,
+            'pcl_AulaDescripcion' => $estado ? '1' : '',
+            'juntarSecciones' => $estado
+        ));
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    }
+    break;
+
+
+case 'actualizar_pcl_aula_descripcion':
+    try {
+        $idPlanClase = isset($data['idPlanClase']) ? (int)$data['idPlanClase'] : 0;
+        $juntarSecciones = isset($data['juntarSecciones']) ? (bool)$data['juntarSecciones'] : false;
+        
+        if ($idPlanClase <= 0) {
+            throw new Exception('ID de planclase inválido');
+        }
+        
+        $resultado = actualizarPclAulaDescripcion($idPlanClase, $juntarSecciones, $conn, 'regular');
+        
+        if ($resultado) {
+            echo json_encode(array('success' => true));
+        } else {
+            throw new Exception('Error al actualizar pcl_AulaDescripcion');
+        }
+        
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(array('success' => false, 'error' => $e->getMessage()));
+    }
+    break;
 
 case 'obtener_datos_solicitud':
     try {
         // ACTUALIZADA: Incluir pcl_movilidadReducida en la consulta
         $stmt = $conn->prepare("SELECT p.pcl_campus, p.pcl_nSalas, p.pcl_DeseaSala, 
-                               p.pcl_observaciones, p.pcl_movilidadReducida,
+                               p.pcl_observaciones, p.pcl_movilidadReducida, p.pcl_AulaDescripcion,
                                (SELECT COUNT(*) FROM asignacion_piloto 
                                 WHERE idplanclases = p.idplanclases 
                                 AND idEstado = 3) as salas_asignadas
@@ -742,6 +918,7 @@ case 'obtener_datos_solicitud':
                 'pcl_nSalas' => $datos['pcl_nSalas'],
                 'pcl_DeseaSala' => $datos['pcl_DeseaSala'],
                 'pcl_movilidadReducida' => $movilidadReducidaFrontend,  // NUEVO CAMPO
+				'pcl_AulaDescripcion' => $datos['pcl_AulaDescripcion'],
                 'observaciones' => $datos['pcl_observaciones'],
                 'mensajeAnterior' => $mensajeAnterior,
                 'estado' => $datos['salas_asignadas'] > 0 ? 3 : 0
@@ -820,6 +997,7 @@ case 'liberar':
     case 'guardar_con_computacion':
     try {
        $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
+	   $juntaSeccionPlanclase = !empty($data['juntarSecciones']) ? 'S' : 'N'; // Para planclases
 	   
 	// Log 
         $juntarSeccionesValue = isset($data['juntarSecciones']) ? $data['juntarSecciones'] : 'NO_ENVIADO';
@@ -887,17 +1065,19 @@ case 'liberar':
                                   pcl_DeseaSala = ?,
                                   pcl_movilidadReducida = ?,
                                   pcl_Cercania = ?,
+								  pcl_AulaDescripcion = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isissisi", 
+        $stmt->bind_param("isisssssi", 
             $nSalasTotales, 
             $campus, 
             $requiereSala,
             $pcl_movilidadReducida,  // 'S' o 'N'
-            $pcl_Cercania,           // 1 o 0
+            $pcl_Cercania,           // 'S' o 'N'
+			$juntaSeccionPlanclase,
             $observacionesPlanclases,
             $observacionesPlanclases,
             $idplanclases
@@ -948,7 +1128,7 @@ case 'liberar':
                 throw new Exception('No se encontró la sala de computación: ' . $idSala);
             }
 			
-			$nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+			$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases);
             
             $capacidadSala = $rowCapacidad['sa_Capacidad'];
             $stmtCapacidad->close();
@@ -1031,7 +1211,7 @@ case 'liberar':
         // Si pidió más salas que las de computación reservadas, crear solicitudes normales
         $salasComputacionReservadas = count($salasComputacion);
         $salasRestantes = $nSalasTotales - $salasComputacionReservadas;
-        $nAlumnosReal = obtenerAlumnosReales($data, $dataPlanclases);
+        $nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases);
         if ($salasRestantes > 0) {
             $comentarioSalasNormales = $observaciones . "\n\n" . 
                                      date('Y-m-d H:i:s') . " - SISTEMA: Solicitud de {$salasRestantes} sala(s) adicional(es) - Ya reservadas {$salasComputacionReservadas} sala(s) de computación";
@@ -1373,7 +1553,7 @@ $result = $stmt->get_result();
 
 
 
-<div class="container py-4">
+<div class="container-fluid py-4">
         <!-- Información del curso -->       
 		
 	<div class="accordion mb-4" id="accordionInstrucciones">
@@ -1396,27 +1576,27 @@ $result = $stmt->get_result();
                 <ul class="list-group list-group-flush">
             <li class="list-group-item">
                 <i class="bi bi-clipboard-check text-primary me-2"></i>
-                <strong>Toda actividad tipo clase</strong> se solicitará automáticamente. El resto de las actividades los debe solicitar pinchando en <strong>“Solicitar”</strong>.
+                Las actividades de tipo clase se solicitan automáticamente. Para las demás, haga clic en “Solicitar”.
             </li>
             <li class="list-group-item">
                 <i class="bi bi-pencil-square text-success me-2"></i>
-                Si al enviar la solicitud cometió un error o si le asignaron salas y alguna no les sirve, o les falta otra sala, puede pinchar en <strong>“Modificar”</strong>.
+                Si cometió un error al enviar una solicitud, si le asignaron una sala que no sirve o necesita una adicional, haga clic en “Modificar”.
             </li>
             <li class="list-group-item">
                 <i class="bi bi-people text-info me-2"></i>
-                Si el curso posee más de una sección y necesitan <strong>juntarlas</strong> para una evaluación u otra actividad, sólo se puede solicitar desde la <strong>sección 1</strong>. Al solicitar sala, pinche en <strong>“Quiero juntar todas las secciones del curso”</strong> (se sumarán automáticamente el total de estudiantes).  Si la actividad es tipo clase, pinche en “Modificar” y luego podrá pinchar en la misma opción.
+                Si el curso tiene más de una sección y desea unirlas para una actividad (como una evaluación), solo puede hacerlo desde la sección 1. Marque la opción “Quiero juntar todas las secciones del curso” (el sistema sumará automáticamente el total de estudiantes). Si la actividad es de tipo clase, primero haga clic en “Modificar” y luego marque la misma opción.
             </li>
             <li class="list-group-item">
                 <i class="bi bi-pc-display-horizontal text-dark me-2"></i>
-                Si desea usar los <strong>laboratorios de computación</strong>, primero debe indicar si quiere 1 ó las 2 salas y luego, si está disponible, pinchar en ¿Desea reservar sala(s) de computación para esta actividad?. Una vez que guarde la solicitud quedará asignada de forma automática (siempre que en otro curso en ese mismo instante no lo haya hecho un poco antes).
+                Para usar laboratorios de computación, primero indique si necesita una o ambas salas. Si hay disponibilidad, marque “¿Desea reservar sala(s) de computación para esta actividad?”. Al guardar la solicitud, la asignación será automática (siempre que no haya sido tomada segundos antes por otro curso).
             </li>
             <li class="list-group-item">
                 <i class="bi bi-universal-access text-secondary me-2"></i>
-                Si existen estudiantes con problemas de <strong>movilidad reducida</strong>, lo debe informar al CEA para que ellos lo o la contacten y quede ingresado en el sistema de la unidad de aulas para que estén al tanto.
+                Si hay estudiantes con movilidad reducida, debe informarlo al CEA. Ellos lo contactarán para registrar el caso en el sistema de la Unidad de Aulas.
             </li>
             <li class="list-group-item">
                 <i class="bi bi-box-arrow-left text-danger me-2"></i>
-                Finalmente, si tiene asignada una o más salas y ya no la utilizará, debe pinchar en <strong>“Liberar”</strong> y aparecerá una ventana para que elija cuál sala liberar.
+                Si tiene salas asignadas que no utilizará, haga clic en “Liberar” y elija cuál desea liberar.
             </li>
         </ul>
     </div>

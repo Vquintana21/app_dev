@@ -25,7 +25,7 @@ if (!isset($conn)) {
 ?>
 
 <!-- Formulario de búsqueda y asignación de docentes -->
-  <div class="container py-4"> 
+  <div class="container-fluid py-4"> 
 
  <div class="card mb-4">
             <div class="card-body">

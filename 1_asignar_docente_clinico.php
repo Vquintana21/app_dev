@@ -54,7 +54,7 @@ if($rut!='' && $control_profe > 0){
 </head>
 <body class="bg-light">
     
-    <div class="container py-4">      
+    <div class="container-fluid py-4">      
 
         <!-- Course Info 
         <div class="card mb-4">

@@ -25,8 +25,8 @@ if ($esActualizacion) {
     $inicio = isset($_POST['start_time']) ? mysqli_real_escape_string($conn, $_POST['start_time']) : '';
     $termino = isset($_POST['end_time']) ? mysqli_real_escape_string($conn, $_POST['end_time']) : '';
     $dia = isset($_POST['dia']) ? mysqli_real_escape_string($conn, $_POST['dia']) : '';
-    $condicion = isset($_POST['mandatory']) && $_POST['mandatory'] === 'true' ? "Obligatorio" : "Libre";
-    $evaluacion = isset($_POST['is_evaluation']) && $_POST['is_evaluation'] === 'true' ? "S" : "N";
+    $condicion = isset($_POST['pcl_condicion']) && $_POST['pcl_condicion'] === 'Obligatorio' ? "Obligatorio" : "Libre";
+$evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_ActividadConEvaluacion'] === 'S' ? "S" : "N";
 
     // Calcular semana basada en la nueva fecha
     $semana = date('W', strtotime($fecha)) - date('W', strtotime(date('Y') . '-01-01')) + 1;

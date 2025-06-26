@@ -13,7 +13,7 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
 
 ?>
 
-    <div class="container py-4">
+    <div class="container-fluid py-4">
         <!-- Información del curso -->
         <div class="card mb-4">
             <div class="card-body">

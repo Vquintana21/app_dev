@@ -1,18 +1,31 @@
 <?php
 include("conexion.php");
+include("login/control_sesion.php");
 session_start();
+
+
+// Validación de sesión: si no existe, redirige
+if (!isset($_SESSION['sesion_idLogin'])) {
+    header("Location: login/close.php");
+    exit(); // Importante: detener la ejecución
+}
+
+
 $rut = $_SESSION['sesion_idLogin'];
 $name = $_SESSION['sesion_usuario']; 
 $viene= array("Ã¡","Ã©","Ã","Ã³","Ãº");
 $queda= array("Á","É","Í","Ó","Ú");
 $nombre = str_replace($viene, $queda, $name);
 $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
+
 ?>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <header id="header" class="header fixed-top d-flex align-items-center">
+
     <div class="d-flex align-items-center justify-content-between">
       <a href="inicio.php" class="logo d-flex align-items-center">
         <img src="assets/img/logo.png" alt="">
-        <span class="d-none d-lg-block">Calendario Académico</span>
+        <span class="d-none d-lg-block">calendario académico</span>
       </a>
       <i class="bi bi-list toggle-sidebar-btn"></i>
     </div>
@@ -24,6 +37,14 @@ $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
             <i class="bi bi-search"></i>
           </a>
         </li>
+		<li>
+		<button id="cronometroSesion" class="btn btn-outline-danger ms-auto">
+		<i class="bi bi-stopwatch"></i>&nbsp;
+		  Tiempo restante: <span id="tiempoRestante">--:--</span>
+		</button>
+		</li>
+		&nbsp;
+		&nbsp;
         <li class="nav-item dropdown pe-3">
 		<?php $foto = InfoDocenteUcampus($rut); ?>
           <a class="nav-link nav-profile d-flex align-items-center pe-0" href="#" data-bs-toggle="dropdown">
@@ -45,3 +66,40 @@ $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
       </ul>
     </nav>
   </header>
+  
+  <script>
+  let tiempoRestante = <?php echo TIEMPO_RESTANTE; ?>;
+  let alertaMostrada = false;
+
+  const cronometro = document.getElementById("tiempoRestante");
+
+  function actualizarCronometro() {
+    if (tiempoRestante <= 0) {
+      window.location.href = "login/close.php?expirada=1";
+      return;
+    }
+
+    // Mostrar alerta cuando queda 1 minuto (60 segundos) — una sola vez
+    if (tiempoRestante <= 60 && !alertaMostrada) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Tu sesión está por expirar',
+        text: 'Queda 1 minuto de sesión. Guarda tu trabajo o refresca la página para extenderla.',
+        confirmButtonText: 'Entendido',
+        timer: 20000,
+        timerProgressBar: true
+      });
+      alertaMostrada = true;
+    }
+
+    const minutos = Math.floor(tiempoRestante / 60);
+    const segundos = tiempoRestante % 60;
+    cronometro.textContent = `${minutos}:${segundos.toString().padStart(2, '0')}`;
+    tiempoRestante--;
+  }
+
+  actualizarCronometro();
+  setInterval(actualizarCronometro, 1000);
+</script>
+
+

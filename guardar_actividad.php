@@ -80,22 +80,40 @@ try {
    $requiereSalaActual = $requiereSalaRow ? $requiereSalaRow['pedir_sala'] : 0;
    $stmtRequiereSala->close();
 
-   // Aplicar reglas específicas de negocio para pcl_nSalas
-   if ($tipo === 'Clase') {
-       $nsalasCalculado = 1;
-   } else if ($requiereSalaActual == 1) {
-       $queryNsalasActual = "SELECT pcl_nSalas FROM a_planclases WHERE idplanclases = ?";
-       $stmtNsalasActual = $conn->prepare($queryNsalasActual);
-       $stmtNsalasActual->bind_param("i", $idplanclases);
-       $stmtNsalasActual->execute();
-       $resultNsalasActual = $stmtNsalasActual->get_result();
-       $nsalasActual = $resultNsalasActual->fetch_assoc()['pcl_nSalas'];
-       $stmtNsalasActual->close();
-       
-       $nsalasCalculado = ($nsalasActual > 1) ? $nsalasActual : 1;
-   } else {
-       $nsalasCalculado = 0;
-   }
+// CONSULTAR VALOR ACTUAL SIEMPRE, ANTES DE CUALQUIER LÓGICA
+$queryNsalasActual = "SELECT pcl_nSalas FROM a_planclases WHERE idplanclases = ?";
+$stmtNsalasActual = $conn->prepare($queryNsalasActual);
+$stmtNsalasActual->bind_param("i", $idplanclases);
+$stmtNsalasActual->execute();
+$resultNsalasActual = $stmtNsalasActual->get_result();
+$nsalasActual = $resultNsalasActual->fetch_assoc()['pcl_nSalas'];
+$stmtNsalasActual->close();
+
+// AHORA SÍ, aplicar tu filosofía
+if ($tipo === 'Clase') {
+    // Verificar si ya tiene asignaciones para decidir si mantener o establecer 1
+    $queryTieneAsignaciones = "SELECT COUNT(*) as total FROM asignacion_piloto WHERE idplanclases = ?";
+    $stmtTieneAsignaciones = $conn->prepare($queryTieneAsignaciones);
+    $stmtTieneAsignaciones->bind_param("i", $idplanclases);
+    $stmtTieneAsignaciones->execute();
+    $resultTieneAsignaciones = $stmtTieneAsignaciones->get_result();
+    $tieneAsignaciones = $resultTieneAsignaciones->fetch_assoc()['total'] > 0;
+    $stmtTieneAsignaciones->close();
+    
+    if ($tieneAsignaciones) {
+        $nsalasCalculado = $nsalasActual; // Mantener valor actual
+    } else {
+        $nsalasCalculado = 1; // Solo nuevas clases
+    }
+} else if ($requiereSalaActual == 1) {
+     if ($nsalasActual > 0) {
+        $nsalasCalculado = $nsalasActual; // Mantener si ya tiene
+    } else {
+        $nsalasCalculado = 1; // Establecer mínimo si venía de sin sala
+    }
+} else {
+    $nsalasCalculado = 0;
+}
 
    // Actualizar planclases incluyendo pcl_nSalas
    $query = "UPDATE a_planclases SET 
@@ -348,20 +366,20 @@ try {
            
            // Si hay asignaciones confirmadas, cambiarlas a estado "modificada"
            if ($asignacionesConfirmadas > 0) {
-               $queryModificar = "UPDATE asignacion_piloto 
-                               SET idEstado = 1, 
-                                   Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Datos de actividad modificados')
-                               WHERE idplanclases = ? AND idEstado = 3";
-               $stmtModificar = $conn->prepare($queryModificar);
-               $stmtModificar->bind_param("i", $idplanclases);
-               $stmtModificar->execute();
-               $stmtModificar->close();
+               // $queryModificar = "UPDATE asignacion_piloto 
+               //                 SET idEstado = 1, 
+               //                     Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Datos de actividad modificados')
+               //                 WHERE idplanclases = ? AND idEstado = 3";
+               // $stmtModificar = $conn->prepare($queryModificar);
+               // $stmtModificar->bind_param("i", $idplanclases);
+               // $stmtModificar->execute();
+               // $stmtModificar->close();
                
-               $mensajeUsuario = 'Se ha solicitado modificación de la sala asignada';
+               $mensajeUsuario = 'Actividad actualizada';
                $necesitaConfirmacion = true;
-               $mensajeConfirmacion = "Este cambio solicitará una modificación de la sala asignada. La reserva actual será cancelada hasta que se asigne una nueva sala. ¿Desea continuar?";
+               $mensajeConfirmacion = "Actividad actualizada";
            } else {
-               $mensajeUsuario = 'Actividad actualizada - CRON gestionará asignación';
+               $mensajeUsuario = 'Actividad actualizada';
            }
        } else if ($requiereSala) {
            /* CASO 5: ACTIVIDAD GRUPAL/TP/EV/EX → ACTIVIDAD GRUPAL/TP/EV/EX */
@@ -388,47 +406,21 @@ try {
                
                // Actualizar tipo a 'Clase' en asignaciones existentes
                if ($asignacionesConfirmadas > 0 || $asignacionesPendientes > 0 || $asignacionesModificadas > 0) {
-                   $queryActualizarTipo = "UPDATE asignacion_piloto 
-                                          SET tipoSesion = 'Clase',
-                                              Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Tipo cambiado a Clase')
-                                          WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
-                   $stmtActualizarTipo = $conn->prepare($queryActualizarTipo);
-                   $stmtActualizarTipo->bind_param("i", $idplanclases);
-                   $stmtActualizarTipo->execute();
-                   $stmtActualizarTipo->close();
-               }
-               
-               // Si hay salas asignadas, necesitamos confirmación
-               if ($asignacionesConfirmadas > 0) {
-                   $necesitaConfirmacion = true;
-                   $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se liberarán las salas actuales y el CRON creará una asignación automática. ¿Desea continuar?";
-               }
-               
-               // Liberar asignaciones existentes (reservas) si hay
-               if ($asignacionesConfirmadas > 0) {
-                   $queryLiberarExistentes = "UPDATE asignacion_piloto 
-                                           SET idEstado = 4, 
-                                               Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Liberada por cambio a tipo Clase')
-                                           WHERE idplanclases = ? AND idEstado = 3";
-                   $stmtLiberarExistentes = $conn->prepare($queryLiberarExistentes);
-                   $stmtLiberarExistentes->bind_param("i", $idplanclases);
-                   $stmtLiberarExistentes->execute();
-                   $stmtLiberarExistentes->close();
-               }
-               
-               // Eliminar asignaciones en proceso
-               $queryEliminarEnProceso = "DELETE FROM asignacion_piloto 
-                                       WHERE idplanclases = ? AND idEstado IN (0, 1)";
-               $stmtEliminarEnProceso = $conn->prepare($queryEliminarEnProceso);
-               $stmtEliminarEnProceso->bind_param("i", $idplanclases);
-               $stmtEliminarEnProceso->execute();
-               $stmtEliminarEnProceso->close();
-               
-               $mensajeUsuario = 'Cambiado a Clase - CRON gestionará asignación automática';
+					$queryActualizarTipo = "UPDATE asignacion_piloto 
+										   SET tipoSesion = 'Clase',
+											   Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Tipo cambiado a Clase')
+										   WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
+					$stmtActualizarTipo = $conn->prepare($queryActualizarTipo);
+					$stmtActualizarTipo->bind_param("i", $idplanclases);
+					$stmtActualizarTipo->execute();
+					$stmtActualizarTipo->close();
+				}
+
+				$mensajeUsuario = 'Tipo de actividad actualizado';
                
            } else {
                /* CASO 7: ACTIVIDAD SIN SALA → CLASE */
-               $mensajeUsuario = 'Cambiado a Clase - CRON gestionará asignación automática';
+               $mensajeUsuario = '¡Actividad actualizada!';
            }
        } else if ($requiereSala) {
            if ($tipoAnterior === 'Clase') {
@@ -446,7 +438,7 @@ try {
                    $stmtActualizarTipo->close();
                    
                    $necesitaConfirmacion = true;
-                   $mensajeConfirmacion = "Al cambiar de 'Clase' a este tipo de actividad, se actualizarán las asignaciones automáticas. Deberá gestionar la sala manualmente desde la pestaña Salas. ¿Desea continuar?";
+                   $mensajeConfirmacion = "Tipo actualizado - Gestione sala desde pestaña Salas";
                }
                
                $mensajeUsuario = 'Tipo actualizado - Gestione sala desde pestaña Salas';
@@ -459,38 +451,50 @@ try {
            if ($tipoAnterior === 'Clase') {
                /* CASO 3: CLASE → ACTIVIDAD SIN SALA (PC/SA/TA/VT) */
                
-               // Si hay salas asignadas, necesitamos confirmación
                if ($asignacionesConfirmadas > 0 || $asignacionesPendientes > 0 || $asignacionesModificadas > 0) {
-                   $necesitaConfirmacion = true;
-                   $mensajeConfirmacion = "Al cambiar a un tipo de actividad que no requiere sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
-               }
-               
-               // Eliminar todas las asignaciones (incluidas reservas)
-               $queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
-               $stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
-               $stmtEliminarTodas->bind_param("i", $idplanclases);
-               $stmtEliminarTodas->execute();
-               $stmtEliminarTodas->close();
-               
-               $mensajeUsuario = 'Actividad no requiere sala - Asignaciones eliminadas';
+						$necesitaConfirmacion = true;
+						$mensajeConfirmacion = "Al cambiar a un tipo sin sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
+					}
+
+					// 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
+					$queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
+					$stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+					$stmtBorrarReservas->bind_param("i", $idplanclases);
+					$stmtBorrarReservas->execute();
+					$stmtBorrarReservas->close();
+
+					// 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
+					$queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
+					$stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
+					$stmtEliminarTodas->bind_param("i", $idplanclases);
+					$stmtEliminarTodas->execute();
+					$stmtEliminarTodas->close();
+
+					$mensajeUsuario = 'Actividad no requiere sala - Asignaciones y reservas eliminadas';
                
            } else {
                /* CASO 6: ACTIVIDAD GRUPAL/TP/EV/EX → ACTIVIDAD SIN SALA */
                
-               // Si hay salas asignadas, necesitamos confirmación
                if ($asignacionesConfirmadas > 0 || $asignacionesPendientes > 0 || $asignacionesModificadas > 0) {
-                   $necesitaConfirmacion = true;
-                   $mensajeConfirmacion = "Al cambiar a un tipo sin sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
-               }
-               
-               // Eliminar todas las asignaciones (incluidas reservas)
-               $queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
-               $stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
-               $stmtEliminarTodas->bind_param("i", $idplanclases);
-               $stmtEliminarTodas->execute();
-               $stmtEliminarTodas->close();
-               
-               $mensajeUsuario = 'Actividad no requiere sala - Asignaciones eliminadas';
+					$necesitaConfirmacion = true;
+					$mensajeConfirmacion = "Al cambiar a un tipo sin sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
+				}
+
+				// 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
+				$queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
+				$stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+				$stmtBorrarReservas->bind_param("i", $idplanclases);
+				$stmtBorrarReservas->execute();
+				$stmtBorrarReservas->close();
+
+				// 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
+				$queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
+				$stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
+				$stmtEliminarTodas->bind_param("i", $idplanclases);
+				$stmtEliminarTodas->execute();
+				$stmtEliminarTodas->close();
+
+				$mensajeUsuario = 'Actividad no requiere sala - Asignaciones y reservas eliminadas';
            }
        }
    }

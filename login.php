@@ -12,18 +12,22 @@ $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
 
 $res_pregrado = mysqli_query($conexion3,"SELECT * FROM `pm_EstudianteCarrera` where `rutEstudiante`='$rut_niv' and idEstadoEstudiante in (3,15) and TipoCarrera='Pregrado' and rutEstudiante not in ('017517415K','016784781K')");
 $numpregrado = mysqli_num_rows($res_pregrado);
+
+
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Administrador de Gestión - Login</title>
+  <title>Calendario académico - Facultad de Medicina</title>
   
   <!-- Bootstrap CSS -->
   <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" rel="stylesheet">
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   
    <!-- Custom styles for this template -->
   <link href="css/small-business.css" rel="stylesheet">
@@ -145,6 +149,39 @@ footer {
   </style>
 </head>
 <body>
+
+<?php
+$expirada = isset($_GET['expirada']) ? $_GET['expirada'] : '0';
+?>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<?php if ($expirada === '1'): ?>
+<script>
+  Swal.fire({
+    icon: 'info',
+    title: 'Sesión expirada',
+    text: 'Tu sesión caducó por inactividad. Inicia sesión nuevamente.',
+    confirmButtonText: 'Iniciar sesión',
+    allowOutsideClick: false,
+    allowEscapeKey: false
+  }).then(() => {
+    sessionStorage.setItem('mensajePostLogin', 'Tu sesión anterior expiró por inactividad.');
+    // Limpia la URL para evitar repetición
+    history.replaceState(null, '', window.location.pathname);
+    window.location.href = 'login/login.php';
+  });
+</script>
+
+<?php elseif ($expirada === '0'): ?>
+<script>
+  // Sesión cerrada manualmente → sin alerta de expiración
+  sessionStorage.removeItem('mensajePostLogin');
+  history.replaceState(null, '', window.location.pathname);
+</script>
+<?php endif; ?>
+
+
     
 <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css" integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
 
@@ -247,6 +284,24 @@ footer {
    <br>
     <!-- /.container -->
   </footer> 
+  
+ 
+<script>
+  // Mostrar mensaje si existe y limpiarlo luego
+  const mensaje = sessionStorage.getItem("mensajePostLogin");
+  if (mensaje) {
+    Swal.fire({
+      icon: 'info',
+      title: 'Bienvenido nuevamente',
+      text: mensaje,
+      confirmButtonText: 'Aceptar'
+    });
+
+    // Eliminarlo para que no se repita
+    sessionStorage.removeItem("mensajePostLogin");
+  }
+</script>
+
 
   <!-- JavaScript Dependencies -->
   <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>

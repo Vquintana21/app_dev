@@ -3,7 +3,7 @@
 //index.php 99677 ultimo profesor
 header('Content-type: text/html; charset=utf-8');
 include("conexion.php");
-
+include_once 'login/control_sesion.php';
 // Obtener el ID del curso desde la URL
 $idCurso = $_GET['curso']; 
 //$idCurso = 8942; // 8158
@@ -14,7 +14,8 @@ $query = "SELECT `idplanclases`, pcl_tituloActividad, `pcl_Fecha`, `pcl_Inicio`,
           `pcl_nSalas`, `pcl_Seccion`, `pcl_TipoSesion`, `pcl_SubTipoSesion`, 
           `pcl_Semana`, `pcl_AsiCodigo`, `pcl_AsiNombre`, `Sala`, `Bloque`, `dia`, `pcl_condicion`, `pcl_ActividadConEvaluacion`, pcl_BloqueExtendido
           FROM `a_planclases` 
-          WHERE `cursos_idcursos` = ?";
+          WHERE `cursos_idcursos` = ?
+		  AND pcl_Semana >= 1";
 
 $stmt = $conn->prepare($query);
 $stmt->bind_param("i", $idCurso);
@@ -248,7 +249,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calendario Académico</title>
+    <title>Calendario académico - Facultad de Medicina</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">	
 	  
@@ -279,7 +280,87 @@ $conn->close();
     
 </head>
 <body class="toggle-sidebar">
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+ <!-- ======= Script Replica ======= -->
+ 	<script>
+	
+	$(document).ready(function() {
+		
+		var idCurso = <?php echo $idCurso; ?>;
+		
+		if(idCurso != ""){
+			
+			$.ajax({ 
+				dataType: "",
+				data: {'idCurso':idCurso
+				},
+				url: 'https://dpi.med.uchile.cl/test/calendarios/replica/validar_reglas.php',
+				type: 'POST',
+				beforeSend: function() {
+					//Lo que se hace antes de enviar el formulario
+				},
+				success: function(respuesta) {
+					
+					if(respuesta == 1){
+						$("#modal_replica").modal("show");
+					}
+				},
+				error: function(xhr, err) {
+					alert("readyState: " + xhr.readyState + "\nstatus: " + xhr.status + "\n \n responseText: " + xhr.responseText);
+				}
+			});
+			
+		}
+		
 
+	});
+	
+	function ejecutar_replica(accion){
+		
+		var idCurso = $("#idCurso").val();
+		
+		
+		$.ajax({
+				dataType: "",
+				data: {'idCurso': idCurso, 'accion': accion
+				},
+				url: 'https://dpi.med.uchile.cl/test/calendarios/replica/ejecutar_replica.php',
+				type: 'POST',
+				beforeSend: function() {
+					//Lo que se hace antes de enviar el formulario
+					if(accion == "replicar"){
+						$('#spinner').show();  
+						$('#btn_ejecutar').prop("disabled",true);
+						$('#btn_nuevo').prop("disabled",true);						
+						$('#mensaje_tiempo').prop("hidden",false);  
+					}else{
+						$('#btn_nuevo').prop("disabled",true); 
+						$('#btn_ejecutar').prop("disabled",true); 			 			
+					}
+					
+					
+				},
+				success: function(respuesta) {
+					
+				
+					if(accion == "replicar"){
+						alert(respuesta);
+					}
+					
+					window.location.href = 'https://dpi.med.uchile.cl/test/calendarios/index.php?curso='+idCurso;
+				},
+				error: function(xhr, err) {
+					alert("readyState: " + xhr.readyState + "\nstatus: " + xhr.status + "\n \n responseText: " + xhr.responseText);
+				}
+			});
+	}
+
+	
+	</script>
+ <!-- ======= Script Replica ======= -->
+ 
+ 
+ 
  <!-- ======= Header ======= -->
   <?php include 'nav_superior.php'; ?>
   
@@ -1003,7 +1084,7 @@ function createActivityButton(activity) {
     if (button.getAttribute('title')) {
         setTimeout(() => {
             new bootstrap.Tooltip(button);
-        }, 100);
+        }, 500);
     }
     
     return button;
@@ -1094,7 +1175,7 @@ function generateCalendar(activitiesForMonth, calendarBody, currentMonth) {
             // Actividades para este día que pertenecen a este mes
             const dayActivities = week.activities
                 .filter(activity => {
-                    if (activity.dia !== day) return false;
+                    if (activity.dia !== day && !(day === 'Miércoles' && activity.dia === 'Miercoles')) return false;
                     
                     const activityDate = new Date(activity.pcl_Fecha);
                     return activityDate.getMonth() === currentMonth;
@@ -1610,14 +1691,11 @@ function saveActivity() {
             if (data.necesita_confirmacion) {
                 // Mostrar SweetAlert de confirmación
                 Swal.fire({
-                    title: '¿Estás seguro?',
+                    title: '¡Importante!',
                     html: data.mensaje_confirmacion,
-                    icon: 'warning',
-                    showCancelButton: true,
+                    icon: 'info',                    
                     confirmButtonColor: '#3085d6',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: 'Sí, continuar',
-                    cancelButtonText: 'Cancelar'
+                    confirmButtonText: 'continuar',
                 }).then((result) => {
                     if (result.isConfirmed) {
                         // Si confirma, proceder con el guardado
@@ -1751,7 +1829,7 @@ function procesarGuardado() {
         // ===== LÓGICA ESPECIAL PARA CASO "DEBE SOLICITAR SALA" =====
         const esCasoSolicitudSala = data.mensaje_sala && 
                                     data.mensaje_sala.includes('Debe solicitar sala desde pestaña Salas') ||
-									data.mensaje_sala.includes('Cambiado a Clase - CRON gestionará asignación automática')
+									data.mensaje_sala.includes('Actividad Solicitada')
         
         if (esCasoSolicitudSala) {
             // CERRAR MODAL PRIMERO
@@ -1790,11 +1868,11 @@ function procesarGuardado() {
 						</p>
 						<div class="alert alert-info mb-3">
 							<i class="bi bi-info-circle me-2"></i>
-							El sistema gestionará automáticamente la asignación de sala.
+							Te ayudaremos a gestionar la solicitud de sala(s) para esta actividad, si deseas modificar el requerimiento debes hacerlo en la sección salas.
 						</div>
 						<p class="text-muted mb-0">
 							<i class="bi bi-clock-history me-2"></i>
-							En las próximas horas verá reflejada la asignación en la pestaña "Salas".
+							En la próxima hora ingresaremos automáticamente tu solicitud de salas para su revisión a la unidad de aulas docentes. 
 						</p>
 					</div>
 				`;
@@ -1881,7 +1959,7 @@ function procesarGuardado() {
             mostrarToast(mensaje, 'success');
             
             // Recargar página después de un breve retraso
-            setTimeout(() => location.reload(), 2000);
+            setTimeout(() => location.reload(), 500);
             
         } else {
             throw new Error(data.message || 'Error al guardar los cambios');
@@ -1952,7 +2030,7 @@ function saveAutoActivity() {
             mostrarToast('Autoaprendizaje guardado correctamente', 'success');
             
             // Recargar la página después de un breve periodo
-            setTimeout(() => location.reload(), 2000);
+            setTimeout(() => location.reload(), 500);
         } else {
             throw new Error(data.message || 'Error al guardar el autoaprendizaje');
         }
@@ -2009,6 +2087,11 @@ async function solicitarSala(idPlanClase) {
                 requiereSala: data.pcl_DeseaSala || 1,
                 movilidadReducida: data.pcl_movilidadReducida || 'No'
             });
+			
+			const juntarCheckbox = document.getElementById('juntarSecciones');
+            if (juntarCheckbox) {
+                juntarCheckbox.checked = (data.pcl_AulaDescripcion === 'S');
+            }
         }
     } catch (error) {
         console.error('Error al obtener datos:', error);
@@ -2044,7 +2127,7 @@ async function solicitarSala(idPlanClase) {
             // Verificar bloques relacionados después de un breve delay
             setTimeout(function() {
                 verificarBloquesMismoDia(parseInt(idCurso), fechaParsed, parseInt(idPlanClase));
-            }, 300);
+            }, 500);
         } else {
             console.warn('⚠️ No se pudo parsear la fecha:', fechaCell);
         }
@@ -2061,7 +2144,7 @@ async function solicitarSala(idPlanClase) {
         if (typeof datosJuntarSecciones !== 'undefined' && datosJuntarSecciones && !juntarSeccionesConfigurado) {
             configurarJuntarSecciones();
         }
-    }, 50);
+    }, 500);
 }
     
     const modal = new bootstrap.Modal(document.getElementById('salaModal'));
@@ -2158,7 +2241,7 @@ document.getElementById('textoObservacionesHistoricas').textContent = datos.mens
                 if (typeof datosJuntarSecciones !== 'undefined' && datosJuntarSecciones && !juntarSeccionesConfigurado) {
                     configurarJuntarSecciones();
                 }
-            }, 50);
+            }, 500);
          // NUEVO: Verificar bloques relacionados del mismo día
 		const fechaCell = tr.cells[1] ? tr.cells[1].textContent.trim() : '';
         if (fechaCell) {
@@ -2177,11 +2260,17 @@ document.getElementById('textoObservacionesHistoricas').textContent = datos.mens
                 // Verificar bloques relacionados después de un breve delay
                 setTimeout(function() {
                     verificarBloquesMismoDia(parseInt(idCurso), fechaParsed, parseInt(idPlanClase));
-                }, 300);
+                }, 500);
             } else {
                 console.warn('⚠️ No se pudo parsear la fecha:', fechaCell);
             }
         }
+		
+		const juntarCheckbox = document.getElementById('juntarSecciones');
+            if (juntarCheckbox) {
+                juntarCheckbox.checked = (datos.pcl_AulaDescripcion === 'S');
+                console.log('Checkbox juntar secciones:', datos.pcl_AulaDescripcion === 'S');
+            }
 		
 		}
     } catch (error) {
@@ -2390,7 +2479,7 @@ function verificarPersistenciaCheckbox() {
         }
         
         console.log('🏁 === FIN VERIFICACIÓN DE PERSISTENCIA ===');
-    }, 2000);
+    }, 500);
 }
 
 // FUNCIÓN: actualizarAlumnosTotales
@@ -2679,7 +2768,7 @@ function restaurarHTMLSeccionComputacion() {
             
             <!-- PREGUNTA - Se mostrará/ocultará dinámicamente -->
             <div class="form-check mb-3" style="display: none;">
-                <input class="form-check-input" type="checkbox" id="deseaComputacion">
+                <input class="form-check-input border border-dark" type="checkbox" id="deseaComputacion">
                 <label class="form-check-label fw-bold text-success" for="deseaComputacion">
                     <i class="bi bi-check-circle me-1"></i>
                     ¿Desea reservar sala(s) de computación para esta actividad?
@@ -2742,7 +2831,7 @@ function mostrarOpcionesComputacion(opciones) {
         div.className = 'form-check mb-2';
         
         const input = document.createElement('input');
-        input.className = 'form-check-input';
+        input.className = 'form-check-input border border-dark';
         input.type = 'radio';
         input.name = 'opcion_computacion';
         input.id = `opcion_computacion_${index}`;
@@ -3042,7 +3131,7 @@ if (requiereSalaSelect) {
 		 manejarCambioRequiereSala(); //
         
         actualizarSalasDisponibles();
-    }, 100);
+    }, 500);
 }
 
 function manejarCambioRequiereSala() {
@@ -3089,16 +3178,16 @@ function manejarCambioRequiereSala() {
     }
     
     // Controlar sección juntar secciones
-    const juntarSeccionesDiv = document.getElementById('juntarSeccionesDiv');
-    if (juntarSeccionesDiv) {
-        juntarSeccionesDiv.style.display = requiere ? 'block' : 'none';
-        
-        // Limpiar checkbox
-        if (!requiere) {
-            const juntarCheckbox = document.getElementById('juntarSecciones');
-            if (juntarCheckbox) juntarCheckbox.checked = false;
-        }
-    }
+ //   const juntarSeccionesDiv = document.getElementById('juntarSeccionesDiv');
+ //   if (juntarSeccionesDiv) {
+ //       juntarSeccionesDiv.style.display = requiere ? 'block' : 'none';
+ //       
+ //       // Limpiar checkbox
+ //       if (!requiere) {
+ //           const juntarCheckbox = document.getElementById('juntarSecciones');
+ //           if (juntarCheckbox) juntarCheckbox.checked = false;
+ //       }
+ //   }
     
     // Controlar botón observaciones históricas
     const btnObsHistoricas = document.querySelector('[data-bs-target="#observacionesHistoricas"]');
@@ -4488,7 +4577,7 @@ function procesarAsignacion(accion, docentesRuts) {
                 // Actualizar la vista después de un breve retraso
                 setTimeout(() => {
                     $('#btnVisualizar').click();
-                }, 1500);
+                }, 500);
             } else {
                 mostrarNotificacionMasiva(response.message || 'Error al procesar la solicitud', 'danger');
             }
@@ -4844,7 +4933,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	
 	 setTimeout(function() {
         verificarDependencias();
-    }, 1000);
+    }, 500);
 	
 	 var alumnosPorSala = document.getElementById('alumnosPorSala');
     if (alumnosPorSala) {
@@ -4866,7 +4955,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modalSalas) {
         modalSalas.addEventListener('shown.bs.modal', function() {
             // Delay para asegurar que todos los campos estén cargados
-            setTimeout(actualizarSalasDisponibles, 1000);
+            setTimeout(actualizarSalasDisponibles, 500);
         });
     }
 	
@@ -5270,7 +5359,7 @@ function modificarSalaDesdeInconsistencia() {
         // Esperar a que se cierre el modal anterior
         setTimeout(() => {
             modificarSala(idActividadActual);
-        }, 300);
+        }, 500);
     }
 }
 
@@ -5287,14 +5376,87 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+
 </script>
 
+	<!-- Modal Replicacion-->
+	<div class="modal fade" id="modal_replica" tabindex="-1" aria-labelledby="exampleModalLabel"  data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+	 
+	  <div class="modal-dialog  modal-xl">
+		<div class="modal-content">
+		  <div class="modal-header">
+			<h1 class="modal-title fs-5" id="exampleModalLabel"><i class="fas fa-clone text-primary"></i> IMPORTANTE: ¿Quieres replicar el calendario desde periodo anterior? </h1>
+			<input type="text" name="idCurso" id="idCurso" value="<?php echo $idCurso; ?>" hidden />
+		  </div>
+		  <div class="modal-body">
+			<div class="alert alert-primary justify" role="alert">
+				<h6><i class="fas fa-lightbulb text-warning"></i> ¡Queremos hacerte la vida un poco más fácil!</h6>
+				<br>
+				Sabemos que el llenado del calendario puede ser una tarea extensa y demandante. Por eso, hemos desarrollado una herramienta que te permitirá pre-cargar automáticamente información del último curso ejecutado.
+				
+				Si decides utilizar esta opción, el sistema buscará el curso anterior y traerá los detalles de actividades, tipos de sesión y docentes asociados. Así tendrás una <b>base inicial</b> desde la cual podrás ajustar y completar la programación actual.
+				<br>
+				<br>
+				<b>Recuerda que, de todos modos, la revisión y validación final de la programación sigue siendo tu responsabilidad, asegurando que refleje fielmente la planificación de este curso.</b>
+				<br><br>
+				Atte. Unidad de Diseño de Procesos Internos (DPI)
+			</div>
+			
+			<div class="card">
+			  <div class="card-body">
+				<h5 class="card-title">
+				  <i class="fas fa-check-square text-success"></i> Este curso cumple con las condiciones para replicar el calendario anterior
+				</h5>
+				<br>
+				<h6 class="card-subtitle mb-2 text-body-secondary">
+				  1. Los cursos tienen la misma duración (en número de semanas) <i class="fas fa-check-square text-success"></i>
+				</h6>
 
+				<h6 class="card-subtitle mb-2 text-body-secondary">
+				  2. Los cursos mantienen el mismo número de actividades semanales <i class="fas fa-check-square text-success"></i>
+				</h6>
+
+				<h6 class="card-subtitle mb-2 text-body-secondary">
+				  3. No corresponde a un curso clínico <i class="fas fa-check-square text-success"></i>
+				</h6>
+
+			  </div>
+			</div>
+			
+			<div class="card mt-2">
+			  <div class="card-body">
+				<h5 class="card-title">
+				  <i class="fas fa-info-circle text-primary"></i> ¿Qué replicaremos?
+				</h5>
+				<br>
+				<h6 class="card-subtitle mb-2 text-body-secondary">
+				  1. El título de las actividades que usaste la última vez.
+				</h6>
+				<h6 class="card-subtitle mb-2 text-body-secondary">
+				  2. Los docentes asociados a las actividades del calendario anterior y que continuen en el equipo docente en el periodo actual. 
+				</h6>
+				<h6 class="card-subtitle mb-2 text-body-secondary">
+				  3. El tipo de actividad y la asistencia (obligatoria o libre) de las actividades.
+				</h6>
+			  </div>
+			</div>
+			
+			
+
+		  </div>
+		  <div class="modal-footer">
+			<button id="btn_nuevo" value="no_replicar" type="button" onclick="ejecutar_replica('no_replicar')" class="btn btn-primary">Deseo empezar desde cero</button>
+			<button id="btn_ejecutar" value="replicar" type="button" onclick="ejecutar_replica('replicar')" class="btn btn-success">Usar calendario anterior <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" style="display: none;" id="spinner"></span></button>
+			<small id="mensaje_tiempo" class="text-danger" hidden>* Esta acción puede demorar un poco. Te pedimos paciencia y que no presiones ni recargues la página hasta que estemos listos. </small>
+		  </div>
+		</div>
+	  </div>
+	</div>
 
 
 
 <!-- Justo antes del cierre del body -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="docentes_helper_regular.js"></script>
 
