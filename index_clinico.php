@@ -1071,7 +1071,7 @@ function validarFormularioActividad() {
                 });
             } else {
                 mostrarToast(mensaje, 'success');
-                setTimeout(() => location.reload(), 1500);
+                setTimeout(() => location.reload(), 500);
             }
         })
         .catch(error => {
@@ -1230,7 +1230,7 @@ function eliminarActividadIndividual(idplanclases) {
         if (data.success) {
             mostrarToast('Actividad eliminada exitosamente', 'success');
             // Recargar página después de un breve periodo
-            setTimeout(() => location.reload(), 1500);
+            setTimeout(() => location.reload(), 500);
         } else {
             throw new Error(data.message || 'Error al eliminar la actividad');
         }
@@ -1369,7 +1369,7 @@ document.getElementById('activity-date').min = today; // ✅ Solo evita fechas p
                 // Si ya está cargado, solo reinicializar las horas
                 setTimeout(() => {
                     setupHorasDirectasClinico();
-                }, 100);
+                }, 500);
                 return;
             }
             
@@ -1451,7 +1451,7 @@ function forzarRecargaCompleta() {
         setTimeout(() => {
             docenteTab.click();
             console.log('✅ Pestaña recargada por click forzado');
-        }, 100);
+        }, 500);
     } else {
         console.error('❌ No se encontró la pestaña de docentes');
     }
@@ -1506,7 +1506,7 @@ function mostrarSpinnerYRecargar(contenedor) {
             // Reinicializar funcionalidades
             setTimeout(() => {
                 reinicializarFuncionalidades();
-            }, 300);
+            }, 500);
         })
         .catch(error => {
             console.error('❌ Error en fetch:', error);
@@ -1597,7 +1597,7 @@ if (typeof inicializarBusquedaDocentesClinico === 'function') {
 				else {
                     console.warn('⚠️ setupHorasDirectasClinico no está disponible');
                 }
-            }, 300);
+            }, 500);
         })
         .catch(error => {
             console.error('❌ Error al actualizar tabla:', error);
@@ -1639,7 +1639,7 @@ if (typeof inicializarBusquedaDocentesClinico === 'function') {
         if (typeof inicializarCrearDocente === 'function') {
             inicializarCrearDocente();
         }
-    }, 1000);
+    }, 500);
         }
     }
     
@@ -1795,7 +1795,7 @@ async function guardarSala() {
             // Recargar la página para ver los cambios
             setTimeout(() => {
     recargarTablaSalasClinico();
-}, 800);
+}, 500);
         } else {
             throw new Error(data.error || 'Error desconocido del servidor');
         }
@@ -1806,13 +1806,13 @@ async function guardarSala() {
 }
 
 // Calcular alumnos por sala (función reutilizable)
-function calcularAlumnosPorSala() {
-    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
-    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
-    // Usar Math.ceil para redondear hacia arriba
-    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
-    document.getElementById('alumnosPorSala').value = alumnosPorSala;
-}
+//function calcularAlumnosPorSala() {
+//    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
+//    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
+//    // Usar Math.ceil para redondear hacia arriba
+//    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
+//    document.getElementById('alumnosPorSala').value = alumnosPorSala;
+//}
 	
 </script>
 
@@ -2118,7 +2118,7 @@ function mostrarToastDiscretoClinico(mensaje, tipo = 'success') {
             if (toastContainer.lastElementChild) {
                 toastContainer.lastElementChild.remove();
             }
-        }, 2000);
+        }, 500);
     }
 }
 
@@ -2144,7 +2144,7 @@ $(document).ready(function() {
         console.log('📑 Pestaña de docentes ya activa al cargar');
         setTimeout(() => {
             setupHorasDirectasClinico();
-        }, 1000);
+        }, 500);
     }
 	
 	 setTimeout(function() {
@@ -2171,7 +2171,7 @@ $(document).ready(function() {
         });
         
         console.log(`✅ ${$('.hours-input').length} inputs de horas inicializados`);
-    }, 100);
+    }, 500);
 });
 
 // Función para recargar la tabla y reinicializar event listeners
@@ -2207,7 +2207,7 @@ function reloadDocentesTableWithHours() {
                 if (typeof inicializarBusquedaDocentesClinico === 'function') {
                     inicializarBusquedaDocentesClinico();
                 }
-            }, 300); // Un poco más de tiempo para que se renderice
+            }, 500); // Un poco más de tiempo para que se renderice
         },
         error: function(xhr, status, error) {
             console.error('❌ Error al recargar tabla:', { status, error });
@@ -2293,17 +2293,48 @@ async function modificarSala(idPlanClase) {
         
         const datos = await response.json();
         
-        if (datos.success) {
-            // Determinar la acción según el estado
-            document.getElementById('action').value = datos.estado === 3 ? 'modificar_asignada' : 'modificar';
+       if (datos.success) {
+    // Determinar la acción según el estado
+    document.getElementById('action').value = datos.estado === 3 ? 'modificar_asignada' : 'modificar';
+    
+    // ✅ LLENAR CAMPOS BÁSICOS
+    document.getElementById('campus').value = datos.pcl_campus || '';
+    document.getElementById('nSalas').value = datos.pcl_nSalas || 1;
+    document.getElementById('textoObservacionesHistoricas').textContent = datos.observaciones || 'Sin observaciones previas.';
+    
+    // ✅ CONFIGURAR MOVILIDAD REDUCIDA
+    if (datos.movilidadReducida) {
+        document.getElementById('movilidadReducida').value = datos.movilidadReducida;
+    }
+    
+    // ✅ CONFIGURAR ALUMNOS CORRECTAMENTE
+    document.getElementById('alumnosTotales').value = datos.pcl_alumnos || cupoCurso;
+    document.getElementById('alumnosPorSala').value = datos.alumnosPorSala || datos.pcl_alumnos || cupoCurso;
+    
+    // ✅ VERIFICAR Y MOSTRAR OPCIONES DE SECCIONES
+    await verificarYMostrarOpciones(idPlanClase);
+    
+    // ✅ CONFIGURAR CHECKBOX JUNTAR SECCIONES (después de verificar opciones)
+    if (datos.juntarSecciones) {
+        const checkboxJuntar = document.getElementById('juntarSecciones');
+        if (checkboxJuntar) {
+            checkboxJuntar.checked = true;
             
-            // Llenar el formulario con los datos
-            document.getElementById('campus').value = datos.pcl_campus || '';
-            document.getElementById('nSalas').value = datos.pcl_nSalas || 1;
-            //document.getElementById('observaciones').value = datos.observaciones || '';
-			document.getElementById('textoObservacionesHistoricas').textContent = datos.observaciones || 'Sin observaciones previas.';
-
+            // Disparar el evento change para que se ejecute recalcularAlumnos()
+            const event = new Event('change', { bubbles: true });
+            checkboxJuntar.dispatchEvent(event);
         }
+    }
+    
+    console.log('✅ Datos cargados:', {
+        campus: datos.pcl_campus,
+        nSalas: datos.pcl_nSalas,
+        alumnosTotales: datos.pcl_alumnos,
+        alumnosPorSala: datos.alumnosPorSala,
+        juntarSecciones: datos.juntarSecciones,
+        movilidadReducida: datos.movilidadReducida
+    });
+}
     } catch (error) {
         console.error('Error:', error);
         mostrarNotificacion('Error al cargar los datos de la sala', 'danger');
@@ -2366,25 +2397,57 @@ async function verificarYMostrarOpciones(idPlanClase) {
     }
 }
 
-// NUEVA FUNCIÓN: Recalcular alumnos según checkbox
+// Función para recalcular alumnos cuando se cambia la opción de juntar secciones
 function recalcularAlumnos() {
-    const checkbox = document.getElementById('juntarSecciones');
+    console.log("🔄 Recalculando alumnos...");
+    
+    const juntarSecciones = document.getElementById('juntarSecciones').checked;
     const alumnosTotalesInput = document.getElementById('alumnosTotales');
     
-    if (checkbox.checked && datosSeccionesCache && datosSeccionesCache.cupoTotal) {
-        // Usar cupo total de todas las secciones
+    if (juntarSecciones && datosSeccionesCache) {
+        // Si está marcado juntar secciones, usar el cupo total
         alumnosTotalesInput.value = datosSeccionesCache.cupoTotal;
-        console.log(`🔄 Juntando secciones: ${datosSeccionesCache.cupoTotal} alumnos`);
-        mostrarNotificacion(`Juntando ${datosSeccionesCache.totalSecciones} secciones - Total: ${datosSeccionesCache.cupoTotal} alumnos`, 'info');
+        console.log(`✅ Juntando secciones: ${datosSeccionesCache.cupoTotal} alumnos totales`);
     } else {
-        // Usar cupo individual del curso
+        // Si no está marcado, usar el cupo individual del curso
         alumnosTotalesInput.value = cupoCurso;
-        console.log(`🔄 Sección individual: ${cupoCurso} alumnos`);
+        console.log(`✅ Sección individual: ${cupoCurso} alumnos totales`);
     }
     
     // Recalcular alumnos por sala
     calcularAlumnosPorSala();
 }
+
+// Función para calcular los alumnos por sala (redondea hacia arriba sin decimales)
+function calcularAlumnosPorSala() {
+    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
+    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
+    // Usar Math.ceil para redondear hacia arriba sin decimales
+    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
+    document.getElementById('alumnosPorSala').value = alumnosPorSala;
+    
+    console.log(`📊 Cálculo: ${totalAlumnos} alumnos ÷ ${nSalas} salas = ${alumnosPorSala} por sala`);
+}
+
+// NUEVA FUNCIÓN: Recalcular alumnos según checkbox
+//function recalcularAlumnos() {
+//    const checkbox = document.getElementById('juntarSecciones');
+//    const alumnosTotalesInput = document.getElementById('alumnosTotales');
+//    
+//    if (checkbox.checked && datosSeccionesCache && datosSeccionesCache.cupoTotal) {
+//        // Usar cupo total de todas las secciones
+//        alumnosTotalesInput.value = datosSeccionesCache.cupoTotal;
+//        console.log(`🔄 Juntando secciones: ${datosSeccionesCache.cupoTotal} alumnos`);
+//        mostrarNotificacion(`Juntando ${datosSeccionesCache.totalSecciones} secciones - Total: ${datosSeccionesCache.cupoTotal} alumnos`, 'info');
+//    } else {
+//        // Usar cupo individual del curso
+//        alumnosTotalesInput.value = cupoCurso;
+//        console.log(`🔄 Sección individual: ${cupoCurso} alumnos`);
+//    }
+//    
+//    // Recalcular alumnos por sala
+//    calcularAlumnosPorSala();
+//}
 
 async function mostrarModalLiberarSalas(idPlanClase) {
     try {
@@ -2461,7 +2524,7 @@ async function liberarSala(idAsignacion) {
             
 setTimeout(() => {
                 recargarTablaSalasClinico();
-            }, 800);
+            }, 500);
 			
         } else {
             showNotification('Error al liberar la sala', 'danger');
@@ -2536,7 +2599,7 @@ async function guardarSala() {
             // Recargar la página para ver los cambios
            setTimeout(() => {
     recargarTablaSalasClinico();
-}, 800);
+}, 500);
         } else {
             throw new Error(data.error || 'Error desconocido del servidor');
         }
@@ -2871,14 +2934,14 @@ function inicializarBusquedaDocentesClinico() {
         console.log('📂 Dropdown abierto');
         setTimeout(() => {
             mostrarInfoResultadosClinico();
-        }, 100);
+        }, 500);
     });
     
     // Actualizar info cuando se escriba
     $('#docente').on('keyup', function() {
         setTimeout(() => {
             mostrarInfoResultadosClinico();
-        }, 50);
+        }, 500);
     });
     
     // Limpiar información al cerrar
@@ -2952,14 +3015,14 @@ function inicializarBusquedaDocentesClinico() {
                     
                     // Recargar tabla de docentes
                     if (typeof reloadDocentesTableWithHours === 'function') {
-                        setTimeout(() => reloadDocentesTableWithHours(), 1000);
+                        setTimeout(() => reloadDocentesTableWithHours(), 500);
                     } else {
-                        setTimeout(() => location.reload(), 1500);
+                        setTimeout(() => location.reload(), 500);
                     }
 					
 					 setTimeout(() => {
         recargarSoloTablaDocentes();
-    }, 1000);
+    }, 500);
 	
                 } else {
                     const errorMsg = response.message || 'Error al asignar docente';
@@ -3195,7 +3258,7 @@ success: function(respuesta) {
                     location.reload();
                 }
             }
-        }, 1000);
+        }, 500);
         
     } else {
         // Mostrar error
@@ -3284,7 +3347,7 @@ function showSpinnerInElement(element) {
 //                } else {
 //                    console.warn('⚠️ setupHorasDirectasClinico no está disponible');
 //                }
-//            }, 300);
+//            }, 500);
 //        })
 //        .catch(error => {
 //            console.error('❌ Error al actualizar tabla:', error);
@@ -3372,9 +3435,9 @@ function solicitarSala(idPlanClase) {
     cargarDatosSolicitud(idPlanClase, 'solicitar');
 }
 
-function modificarSala(idPlanClase) {
-    cargarDatosSolicitud(idPlanClase, 'modificar');
-}
+//function modificarSala(idPlanClase) {
+//    cargarDatosSolicitud(idPlanClase, 'modificar');
+//}
 
 async function cargarDatosSolicitud(idPlanClase, action) {
     try {
@@ -3514,26 +3577,26 @@ async function cargarDatosExistentes(idPlanClase) {
     }
 }
 
-function recalcularAlumnos() {
-    const juntarCheckbox = document.getElementById('juntarSecciones');
-    const alumnosTotalesInput = document.getElementById('alumnosTotales');
-    
-    if (juntarCheckbox.checked && datosSeccionesCache) {
-        alumnosTotalesInput.value = datosSeccionesCache.cupoTotal;
-    } else {
-        // Recargar cupo original del curso
-        const idPlanClase = document.getElementById('idplanclases').value;
-        cargarCupoCurso(idPlanClase);
-    }
-    calcularAlumnosPorSala();
-}
-
-function calcularAlumnosPorSala() {
-    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
-    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
-    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
-    document.getElementById('alumnosPorSala').value = alumnosPorSala;
-}
+//function recalcularAlumnos() {
+//    const juntarCheckbox = document.getElementById('juntarSecciones');
+//    const alumnosTotalesInput = document.getElementById('alumnosTotales');
+//    
+//    if (juntarCheckbox.checked && datosSeccionesCache) {
+//        alumnosTotalesInput.value = datosSeccionesCache.cupoTotal;
+//    } else {
+//        // Recargar cupo original del curso
+//        const idPlanClase = document.getElementById('idplanclases').value;
+//        cargarCupoCurso(idPlanClase);
+//    }
+//    calcularAlumnosPorSala();
+//}
+//
+//function calcularAlumnosPorSala() {
+//    const totalAlumnos = parseInt(document.getElementById('alumnosTotales').value) || 0;
+//    const nSalas = parseInt(document.getElementById('nSalas').value) || 1;
+//    const alumnosPorSala = Math.ceil(totalAlumnos / nSalas);
+//    document.getElementById('alumnosPorSala').value = alumnosPorSala;
+//}
 
 async function guardarSala() {
     const form = document.getElementById('salaForm');
@@ -3591,7 +3654,7 @@ async function guardarSala() {
             mostrarNotificacion(data.message || 'Solicitud procesada correctamente', 'success');
             setTimeout(() => {
     recargarTablaSalasClinico();
-}, 800);
+}, 500);
         } else {
             throw new Error(data.error || 'Error desconocido del servidor');
         }
@@ -3697,7 +3760,7 @@ async function liberarSala(idAsignacion) {
             mostrarNotificacion(data.message || 'Sala liberada correctamente', 'success');
            setTimeout(() => {
                 recargarTablaSalasClinico();
-            }, 800);
+            }, 500);
         } else {
             mostrarNotificacion(data.error || 'Error al liberar la sala', 'danger');
         }
@@ -3895,7 +3958,7 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
         if (notificacion && notificacion.parentNode) {
             notificacion.remove();
         }
-    }, 5000);
+    }, 500);
 }
 
 // ===== INICIALIZACIÓN =====
@@ -3941,7 +4004,7 @@ function recargarTablaSalasClinico() {
                 if (typeof reinicializarFuncionalidades === 'function') {
                     reinicializarFuncionalidades();
                 }
-            }, 300);
+            }, 500);
         })
         .catch(error => {
             console.error('❌ Error al recargar tabla de salas:', error);

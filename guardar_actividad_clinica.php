@@ -26,7 +26,7 @@ if ($esActualizacion) {
     $termino = isset($_POST['end_time']) ? mysqli_real_escape_string($conn, $_POST['end_time']) : '';
     $dia = isset($_POST['dia']) ? mysqli_real_escape_string($conn, $_POST['dia']) : '';
     $condicion = isset($_POST['pcl_condicion']) && $_POST['pcl_condicion'] === 'Obligatorio' ? "Obligatorio" : "Libre";
-$evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_ActividadConEvaluacion'] === 'S' ? "S" : "N";
+	$evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_ActividadConEvaluacion'] === 'S' ? "S" : "N";
 
     // Calcular semana basada en la nueva fecha
     $semana = date('W', strtotime($fecha)) - date('W', strtotime(date('Y') . '-01-01')) + 1;
@@ -137,42 +137,42 @@ $evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_Activid
     }
 
     // Verificar si necesitamos actualizar vigencia de docentes (CLÍNICOS)
-    if ($tipoAnterior !== $tipo) {
-        // Obtener si tipo anterior permitía docentes
-        $permiteDocentesAnterior = 1;
-        $stmtDocentesAnt = $conn->prepare("SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1");
-        $stmtDocentesAnt->bind_param("s", $tipoAnterior);
-        $stmtDocentesAnt->execute();
-        $resAnt = $stmtDocentesAnt->get_result();
-        if ($rowAnt = $resAnt->fetch_assoc()) {
-            $permiteDocentesAnterior = (int)$rowAnt['docentes'];
-        }
-        $stmtDocentesAnt->close();
-
-        // Obtener si tipo nuevo permite docentes
-        $permiteDocentesNuevo = 1;
-        $stmtDocentesNuevo = $conn->prepare("SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1");
-        $stmtDocentesNuevo->bind_param("s", $tipo);
-        $stmtDocentesNuevo->execute();
-        $resNuevo = $stmtDocentesNuevo->get_result();
-        if ($rowNuevo = $resNuevo->fetch_assoc()) {
-            $permiteDocentesNuevo = (int)$rowNuevo['docentes'];
-        }
-        $stmtDocentesNuevo->close();
-
-        // Solo si el tipo anterior permitía docentes y el nuevo NO
-        if ($permiteDocentesAnterior === 1 && $permiteDocentesNuevo === 0) {
-            $queryUpdateVigencia = "UPDATE docenteclases_copy 
-                                    SET vigencia = 0, 
-                                        fechaModificacion = NOW(),
-                                        usuarioModificacion = 'sistema'
-                                    WHERE idPlanClases = ? AND vigencia = 1";
-            $stmtUpdateVigencia = $conn->prepare($queryUpdateVigencia);
-            $stmtUpdateVigencia->bind_param("i", $idplanclases);
-            $stmtUpdateVigencia->execute();
-            $stmtUpdateVigencia->close();
-        }
-    }
+//   if ($tipoAnterior !== $tipo) {
+//       // Obtener si tipo anterior permitía docentes
+//       $permiteDocentesAnterior = 1;
+//       $stmtDocentesAnt = $conn->prepare("SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1");
+//       $stmtDocentesAnt->bind_param("s", $tipoAnterior);
+//       $stmtDocentesAnt->execute();
+//       $resAnt = $stmtDocentesAnt->get_result();
+//       if ($rowAnt = $resAnt->fetch_assoc()) {
+//           $permiteDocentesAnterior = (int)$rowAnt['docentes'];
+//       }
+//       $stmtDocentesAnt->close();
+//
+//       // Obtener si tipo nuevo permite docentes
+//       $permiteDocentesNuevo = 1;
+//       $stmtDocentesNuevo = $conn->prepare("SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1");
+//       $stmtDocentesNuevo->bind_param("s", $tipo);
+//       $stmtDocentesNuevo->execute();
+//       $resNuevo = $stmtDocentesNuevo->get_result();
+//       if ($rowNuevo = $resNuevo->fetch_assoc()) {
+//           $permiteDocentesNuevo = (int)$rowNuevo['docentes'];
+//       }
+//       $stmtDocentesNuevo->close();
+//
+//       // Solo si el tipo anterior permitía docentes y el nuevo NO
+//       if ($permiteDocentesAnterior === 1 && $permiteDocentesNuevo === 0) {
+//           $queryUpdateVigencia = "UPDATE docenteclases_copy 
+//                                   SET vigencia = 0, 
+//                                       fechaModificacion = NOW(),
+//                                       usuarioModificacion = 'sistema'
+//                                   WHERE idPlanClases = ? AND vigencia = 1";
+//           $stmtUpdateVigencia = $conn->prepare($queryUpdateVigencia);
+//           $stmtUpdateVigencia->bind_param("i", $idplanclases);
+//           $stmtUpdateVigencia->execute();
+//           $stmtUpdateVigencia->close();
+//       }
+//   }
 
     /* 
      * GESTIÓN DE SALAS SEGÚN TIPO DE ACTIVIDAD (CLÍNICOS)
@@ -265,20 +265,20 @@ $evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_Activid
             
             // Si hay asignaciones confirmadas, cambiarlas a estado "modificada"
             if ($asignacionesConfirmadas > 0) {
-                $queryModificar = "UPDATE asignacion_piloto 
-                                SET idEstado = 1, 
-                                    Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Datos de actividad clínica modificados')
-                                WHERE idplanclases = ? AND idEstado = 3";
-                $stmtModificar = $conn->prepare($queryModificar);
-                $stmtModificar->bind_param("i", $idplanclases);
-                $stmtModificar->execute();
-                $stmtModificar->close();
+                //$queryModificar = "UPDATE asignacion_piloto 
+                //                SET idEstado = 1, 
+                //                    Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Datos de actividad clínica modificados')
+                //                WHERE idplanclases = ? AND idEstado = 3";
+                //$stmtModificar = $conn->prepare($queryModificar);
+                //$stmtModificar->bind_param("i", $idplanclases);
+                //$stmtModificar->execute();
+                //$stmtModificar->close();
                 
-                $mensajeUsuario = 'Se ha solicitado modificación de la sala asignada';
+                $mensajeUsuario = 'Actividad clínica actualizada';
                 $necesitaConfirmacion = true;
-                $mensajeConfirmacion = "Este cambio solicitará una modificación de la sala asignada. La reserva actual será cancelada hasta que se asigne una nueva sala. ¿Desea continuar?";
+                $mensajeConfirmacion = "Actividad actualizada";
             } else {
-                $mensajeUsuario = 'Actividad clínica actualizada - CRON gestionará asignación';
+                $mensajeUsuario = 'Actividad clínica actualizada';
             }
         } else if ($requiereSala) {
             /* CASO 5: ACTIVIDAD GRUPAL/TP/EV/EX → ACTIVIDAD GRUPAL/TP/EV/EX */
@@ -316,32 +316,32 @@ $evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_Activid
                 }
                 
                 // Si hay salas asignadas, necesitamos confirmación
-                if ($asignacionesConfirmadas > 0) {
-                    $necesitaConfirmacion = true;
-                    $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se liberarán las salas actuales y el CRON creará una asignación automática. ¿Desea continuar?";
-                }
+  //            if ($asignacionesConfirmadas > 0) {
+  //                $necesitaConfirmacion = true;
+  //                $mensajeConfirmacion = "Al cambiar a tipo 'Clase', se liberarán las salas actuales y el CRON creará una asignación automática. ¿Desea continuar?";
+  //            }
+  //            
+  //            // Liberar asignaciones existentes (reservas) si hay
+  //            if ($asignacionesConfirmadas > 0) {
+  //                $queryLiberarExistentes = "UPDATE asignacion_piloto 
+  //                                        SET idEstado = 4, 
+  //                                            Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Liberada por cambio a tipo Clase (clínico)')
+  //                                        WHERE idplanclases = ? AND idEstado = 3";
+  //                $stmtLiberarExistentes = $conn->prepare($queryLiberarExistentes);
+  //                $stmtLiberarExistentes->bind_param("i", $idplanclases);
+  //                $stmtLiberarExistentes->execute();
+  //                $stmtLiberarExistentes->close();
+  //            }
+  //            
+  //            // Eliminar asignaciones en proceso
+  //            $queryEliminarEnProceso = "DELETE FROM asignacion_piloto 
+  //                                    WHERE idplanclases = ? AND idEstado IN (0, 1)";
+  //            $stmtEliminarEnProceso = $conn->prepare($queryEliminarEnProceso);
+  //            $stmtEliminarEnProceso->bind_param("i", $idplanclases);
+  //            $stmtEliminarEnProceso->execute();
+  //            $stmtEliminarEnProceso->close();
                 
-                // Liberar asignaciones existentes (reservas) si hay
-                if ($asignacionesConfirmadas > 0) {
-                    $queryLiberarExistentes = "UPDATE asignacion_piloto 
-                                            SET idEstado = 4, 
-                                                Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Liberada por cambio a tipo Clase (clínico)')
-                                            WHERE idplanclases = ? AND idEstado = 3";
-                    $stmtLiberarExistentes = $conn->prepare($queryLiberarExistentes);
-                    $stmtLiberarExistentes->bind_param("i", $idplanclases);
-                    $stmtLiberarExistentes->execute();
-                    $stmtLiberarExistentes->close();
-                }
-                
-                // Eliminar asignaciones en proceso
-                $queryEliminarEnProceso = "DELETE FROM asignacion_piloto 
-                                        WHERE idplanclases = ? AND idEstado IN (0, 1)";
-                $stmtEliminarEnProceso = $conn->prepare($queryEliminarEnProceso);
-                $stmtEliminarEnProceso->bind_param("i", $idplanclases);
-                $stmtEliminarEnProceso->execute();
-                $stmtEliminarEnProceso->close();
-                
-                $mensajeUsuario = 'Cambiado a Clase - CRON gestionará asignación automática';
+                $mensajeUsuario = 'Tipo de actividad actualizado';
                 
             } else {
                 /* CASO 7: ACTIVIDAD SIN SALA → CLASE */
@@ -382,14 +382,23 @@ $evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_Activid
                     $mensajeConfirmacion = "Al cambiar a un tipo de actividad que no requiere sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
                 }
                 
-                // Eliminar todas las asignaciones (incluidas reservas)
+                // ✅ CORRECCIÓN CRÍTICA: Eliminar PRIMERO las reservas físicas (igual que regulares)
+                // 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
+                $queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
+                $stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+                $stmtBorrarReservas->bind_param("i", $idplanclases);
+                $stmtBorrarReservas->execute();
+                $stmtBorrarReservas->close();
+
+                // 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
                 $queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
                 $stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
                 $stmtEliminarTodas->bind_param("i", $idplanclases);
                 $stmtEliminarTodas->execute();
                 $stmtEliminarTodas->close();
                 
-                $mensajeUsuario = 'Actividad no requiere sala - Asignaciones eliminadas';
+                // ✅ CORRECCIÓN: Mensaje consistente con regulares
+                $mensajeUsuario = 'Actividad no requiere sala - Asignaciones y reservas eliminadas';
                 
             } else {
                 /* CASO 6: ACTIVIDAD GRUPAL/TP/EV/EX → ACTIVIDAD SIN SALA */
@@ -400,14 +409,23 @@ $evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_Activid
                     $mensajeConfirmacion = "Al cambiar a un tipo sin sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
                 }
                 
-                // Eliminar todas las asignaciones (incluidas reservas)
+                // ✅ CORRECCIÓN CRÍTICA: Eliminar PRIMERO las reservas físicas (igual que regulares)
+                // 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
+                $queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
+                $stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+                $stmtBorrarReservas->bind_param("i", $idplanclases);
+                $stmtBorrarReservas->execute();
+                $stmtBorrarReservas->close();
+
+                // 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
                 $queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
                 $stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
                 $stmtEliminarTodas->bind_param("i", $idplanclases);
                 $stmtEliminarTodas->execute();
                 $stmtEliminarTodas->close();
-                
-                $mensajeUsuario = 'Actividad no requiere sala - Asignaciones eliminadas';
+
+                // ✅ CORRECCIÓN: Mensaje consistente con regulares
+                $mensajeUsuario = 'Actividad no requiere sala - Asignaciones y reservas eliminadas';
             }
         }
     }

@@ -57,18 +57,45 @@ if($rut!='' && $control_profe > 0){
     
 
     <div class="container-fluid py-4">  
-	 <div class="card mb-4">
-            <div class="card-body">
-               <h4 class="text-center"> <i class="bi bi-person-raised-hand"></i> Instrucciones equipo docente</h4>
-			   
-			   <ul>
-				   <li>Si no encuentra al funcionario en el buscador, lo puede agregar en “Nuevo Docente”
-				   <li>Si se requiere cambio de PEC o coordinador del curso, lo debe solicitar a la dirección de escuela
-				   <li>El total de horas directas en docencia irá aumentando a medida que se le asigne a un docente en cada actividad.
-			   </ul>
-                
-            </div>
-        </div>
+	 
+		
+		<div class="accordion mb-4" id="accordionInstrucciones">
+    <div class="accordion-item border-warning">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed bg-warning bg-opacity-10 text-warning fw-bold" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#collapseInstrucciones"
+                    aria-expanded="false" 
+                    aria-controls="collapseInstrucciones">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Instrucciones Importantes para Equipo Docente
+            </button>
+        </h2>
+        <div id="collapseInstrucciones" 
+             class="accordion-collapse collapse" 
+             data-bs-parent="#accordionInstrucciones">
+            <div class="accordion-body">
+                <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+                <i class="bi bi-person-plus text-primary me-2"></i>
+                Si el funcionario no aparece en el buscador, puede agregarlo manualmente a través de la opción “Nuevo Docente”.
+            </li>
+            <li class="list-group-item">
+                <i class="bi bi-people text-warning me-2"></i>
+                En caso de requerir un cambio de PEC o coordinador del curso, debe solicitarlo directamente a la Dirección de Escuela.
+            </li>
+			<li class="list-group-item">
+                <i class="bi bi-stopwatch text-success me-2"></i>
+                El total de horas directas en docencia se irá actualizando automáticamente a medida que se asignen docentes a las distintas actividades.
+            </li>
+            
+        </ul>
+    </div>
+</div>
+    </div>
+</div>
+		
         <!-- Search -->
         <div class="card mb-4">
             <div class="card-body">

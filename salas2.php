@@ -1,5 +1,5 @@
 <?php
-
+// regulares
 ob_start();
 include("conexion.php");
 require_once 'funciones_secciones.php';
@@ -340,8 +340,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         for ($i = 0; $i < $data['nSalas']; $i++) {
             
             // ✅ CADENA CORREGIDA: 15 caracteres para 15 parámetros
-            $result = $stmtInsert->bind_param(
-                "iisssssississis",                   // ✅ 15 caracteres
+            $result = $stmtInsert->bind_param(     // ✅ 15 caracteres
+                "iisssssisisssis",                   // ✅ 15 caracteres
                 // i-i-s-s-s-s-s-i-s-i-s-s-s-i-s
                 $data['idplanclases'],               // 1.  i (convertir string a int)
                 $nAlumnosReal,      // 2.  i
@@ -396,19 +396,36 @@ case 'modificar':
     try {
         $conn->begin_transaction();
         
+        // ✅ LOG 1: INICIO - qué llega del frontend
+        error_log("🚀 =========================");
+        error_log("🚀 INICIO MODIFICAR - ID: " . $data['idplanclases']);
+        error_log("📨 DATOS FRONTEND:");
+        error_log("   campus: '" . (isset($data['campus']) ? $data['campus'] : 'NO_EXISTE') . "'");
+        error_log("   movilidadReducida: '" . (isset($data['movilidadReducida']) ? $data['movilidadReducida'] : 'NO_EXISTE') . "'");
+        error_log("   juntarSecciones: '" . (isset($data['juntarSecciones']) ? $data['juntarSecciones'] : 'NO_EXISTE') . "'");
+        error_log("   nSalas: '" . (isset($data['nSalas']) ? $data['nSalas'] : 'NO_EXISTE') . "'");
+        error_log("   requiereSala: '" . (isset($data['requiereSala']) ? $data['requiereSala'] : 'NO_EXISTE') . "'");
+        
         // Verificar si requiere sala
         $requiereSala = isset($data['requiereSala']) ? (int)$data['requiereSala'] : 1;
         $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
-		$juntaSeccionPlanclase = !empty($data['juntarSecciones']) ? 'S' : 'N'; // Para planclases
-		
-		$juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
-        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'clinico');
+        $juntaSeccionPlanclase = !empty($data['juntarSecciones']) ? 'S' : 'N'; // Para planclases
+        
+        $juntarSecciones = isset($data['juntarSecciones']) && $data['juntarSecciones'] == '1';
+        
+        // ✅ CORREGIR: Cambiar 'clinico' por 'regular'
+        $actualizacionOk = actualizarPclAulaDescripcion($data['idplanclases'], $juntarSecciones, $conn, 'regular');
         
         if (!$actualizacionOk) {
-            throw new Exception('Error actualizando pcl_AulaDescripcion en clínico');
+            throw new Exception('Error actualizando pcl_AulaDescripcion en regular');
         }
         
-	// Log 
+        // ✅ NUEVO: Forzar commit para confirmar pcl_AulaDescripcion
+        error_log("💾 FORZANDO COMMIT después de actualizarPclAulaDescripcion");
+        $conn->commit();
+        $conn->begin_transaction();
+        
+        // Log 
         $juntarSeccionesValue = isset($data['juntarSecciones']) ? $data['juntarSecciones'] : 'NO_ENVIADO';
         error_log("DEBUG - juntarSecciones recibido: " . var_export($juntarSeccionesValue, true));
         error_log("DEBUG - juntaSeccion calculado: " . $juntaSeccion);
@@ -423,11 +440,54 @@ case 'modificar':
             $pcl_Cercania = 'N';  // Sin restricción de cercanía
         }
         
+        // ✅ LOG 2: DESPUÉS DE CALCULAR - valores procesados
+        error_log("🧮 VALORES CALCULADOS:");
+        error_log("   movilidadReducida: '" . $movilidadReducida . "'");
+        error_log("   pcl_movilidadReducida: '" . $pcl_movilidadReducida . "'");
+        error_log("   pcl_Cercania: '" . $pcl_Cercania . "'");
+        error_log("   juntaSeccion: '" . $juntaSeccion . "'");
+        error_log("   juntaSeccionPlanclase: '" . $juntaSeccionPlanclase . "'");
+        
         // Preparar observaciones para planclases
         $observacionesPlanclases = "";
         if (isset($data['observaciones']) && !empty($data['observaciones'])) {
             $observacionesPlanclases = date('Y-m-d H:i:s') . " - MODIFICACIÓN: " . $data['observaciones'];
         }
+        
+        // ✅ NUEVA SECCIÓN: Obtener datos ACTUALIZADOS de planclases
+        $queryPlanclases = "SELECT * FROM a_planclases WHERE idplanclases = ?";
+        $stmtPlanclases = $conn->prepare($queryPlanclases);
+        $stmtPlanclases->bind_param("i", $data['idplanclases']);
+        $stmtPlanclases->execute();
+        $resultPlanclases = $stmtPlanclases->get_result();
+        $dataPlanclases = $resultPlanclases->fetch_assoc();
+        $stmtPlanclases->close();
+        
+        // ✅ LOG 3: DATOS DE PLANCLASES
+        error_log("📋 DATOS PLANCLASES:");
+        error_log("   pcl_AulaDescripcion: '" . (isset($dataPlanclases['pcl_AulaDescripcion']) ? $dataPlanclases['pcl_AulaDescripcion'] : 'NO_EXISTE') . "'");
+        error_log("   pcl_alumnos: '" . (isset($dataPlanclases['pcl_alumnos']) ? $dataPlanclases['pcl_alumnos'] : 'NO_EXISTE') . "'");
+        error_log("   pcl_AsiNombre: '" . (isset($dataPlanclases['pcl_AsiNombre']) ? $dataPlanclases['pcl_AsiNombre'] : 'NO_EXISTE') . "'");
+        error_log("   pcl_Inicio: '" . (isset($dataPlanclases['pcl_Inicio']) ? $dataPlanclases['pcl_Inicio'] : 'NO_EXISTE') . "'");
+        error_log("   pcl_Termino: '" . (isset($dataPlanclases['pcl_Termino']) ? $dataPlanclases['pcl_Termino'] : 'NO_EXISTE') . "'");
+        error_log("   pcl_campus: '" . (isset($dataPlanclases['pcl_campus']) ? $dataPlanclases['pcl_campus'] : 'NO_EXISTE') . "'");
+        error_log("   pcl_Cercania: '" . (isset($dataPlanclases['pcl_Cercania']) ? $dataPlanclases['pcl_Cercania'] : 'NO_EXISTE') . "'");
+        
+        // ✅ CORREGIR: Agregar parámetro tipoCurso
+        $alumnosTotales = obtenerAlumnosReales($data, $dataPlanclases, 'regular');
+        
+        // Log para debugging
+        error_log("DEBUG MODIFICAR - alumnosTotales calculado: " . $alumnosTotales);
+        
+        // ✅ LOG 4: ANTES UPDATE PLANCLASES
+        error_log("📝 ANTES UPDATE a_planclases:");
+        error_log("   data[nSalas]: '" . $data['nSalas'] . "'");
+        error_log("   data[campus]: '" . $data['campus'] . "'");
+        error_log("   requiereSala: '" . $requiereSala . "'");
+        error_log("   pcl_movilidadReducida: '" . $pcl_movilidadReducida . "'");
+        error_log("   pcl_Cercania: '" . $pcl_Cercania . "'");
+        error_log("   alumnosTotales: '" . $alumnosTotales . "'");
+        error_log("   juntaSeccionPlanclase: '" . $juntaSeccionPlanclase . "'");
         
         // ACTUALIZADA: Incluir pcl_movilidadReducida y pcl_Cercania
         $stmt = $conn->prepare("UPDATE a_planclases 
@@ -436,24 +496,30 @@ case 'modificar':
                                   pcl_DeseaSala = ?,
                                   pcl_movilidadReducida = ?,
                                   pcl_Cercania = ?,
-								  pcl_AulaDescripcion = ?,
+                                  pcl_alumnos = ?,
+                                  pcl_AulaDescripcion = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("isisssssi", 
+        
+        // ✅ CORREGIR: String de tipos correcto (10 caracteres para 10 parámetros)
+        $stmt->bind_param("issssisssi", 
             $data['nSalas'], 
             $data['campus'], 
             $requiereSala,
-            $pcl_movilidadReducida,  // 'S' o 'N'
-            $pcl_Cercania,           // 'S' o 'N'
-			$juntaSeccionPlanclase,
+            $pcl_movilidadReducida,
+            $pcl_Cercania,
+            $alumnosTotales,           // ✅ NUEVA LÍNEA
+            $juntaSeccionPlanclase,
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
         );
         $stmt->execute();
+        
+        error_log("✅ UPDATE a_planclases ejecutado");
         
         if ($requiereSala == 0) {
             // Si NO requiere sala, liberar todas las asignaciones
@@ -478,16 +544,10 @@ case 'modificar':
         $result = $stmt->get_result();
         $currentState = $result->fetch_assoc();
         
+        error_log("📊 ESTADO ASIGNACIONES: count=" . $currentState['count'] . ", maxEstado=" . $currentState['maxEstado']);
+        
         // Solo modificar si están en estado 0 (solicitado)
         if ($currentState['maxEstado'] == 0) {
-            // Obtener datos de planclases
-            $queryPlanclases = "SELECT * FROM a_planclases WHERE idplanclases = ?";
-            $stmtPlanclases = $conn->prepare($queryPlanclases);
-            $stmtPlanclases->bind_param("i", $data['idplanclases']);
-            $stmtPlanclases->execute();
-            $resultPlanclases = $stmtPlanclases->get_result();
-            $dataPlanclases = $resultPlanclases->fetch_assoc();
-            
             // Obtener observaciones existentes de asignacion_piloto
             $queryObs = "SELECT Comentario FROM asignacion_piloto 
                          WHERE idplanclases = ? LIMIT 1";
@@ -510,9 +570,17 @@ case 'modificar':
                     $nuevaObservacionAsignacion = date('Y-m-d H:i:s') . " - MODIFICACIÓN: " . $data['observaciones'];
                 }
             }
-			
-			$alumnosTotales = obtenerAlumnosReales($data, $dataPlanclases); // Para planclases
-			$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases); // Para asignacion_piloto
+            
+            $nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases); // Para asignacion_piloto
+            
+            // ✅ LOG 5: ANTES UPDATE ASIGNACION_PILOTO
+            error_log("📝 ANTES UPDATE asignacion_piloto:");
+            error_log("   nuevaObservacionAsignacion: '" . $nuevaObservacionAsignacion . "'");
+            error_log("   nAlumnosReal: '" . $nAlumnosReal . "'");
+            error_log("   data[campus]: '" . $data['campus'] . "'");
+            error_log("   pcl_Cercania: '" . $pcl_Cercania . "'");
+            error_log("   juntaSeccion: '" . $juntaSeccion . "'");
+            error_log("   data[idplanclases]: '" . $data['idplanclases'] . "'");
             
             // ACTUALIZADA: Incluir cercanía en la actualización de asignacion_piloto
             $stmt = $conn->prepare("UPDATE asignacion_piloto 
@@ -522,7 +590,9 @@ case 'modificar':
                                       cercania = ?,
                                       junta_seccion = ?
                                   WHERE idplanclases = ? AND idEstado = 0");
-            $stmt->bind_param("ssiiii", 
+            
+            // ✅ CORREGIR: String de tipos correcto
+            $stmt->bind_param("sissii", 
                 $nuevaObservacionAsignacion, 
                 $nAlumnosReal,
                 $data['campus'],
@@ -532,57 +602,106 @@ case 'modificar':
             );
             $stmt->execute();
             
+            $filasAfectadas = $stmt->affected_rows;
+            error_log("✅ UPDATE asignacion_piloto ejecutado - Filas afectadas: " . $filasAfectadas);
+            
+            // ✅ LOG 6: DESPUÉS UPDATE - verificar si las variables cambiaron
+            error_log("🔄 DESPUÉS UPDATE asignacion_piloto:");
+            error_log("   data[campus]: '" . $data['campus'] . "'");
+            error_log("   pcl_Cercania: '" . $pcl_Cercania . "'");
+            
             // Ajustar número de registros si cambió
             $diff = $data['nSalas'] - $currentState['count'];
+            error_log("📊 DIFERENCIA SALAS: " . $diff . " (solicitadas: " . $data['nSalas'] . ", existentes: " . $currentState['count'] . ")");
             
             if ($diff > 0) {
-            $queryInsert = "INSERT INTO asignacion_piloto (
-                idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
-                fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
-                NombreCurso, Comentario, cercania, junta_seccion, TipoAsignacion, idEstado, Usuario, timestamp
-            ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'M', 0, ?, NOW())";
-            
-            $stmtInsert = $conn->prepare($queryInsert);
-            $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
-			$nAlumnosReal = distribuirAlumnosEntreSalas($data, $dataPlanclases);
-            
-            for ($i = 0; $i < $diff; $i++) {
-                $stmtInsert->bind_param(
-					"iissssississsis",  // 15 caracteres
-					$data['idplanclases'],               // 1
-					$nAlumnosReal,      // 2
-					$dataPlanclases['pcl_TipoSesion'],   // 3
-					$data['campus'],                     // 4
-					$dataPlanclases['pcl_Fecha'],        // 5
-					$dataPlanclases['pcl_Inicio'],       // 6
-					$dataPlanclases['pcl_Termino'],      // 7
-					$dataPlanclases['cursos_idcursos'],  // 8
-					$dataPlanclases['pcl_AsiCodigo'],    // 9
-					$dataPlanclases['pcl_Seccion'],      // 10
-					$dataPlanclases['pcl_AsiNombre'],    // 11
-					$observacionesAsignacion,            // 12
-					$pcl_Cercania,                       // 13 (string)
-					$juntaSeccion,                       // 14
-					$usuario                             // 15
-				);
-                $stmtInsert->execute();
+                // ✅ LOG 7: ANTES INSERT
+                error_log("📝 ANTES INSERT asignacion_piloto (diff=" . $diff . "):");
+                error_log("   data[idplanclases]: '" . $data['idplanclases'] . "'");
+                error_log("   nAlumnosReal: '" . $nAlumnosReal . "'");
+                error_log("   pcl_TipoSesion: '" . $dataPlanclases['pcl_TipoSesion'] . "'");
+                error_log("   data[campus]: '" . $data['campus'] . "'");
+                error_log("   pcl_Fecha: '" . $dataPlanclases['pcl_Fecha'] . "'");
+                error_log("   pcl_Inicio: '" . $dataPlanclases['pcl_Inicio'] . "'");
+                error_log("   pcl_Termino: '" . $dataPlanclases['pcl_Termino'] . "'");
+                error_log("   cursos_idcursos: '" . $dataPlanclases['cursos_idcursos'] . "'");
+                error_log("   pcl_AsiCodigo: '" . $dataPlanclases['pcl_AsiCodigo'] . "'");
+                error_log("   pcl_Seccion: '" . $dataPlanclases['pcl_Seccion'] . "'");
+                error_log("   pcl_AsiNombre: '" . $dataPlanclases['pcl_AsiNombre'] . "'");
+                error_log("   observacionesAsignacion: '" . (isset($observacionesAsignacion) ? $observacionesAsignacion : 'NO_DEFINIDO') . "'");
+                error_log("   pcl_Cercania: '" . $pcl_Cercania . "'");
+                error_log("   juntaSeccion: '" . $juntaSeccion . "'");
+                
+                $queryInsert = "INSERT INTO asignacion_piloto (
+                    idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
+                    fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
+                    NombreCurso, Comentario, cercania, junta_seccion, TipoAsignacion, idEstado, Usuario, timestamp
+                ) VALUES (?, '', 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'M', 0, ?, NOW())";
+                
+                $stmtInsert = $conn->prepare($queryInsert);
+                $usuario = isset($_SESSION['usuario']) ? $_SESSION['usuario'] : 'sistema';
+                
+                // ✅ DEFINIR observacionesAsignacion para INSERT
+                $observacionesAsignacion = $nuevaObservacionAsignacion;
+                
+                for ($i = 0; $i < $diff; $i++) {
+                    error_log("🔄 INSERT iteración " . ($i+1) . "/" . $diff);
+                    
+                    $stmtInsert->bind_param(
+                        "iisssssisssssis",  // 15 caracteres
+                        $data['idplanclases'],               // 1
+                        $nAlumnosReal,                       // 2
+                        $dataPlanclases['pcl_TipoSesion'],   // 3
+                        $data['campus'],                     // 4
+                        $dataPlanclases['pcl_Fecha'],        // 5
+                        $dataPlanclases['pcl_Inicio'],       // 6
+                        $dataPlanclases['pcl_Termino'],      // 7
+                        $dataPlanclases['cursos_idcursos'],  // 8
+                        $dataPlanclases['pcl_AsiCodigo'],    // 9
+                        $dataPlanclases['pcl_Seccion'],      // 10
+                        $dataPlanclases['pcl_AsiNombre'],    // 11
+                        $nuevaObservacionAsignacion,         // 12
+                        $pcl_Cercania,                       // 13 (string)
+                        $juntaSeccion,                       // 14
+                        $usuario                             // 15
+                    );
+                    
+                    if (!$stmtInsert->execute()) {
+                        error_log("❌ ERROR en INSERT iteración " . ($i+1) . ": " . $stmtInsert->error);
+                        throw new Exception("Error en INSERT iteración " . ($i+1) . ": " . $stmtInsert->error);
+                    } else {
+                        error_log("✅ INSERT iteración " . ($i+1) . " exitoso");
+                    }
                 }
+                
+                $stmtInsert->close();
+                
             } elseif ($diff < 0) {
                 // Eliminar asignaciones sobrantes
+                error_log("🗑️ ELIMINANDO " . abs($diff) . " asignaciones sobrantes");
                 $stmt = $conn->prepare("DELETE FROM asignacion_piloto 
                                       WHERE idplanclases = ? AND idEstado = 0 
                                       LIMIT ?");
                 $limit = abs($diff);
                 $stmt->bind_param("ii", $data['idplanclases'], $limit);
                 $stmt->execute();
+                error_log("✅ ELIMINADAS " . $stmt->affected_rows . " asignaciones");
             }
+        } else {
+            error_log("⚠️ No se modifican asignaciones porque maxEstado != 0");
         }
         
         $conn->commit();
+        error_log("✅ COMMIT FINAL exitoso");
+        error_log("🏁 FIN MODIFICAR - ID: " . $data['idplanclases']);
+        error_log("🏁 =========================");
+        
         echo json_encode(['success' => true]);
         
     } catch (Exception $e) {
         $conn->rollback();
+        error_log("❌ ERROR en case 'modificar': " . $e->getMessage());
+        error_log("❌ Stack trace: " . $e->getTraceAsString());
         http_response_code(500);
         echo json_encode(['error' => $e->getMessage()]);
     }
@@ -686,25 +805,41 @@ case 'modificar_asignada':
         if (isset($data['observaciones']) && !empty($data['observaciones'])) {
             $observacionesPlanclases = date('Y-m-d H:i:s') . " - MODIFICACIÓN DE ASIGNADA: " . $data['observaciones'];
         }
+		
+		// ✅ NUEVA SECCIÓN: Calcular alumnos totales correctamente
+        // Obtener datos de planclases
+        $queryPlanclases = "SELECT * FROM a_planclases WHERE idplanclases = ?";
+        $stmtPlanclases = $conn->prepare($queryPlanclases);
+        $stmtPlanclases->bind_param("i", $data['idplanclases']);
+        $stmtPlanclases->execute();
+        $resultPlanclases = $stmtPlanclases->get_result();
+        $dataPlanclases = $resultPlanclases->fetch_assoc();
+        
+        $alumnosTotales = obtenerAlumnosReales($data, $dataPlanclases);
+        
+        // Log para debugging
+        error_log("DEBUG MODIFICAR_ASIGNADA - alumnosTotales calculado: " . $alumnosTotales);
         
         // ACTUALIZADA: Incluir pcl_movilidadReducida y pcl_Cercania
         $stmt = $conn->prepare("UPDATE a_planclases 
                               SET pcl_nSalas = ?, 
                                   pcl_campus = ?,
+                                  pcl_alumnos = ?,
                                   pcl_movilidadReducida = ?,
                                   pcl_Cercania = ?,
-								  pcl_AulaDescripcion = ?,
+                                  pcl_AulaDescripcion = ?,
                                   pcl_observaciones = CASE 
                                       WHEN COALESCE(pcl_observaciones, '') = '' THEN ?
                                       ELSE CONCAT(pcl_observaciones, '\n\n', ?)
                                   END
                               WHERE idplanclases = ?");
-        $stmt->bind_param("issssssi", 
+        $stmt->bind_param("isisssssi", 
             $data['nSalas'], 
             $data['campus'],
-            $pcl_movilidadReducida,  // 'S' o 'N'
-            $pcl_Cercania,           // 'S' o 'N'
-			$juntaSeccionPlanclase,
+            $alumnosTotales,              // ✅ NUEVA LÍNEA
+            $pcl_movilidadReducida,
+            $pcl_Cercania,
+            $juntaSeccionPlanclase,
             $observacionesPlanclases,
             $observacionesPlanclases,
             $data['idplanclases']
@@ -852,7 +987,7 @@ case 'modificar_asignada':
         
         echo json_encode(array(
             'success' => true,
-            'pcl_AulaDescripcion' => $estado ? '1' : '',
+            'pcl_AulaDescripcion' => $estado ? 'S' : 'N',
             'juntarSecciones' => $estado
         ));
         
@@ -1908,13 +2043,31 @@ $result = $stmt->get_result();
 
 <!-- Modal para Solicitar/Modificar Sala -->
 <div class="modal fade" id="salaModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="salaModalTitle">Gestionar Sala</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-primary text-white">
+                <div class="d-flex align-items-center w-100">
+                    <div class="flex-grow-1">
+                        <h4 class="modal-title mb-1">
+                            <i class="bi bi-building me-2"></i>
+                            <span id="salaModalTitle">Gestionar Sala</span> 
+                            <span id="sala-modal-idplanclases" class="badge bg-light text-primary ms-2"></span>
+                        </h4>
+                        <div class="d-flex gap-3 text-white-50">
+                            <small>
+                                <i class="bi bi-calendar-event me-1"></i> 
+                                <span id="sala-modal-fecha-hora">Cargando...</span>
+                            </small>
+                            <small>
+                                <i class="bi bi-tag me-1"></i> 
+                                <span id="sala-modal-tipo-sesion">Cargando...</span>
+                            </small>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
             </div>
-            <div class="modal-body">                
+            <div class="modal-body p-4">                
 
                 <form id="salaForm">
                     <input type="hidden" id="idplanclases" name="idplanclases">
@@ -1950,9 +2103,6 @@ $result = $stmt->get_result();
         </a>
     </div>
 </div>
-
-
-<hr>
 
 
 <div id="juntarSeccionesDiv" class="mb-3 alert alert-info">
@@ -2005,10 +2155,11 @@ $result = $stmt->get_result();
 					<div id="seccion-computacion" style="display: none;">
     <hr>
     <div class="mb-3">
-        <h6 class="text-primary">
+        <label class="form-label fw-bold text-primary mb-0">
             <i class="bi bi-pc-display me-2"></i>
             Salas de Computación Disponibles
-        </h6>
+        </label>		
+		
         
         <div class="alert alert-info alert-sm">
             <i class="bi bi-info-circle me-1"></i>

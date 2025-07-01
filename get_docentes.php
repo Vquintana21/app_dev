@@ -66,7 +66,7 @@ echo '<label class="form-check-label" for="selectAllDocentes"></label>';
 echo '</div></div></div>';
 
 // Consulta de docentes
-$equipo_docente = "SELECT A.rut, CONCAT(B.Nombres, ' ', B.Paterno, ' ', B.Materno) AS Funcionario, A.idTipoParticipacion 
+$equipo_docente = "SELECT A.rut, CONCAT_WS(' ', B.Nombres, B.Paterno, B.Materno) AS Funcionario, A.idTipoParticipacion 
                    FROM spre_profesorescurso A
                    LEFT JOIN spre_personas B ON B.Rut = A.rut
                    WHERE idcurso = '$idCurso'

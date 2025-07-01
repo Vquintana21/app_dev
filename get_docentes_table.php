@@ -41,7 +41,7 @@ function decimalAHorasMinutos($decimal) {
 ?>
 
 <!-- Formulario de búsqueda y asignación de docentes REGULARES -->
-<div class="container py-4"> 
+<div class="container-fluid py-4">  
 
     <div class="card mb-4">
         <div class="card-body">
@@ -94,7 +94,7 @@ function decimalAHorasMinutos($decimal) {
     </div>
 
     <!-- Tabla de docentes REGULARES -->
-    <<div class="card">
+    <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">

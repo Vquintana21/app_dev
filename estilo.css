@@ -1,3 +1,28 @@
+body.modal-open {
+    padding-right: 0 !important;
+}
+
+#header {
+    padding-right: 0 !important;
+}
+
+/* Estilo para error en el campo subtipo */
+.campo-error-subtipo {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+/* Estilo para el asterisco de campo requerido */
+.campo-requerido {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+/* Transición suave para los cambios de borde */
+#activity-subtype {
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
 /* Estilos base */
 
 .auto-expand {

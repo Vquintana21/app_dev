@@ -18,6 +18,34 @@ function sendResponse($success, $message = '', $debug = array()) {
     exit;
 }
 
+function procesarRUTCorrectamente($rut_docente) {
+    $rut_limpio = str_replace(['.', ' '], '', trim($rut_docente));
+    
+    if (strpos($rut_limpio, '-') !== false) {
+        $partes = explode('-', $rut_limpio);
+        $parte_numerica = $partes[0];
+        $digito_verificador = strtoupper($partes[1]);
+    } else {
+        $parte_numerica = substr($rut_limpio, 0, -1);
+        $digito_verificador = strtoupper(substr($rut_limpio, -1));
+    }
+    
+    if (!is_numeric($parte_numerica)) {
+        throw new Exception("RUT inválido");
+    }
+    
+    // ✅ 9 dígitos + DV = 10 caracteres total
+    $parte_numerica_formateada = str_pad($parte_numerica, 9, "0", STR_PAD_LEFT);
+    $rut_completo_10_digitos = $parte_numerica_formateada . $digito_verificador;
+    
+    return [
+        'rut_formateado' => $rut_completo_10_digitos,
+        'digito_verificador' => $digito_verificador,
+        'parte_numerica' => $parte_numerica,
+        'rut_original' => $rut_docente
+    ];
+}
+
 try {
     // 1. Verificar inclusión de conexión
     if (!file_exists("conexion.php")) {
@@ -41,27 +69,19 @@ try {
     $email = isset($_POST['email']) ? $_POST['email'] : '';
     $funcion = isset($_POST['funcion']) ? $_POST['funcion'] : '';
     
-    // **CORRECCIÓN IMPORTANTE: Procesar el RUT correctamente**
-    // Eliminar todos los caracteres no numéricos (guión, puntos, etc.)
-    $rut_numerico = preg_replace('/[^0-9]/', '', $rut_docente);
+    // ✅ PROCESAMIENTO CORRECTO DEL RUT - 10 DÍGITOS INCLUYENDO DV
+try {
+    $resultado_rut = procesarRUTCorrectamente($rut_docente);
+    $rut_formateado = $resultado_rut['rut_formateado'];  // 10 caracteres incluyendo DV
     
-    // Si el RUT tiene más de 9 dígitos (incluye dígito verificador), eliminarlo
-    if (strlen($rut_numerico) > 9) {
-        $rut_sin_dv = substr($rut_numerico, 0, -1);
-    } else {
-        $rut_sin_dv = $rut_numerico;
-    }
+    // Debug mejorado
+    $rut_debug = $resultado_rut;
     
-    // Formatear el RUT con padding de ceros a la izquierda (total: 10 caracteres)
-    $rut_formateado = str_pad($rut_sin_dv, 10, "0", STR_PAD_LEFT);
-    
-    // Debug: mostrar cómo se procesa el RUT
-    $rut_debug = array(
-        'rut_original' => $rut_docente,
-        'rut_numerico' => $rut_numerico,
-        'rut_sin_dv' => $rut_sin_dv,
-        'rut_formateado' => $rut_formateado
-    );
+} catch (Exception $e) {
+    sendResponse(false, "Error al procesar RUT: " . $e->getMessage(), array(
+        'rut_original' => $rut_docente
+    ));
+}
     
     // Construir el nombre completo del funcionario
     $funcionario = trim($nombres . ' ' . $paterno . ' ' . $materno);

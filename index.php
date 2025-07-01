@@ -7,10 +7,12 @@ include_once 'login/control_sesion.php';
 // Obtener el ID del curso desde la URL
 $idCurso = $_GET['curso']; 
 //$idCurso = 8942; // 8158
-$rut = "016784781K";
+//$rut = "016784781K";
+$ruti = $_SESSION['sesion_idLogin'];
+$rut = str_pad($ruti, 10, "0", STR_PAD_LEFT);
 //$ano = 2024; 
 // Consulta SQL
-$query = "SELECT `idplanclases`, pcl_tituloActividad, `pcl_Fecha`, `pcl_Inicio`, `pcl_Termino`, 
+$query = "SELECT `idplanclases`, pcl_tituloActividad, pcl_Periodo, `pcl_Fecha`, `pcl_Inicio`, `pcl_Termino`, 
           `pcl_nSalas`, `pcl_Seccion`, `pcl_TipoSesion`, `pcl_SubTipoSesion`, 
           `pcl_Semana`, `pcl_AsiCodigo`, `pcl_AsiNombre`, `Sala`, `Bloque`, `dia`, `pcl_condicion`, `pcl_ActividadConEvaluacion`, pcl_BloqueExtendido
           FROM `a_planclases` 
@@ -38,6 +40,7 @@ $FilaCurso = mysqli_fetch_assoc($buscarCursoQ);
 
 $codigo_curso = $FilaCurso["CodigoCurso"];
 $seccion = $FilaCurso["Seccion"];
+$idperiodo = $FilaCurso["idperiodo"];
 
 $esSecciones1 = ($seccion == "1");
 $tieneMultiplesSecciones = false;
@@ -369,7 +372,7 @@ $conn->close();
 
  <main id="main" class="main">
     <div class="pagetitle">
-        <h1><?php echo $codigo_curso."-".$seccion; ?> <?php echo $nombre_curso; ?> <?php echo "2024-2"; ?></h1>
+        <h1><?php echo $codigo_curso."-".$seccion; ?> <?php echo $nombre_curso; ?> <?php echo $idperiodo ; ?></h1>
         <small style="float: right;">ID curso: <?php echo $idCurso; ?></small>
         <nav>
             <ol class="breadcrumb">
@@ -483,14 +486,16 @@ $conn->close();
 												</div>
 											</div>
 
-											<div class="row mb-3" id="subtype-container" style="display: none;">
-												<label class="col-sm-2 col-form-label">Sub Tipo actividad</label>
-												<div class="col-sm-10">
-													<select class="form-control" id="activity-subtype" name="subtype">
-														<!-- Se llenará dinámicamente -->
-													</select>
-												</div>
-											</div>
+<div class="row mb-3" id="subtype-container" style="display: none;">
+	<label class="col-sm-2 col-form-label">
+	Sub Tipo actividad <span style="color: #dc3545; font-weight: bold;">*</span>
+	</label>
+		<div class="col-sm-10">
+		<select class="form-control" id="activity-subtype" name="subtype">
+		<!-- Se llenará dinámicamente -->
+		</select>
+		</div>
+</div>
                                             <div class="row mb-3">
 												<label class="col-sm-2 col-form-label">Horario</label>
 												<div class="col-sm-10">
@@ -961,6 +966,8 @@ function updateSubTypes() {
         subtypeContainer.style.display = ''; // Removemos el display para que use el valor por defecto
         selectSubtipo.innerHTML = '<option value="">Seleccione un subtipo</option>';
         
+		
+		
         // Filtrar y agregar subtipos correspondientes
         tiposSesion
             .filter(t => t.tipo_sesion === tipoSeleccionado && t.Sub_tipo_sesion)
@@ -968,8 +975,24 @@ function updateSubTypes() {
                 const option = new Option(st.Sub_tipo_sesion, st.Sub_tipo_sesion);
                 selectSubtipo.add(option);
             });
+        
+        // ✅ NUEVO: Agregar evento para limpiar errores cuando se selecciona un subtipo
+        selectSubtipo.removeEventListener('change', limpiarErrorSubtipo); // Evitar duplicados
+        selectSubtipo.addEventListener('change', limpiarErrorSubtipo);
+        
     } else {
         subtypeContainer.style.display = 'none';
+        selectSubtipo.innerHTML = '<option value="">No aplica</option>';
+        // Limpiar errores cuando se oculta
+        selectSubtipo.classList.remove('campo-error-subtipo');
+    }
+}
+
+// ✅ NUEVA FUNCIÓN: Para limpiar errores del subtipo
+function limpiarErrorSubtipo() {
+    const subtypeSelect = document.getElementById('activity-subtype');
+    if (subtypeSelect && subtypeSelect.value.trim()) {
+        subtypeSelect.classList.remove('campo-error-subtipo');
     }
 }
 
@@ -1039,8 +1062,7 @@ function createActivityButton(activity) {
         
         // Agregar tooltip si el título es largo
         if (activity.pcl_tituloActividad && activity.pcl_tituloActividad.length > 25) {
-            button.setAttribute('data-bs-toggle', 'tooltip');
-            button.setAttribute('data-bs-placement', 'top');
+            
             button.setAttribute('title', activity.pcl_tituloActividad);
         }
     } else {
@@ -1060,6 +1082,7 @@ function createActivityButton(activity) {
             content = `
                 <div class="class-date"><i class="fas fa-calendar-days me-1"></i>${fechaFormateada}</div>
                 <div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
+				<div class="activity-type-sesion"><i class="fas fa-pen-to-square me-1"></i>${truncateText(activity.pcl_TipoSesion, 25)}</div>
                 <div class="activity-title"><i class="fas fa-book me-1"></i>${truncateText(activity.pcl_tituloActividad, 25)}</div>
             `;
             
@@ -1660,6 +1683,22 @@ function saveActivity() {
         mostrarToast('El título de la actividad no puede estar vacío', 'danger');
         return;
     }
+	
+	 // ✅ NUEVA VALIDACIÓN: Verificar subtipo si está visible
+    const subtypeContainer = document.getElementById('subtype-container');
+    const subtypeSelect = document.getElementById('activity-subtype');
+    
+    if (subtypeContainer && subtypeContainer.style.display !== 'none' && subtypeContainer.style.display !== '') {
+        const subtipoValue = subtypeSelect ? subtypeSelect.value.trim() : '';
+        if (!subtipoValue) {
+            mostrarToast('Debe seleccionar un subtipo de actividad', 'danger');
+            if (subtypeSelect) {
+                subtypeSelect.focus();
+                subtypeSelect.classList.add('campo-error-subtipo');
+            }
+            return;
+        }
+    }
     
     // Obtener datos necesarios para verificación
     const idplanclases = document.getElementById('idplanclases').value;
@@ -1731,6 +1770,48 @@ function saveActivity() {
 
 // REEMPLAZAR TODA la función procesarGuardado() en index.php:
 function procesarGuardado() {
+	
+	
+    
+    const subtypeContainer = document.getElementById('subtype-container');
+    const subtypeSelect = document.getElementById('activity-subtype');
+    const activityType = document.getElementById('activity-type').value;
+    
+   
+    
+    // ✅ LÓGICA CORREGIDA DE VISIBILIDAD
+    if (subtypeContainer && subtypeSelect) {
+        // Verificar si está visible usando getComputedStyle (más preciso)
+        const computedStyle = window.getComputedStyle(subtypeContainer);
+        const isVisible = computedStyle.display !== 'none';
+        
+        // También verificar si el style directo no dice 'none'
+        const isVisibleByStyle = subtypeContainer.style.display !== 'none';
+        
+        const hasOptions = subtypeSelect.options.length > 1;
+        const subtipoValue = subtypeSelect.value.trim();
+        
+       
+        
+        // ✅ NUEVA CONDICIÓN: Si está visible Y tiene opciones Y no hay valor seleccionado
+        if (isVisible && hasOptions && !subtipoValue) {           
+            mostrarToast('Debe seleccionar un subtipo de actividad', 'danger');
+            subtypeSelect.focus();
+            subtypeSelect.classList.add('campo-error-subtipo');
+            
+            // Rehabilitar botón
+            const saveButton = document.querySelector('button[onclick="saveActivity()"]');
+            if (saveButton) saveButton.disabled = false;
+            
+            return; // DETENER AQUÍ
+        }
+    }    
+   
+    
+   
+    
+  
+	
     // Mostrar toast de carga
     mostrarToastCarga('Guardando cambios...');
     
@@ -2044,6 +2125,41 @@ function saveAutoActivity() {
 // 7. SISTEMA DE SALAS COMPLETO
 // ===========================================
 
+async function configurarHeaderModalSala(idPlanClase, accion) {
+    // Configurar título de la acción
+    const tituloAccion = {
+        'solicitar': 'Solicitar Sala',
+        'modificar': 'Modificar Solicitud de Sala', 
+        'modificar_asignada': 'Modificar Sala Asignada'
+    };
+    
+    document.getElementById('salaModalTitle').textContent = tituloAccion[accion] || 'Gestionar Sala';
+    document.getElementById('sala-modal-idplanclases').textContent = idPlanClase;
+    
+    // Valores por defecto mientras carga
+    document.getElementById('sala-modal-fecha-hora').textContent = 'Cargando...';
+    document.getElementById('sala-modal-tipo-sesion').textContent = 'Cargando...';
+    
+    try {
+        // ✅ OBTENER DATOS DESDE LA BD
+        const response = await fetch(`get_actividad_info.php?id=${idPlanClase}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('sala-modal-fecha-hora').textContent = data.fechaHora;
+            document.getElementById('sala-modal-tipo-sesion').textContent = data.tipoSesion;
+        } else {
+            document.getElementById('sala-modal-fecha-hora').textContent = 'Información no disponible';
+            document.getElementById('sala-modal-tipo-sesion').textContent = 'Información no disponible';
+        }
+    } catch (error) {
+        console.error('Error al obtener información de la actividad:', error);
+        document.getElementById('sala-modal-fecha-hora').textContent = 'Error al cargar';
+        document.getElementById('sala-modal-tipo-sesion').textContent = 'Error al cargar';
+    }
+}
+
+
 // FUNCIÓN PRINCIPAL: solicitarSala
 async function solicitarSala(idPlanClase) {
     console.log('=== INICIANDO SOLICITAR SALA ===');
@@ -2054,7 +2170,7 @@ async function solicitarSala(idPlanClase) {
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
     document.getElementById('action').value = 'solicitar';
-    document.getElementById('salaModalTitle').textContent = 'Solicitar Sala';
+    configurarHeaderModalSala(idPlanClase, 'solicitar');
     
     // Obtener datos para prellenar el formulario
     try {
@@ -2164,7 +2280,7 @@ async function modificarSala(idPlanClase) {
     
     document.getElementById('salaForm').reset();
     document.getElementById('idplanclases').value = idPlanClase;
-    document.getElementById('salaModalTitle').textContent = 'Modificar Solicitud de Sala';
+    configurarHeaderModalSala(idPlanClase, 'modificar');
     
     // Obtener el elemento de la tabla
     const tr = document.querySelector(`tr[data-id="${idPlanClase}"]`);
@@ -2415,17 +2531,12 @@ function mostrarMensajeJuntarSecciones(mostrar, cupoTotal = 0) {
             const alumnosTotalesDiv = document.getElementById('alumnosTotales').closest('.mb-3');
             mensajeDiv = document.createElement('div');
             mensajeDiv.id = 'mensaje-juntar-secciones';
-            mensajeDiv.className = 'alert alert-info alert-sm mt-2';
+            mensajeDiv.className = 'alert alert-light alert-sm mt-2';
             alumnosTotalesDiv.appendChild(mensajeDiv);
         }
-        
-        mensajeDiv.innerHTML = `
-            <i class="bi bi-info-circle me-1"></i>
-            <small>
-                <strong>Secciones unificadas:</strong> Se están considerando los alumnos de todas las secciones del curso (${cupoTotal} estudiantes total).
-            </small>
-        `;
-        mensajeDiv.style.display = 'block';
+        mensajeDiv.innerHTML = ``;
+       
+        mensajeDiv.style.display = 'none';
         
     } else {
         if (mensajeDiv) {
@@ -2754,10 +2865,10 @@ function restaurarHTMLSeccionComputacion() {
     seccionComputacion.innerHTML = `
         <hr>
         <div class="mb-3">
-            <h6 class="text-primary">
+            <label class="form-label fw-bold text-primary mb-0">
                 <i class="bi bi-pc-display me-2"></i>
                 Salas de Computación
-            </h6>
+            </label>
             
             <div class="alert alert-info alert-sm">
                 <i class="bi bi-info-circle me-1"></i>
@@ -4853,30 +4964,39 @@ function guardar_docente() {
                 },
                 url: 'guardar_docente_nuevo.php', 
                 type: 'POST',
-                success: function(respuesta) {
-                    // Restaurar botón
-                    $btnGuardar.prop('disabled', false).html(textoOriginal);
-                    
-                    if(respuesta.success) {
-                        // Cerrar el modal de nuevo docente
-                        const modalElement = document.getElementById('nuevoDocenteModal');
-                        const modal = bootstrap.Modal.getInstance(modalElement);
-                        if (modal) modal.hide();
-                        
-                        // Mostrar notificación de éxito
-                        mostrarToast('Docente agregado correctamente', 'success');
-                        
-                        // Recargar la pestaña de docentes
-                        $('#docente-tab').click();
-                        
-                        // Limpiar el formulario para la próxima vez
-                        $('#nuevoDocenteForm')[0].reset();
-                        $('#unidad_externa').prop('disabled', true);
-                    } else {
-                        // Mostrar error
-                        mostrarToast(respuesta.message || 'Error al agregar docente', 'danger');
-                    }
-                },
+                // ✅ REEMPLAZA tu función success con esta versión corregida:
+
+					success: function(respuesta) {
+						// Restaurar botón
+						$btnGuardar.prop('disabled', false).html(textoOriginal);
+						
+						if(respuesta.success) {
+							// ✅ PRIMERO: Limpiar el formulario ANTES de cerrar el modal
+							const form = document.getElementById('nuevoDocenteForm');
+							if (form) {
+								form.reset();
+							}
+							const unidadExterna = document.getElementById('unidad_externa');
+							if (unidadExterna) {
+								unidadExterna.disabled = true;
+							}
+							
+							// SEGUNDO: Cerrar el modal de nuevo docente
+							const modalElement = document.getElementById('nuevoDocenteModal');
+							const modal = bootstrap.Modal.getInstance(modalElement);
+							if (modal) modal.hide();
+							
+							// TERCERO: Mostrar notificación de éxito
+							mostrarToast('Docente agregado correctamente', 'success');
+							
+							// CUARTO: Recargar la pestaña de docentes
+							$('#docente-tab').click();
+							
+						} else {
+							// Mostrar error
+							mostrarToast(respuesta.message || 'Error al agregar docente', 'danger');
+						}
+					},
                 error: function(xhr, status, error) {
                     // Restaurar botón
                     $btnGuardar.prop('disabled', false).html(textoOriginal);
@@ -5376,6 +5496,54 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+function recargarSoloTablaDocentes() {
+    console.log('🔄 Recargando solo la tabla de docentes clínicos...');
+    
+    // Buscar específicamente el contenedor de la tabla
+    const tablaContainer = document.querySelector('#docentes-list .table-responsive');
+    
+    if (!tablaContainer) {
+        console.log('📋 Contenedor específico no encontrado, usando fallback de pestaña completa');
+        // Fallback: recargar toda la pestaña
+        const docentesList = document.getElementById('docentes-list');
+        const docenteTab = document.getElementById('docente-tab');
+        
+        if (docentesList) {
+            docentesList.removeAttribute('data-loaded');
+        }
+        
+        if (docenteTab) {
+            docenteTab.click();
+        }
+        return;
+    }
+    
+    showSpinnerInElement(tablaContainer);
+    fetchAndUpdateTable(tablaContainer);
+}
+
+function volverYRecargarTabla() {
+    console.log('🔄 Cerrando modal...');
+    
+    // 1. Cerrar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('nuevoDocenteModal'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // 2. Limpiar formulario (si existe)
+    const form = document.querySelector('#nuevoDocenteModal form');
+    if (form) {
+        form.reset();
+    }
+    
+    // 3. Estrategia simple: esperar un poco y recargar
+    setTimeout(() => {
+        console.log('🔄 Ejecutando recarga...');
+        recargarSoloTablaDocentes();
+    }, 500); // Más tiempo para que se cierre el modal
+}
 
 
 </script>

@@ -1,6 +1,7 @@
 <?php
 include("conexion.php");
-function obtenerDatosMultiplesSecciones($codigoCurso, $periodo, $conexion3) {
+function obtenerDatosMultiplesSecciones($codigoCurso, $periodo, $conn) {
+	 global $conn, $conexion3;
     try {
         $stmt = $conexion3->prepare("SELECT COUNT(*) as total_secciones, 
                                            SUM(Cupo) as cupo_total,
@@ -61,7 +62,7 @@ function obtenerDatosMultiplesSecciones($codigoCurso, $periodo, $conexion3) {
 function calcularAlumnosReales($idplanclases, $conn, $tipoCurso = 'regular') {
     try {
         // Determinar tabla según tipo de curso
-        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'dpimeduc_calendario.planclases_test' : 'dpimeduc_calendario.a_planclases';
+        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases_test' : 'a_planclases';
         
         // Obtener datos de planclases
         $stmt = $conn->prepare("SELECT pcl_AulaDescripcion, pcl_alumnos, cursos_idcursos, pcl_AsiCodigo, pcl_Periodo 
@@ -174,7 +175,7 @@ function calcularAlumnosPorSala($cupoTotal, $numeroSalas) {
  */
 function actualizarPclAulaDescripcion($idplanclases, $juntarSecciones, $conn, $tipoCurso = 'regular') {
     try {
-        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'dpimeduc_calendario.planclases_test' : 'dpimeduc_calendario.a_planclases';
+        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases_test' : 'a_planclases';
         $valor = $juntarSecciones ? 'S' : 'N';
         
         $stmt = $conn->prepare("UPDATE $tablaPlanclases SET pcl_AulaDescripcion = ? WHERE idplanclases = ?");
@@ -210,7 +211,7 @@ function actualizarPclAulaDescripcion($idplanclases, $juntarSecciones, $conn, $t
  */
 function obtenerEstadoJuntarSecciones($idplanclases, $conn, $tipoCurso = 'regular') {
     try {
-        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'dpimeduc_calendario.planclases_test' : 'dpimeduc_calendario.a_planclases';
+        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases_test' : 'a_planclases';
         
         $stmt = $conn->prepare("SELECT pcl_AulaDescripcion FROM $tablaPlanclases WHERE idplanclases = ?");
         

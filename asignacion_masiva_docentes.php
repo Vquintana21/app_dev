@@ -14,18 +14,39 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
 ?>
 
     <div class="container-fluid py-4">
-        <!-- Información del curso -->
-        <div class="card mb-4">
-            <div class="card-body">
-               <h4 class="text-center"> <i class="bi bi-person-raised-hand"></i> Instrucciones asignar docentes masivamente</h4>
-			   
-			   <ul>
-				   <li>En esta pestaña podrá asignar uno o varios docentes a una o varias actividades según lo que haya filtrado en el paso 1. 
-				   <li>Tenga cuidado, si asignó por error a muchas actividades a alguien, lo deberá borrar uno por uno en la pestaña de calendario.
-			   </ul>
-                
-            </div>
-        </div>
+        
+		<div class="accordion mb-4" id="accordionInstrucciones">
+    <div class="accordion-item border-warning">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed bg-warning bg-opacity-10 text-warning fw-bold" 
+                    type="button" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#collapseInstrucciones"
+                    aria-expanded="false" 
+                    aria-controls="collapseInstrucciones">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Instrucciones Importantes para asignar docentes masivamente
+            </button>
+        </h2>
+        <div id="collapseInstrucciones" 
+             class="accordion-collapse collapse" 
+             data-bs-parent="#accordionInstrucciones">
+            <div class="accordion-body">
+                <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+                <i class="bi bi-person-plus text-primary me-2"></i>
+                En esta pestaña podrá asignar uno o varios docentes a una o más actividades, según los filtros aplicados en el paso 1.
+            </li>
+            <li class="list-group-item">
+                <i class="bi bi-people text-warning me-2"></i>
+                <b> Importante: </b> Si asigna por error un docente a múltiples actividades, deberá eliminarlas una por una desde la pestaña Calendario.
+            </li>		
+            
+        </ul>
+    </div>
+</div>
+    </div>
+</div>
 		
 
         <!-- Filtros y selección -->
@@ -45,8 +66,8 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                 $tipos_query = "SELECT DISTINCT tipo_sesion FROM pcl_TipoSesion WHERE docentes = 1";
                                 $result_tipos = mysqli_query($conn, $tipos_query);
                                 while($tipo = mysqli_fetch_assoc($result_tipos)) {
-                                    echo '<option value="'.htmlspecialchars($tipo['tipo_sesion']).'">'.
-                                        htmlspecialchars($tipo['tipo_sesion']).'</option>';
+                                    echo '<option value="'.$tipo['tipo_sesion'].'">'.
+                                        $tipo['tipo_sesion'].'</option>';
                                 }
                                 ?>
                             </select>
@@ -74,8 +95,8 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                 $tipos_query = "SELECT DISTINCT dia FROM a_planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso'";
                                 $result_tipos = mysqli_query($conn, $tipos_query);
                                 while($tipo = mysqli_fetch_assoc($result_tipos)) {
-                                    echo '<option value="'.htmlspecialchars($tipo['dia']).'">'.
-                                        htmlspecialchars($tipo['dia']).'</option>';
+                                    echo '<option value="'.$tipo['dia'].'">'.
+                                        $tipo['dia'].'</option>';
                                 }
                                 ?>
                             </select>
@@ -89,8 +110,8 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                 $tipos_query = "SELECT DISTINCT pcl_Inicio FROM a_planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso' order by pcl_Inicio asc;";
                                 $result_tipos = mysqli_query($conn, $tipos_query);
                                 while($tipo = mysqli_fetch_assoc($result_tipos)) {
-                                    echo '<option value="'.htmlspecialchars($tipo['pcl_Inicio']).'">'.
-                                        htmlspecialchars($tipo['pcl_Inicio']).'</option>';
+                                    echo '<option value="'.$tipo['pcl_Inicio'].'">'.
+                                        $tipo['pcl_Inicio'].'</option>';
                                 }
                                 ?>
                             </select>
@@ -104,8 +125,8 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                                 $tipos_query = "SELECT DISTINCT pcl_Termino FROM a_planclases WHERE dia NOT LIKE 'Domingo' AND cursos_idcursos = '$idCurso' order by pcl_Inicio asc;";
                                 $result_tipos = mysqli_query($conn, $tipos_query);
                                 while($tipo = mysqli_fetch_assoc($result_tipos)) {
-                                    echo '<option value="'.htmlspecialchars($tipo['pcl_Termino']).'">'.
-                                        htmlspecialchars($tipo['pcl_Termino']).'</option>';
+                                    echo '<option value="'.$tipo['pcl_Termino'].'">'.
+                                        $tipo['pcl_Termino'].'</option>';
                                 }
                                 ?>
                             </select>
@@ -252,16 +273,21 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
                         <div id="listaDocentes">
                             <?php
                             // Consultar el equipo docente del curso
-                            $equipo_docente = "SELECT spre_profesorescurso.rut, spre_personas.Nombres, 
-                                              spre_personas.Paterno, spre_personas.Materno,
-                                              spre_tipoparticipacion.CargoTexto 
-                                              FROM spre_profesorescurso
-                                              INNER JOIN spre_personas ON spre_profesorescurso.rut = spre_personas.Rut
-                                              INNER JOIN spre_tipoparticipacion ON spre_profesorescurso.idTipoParticipacion = spre_tipoparticipacion.idTipoParticipacion
-                                              WHERE idcurso = '$idCurso'
-                                              AND spre_profesorescurso.idTipoParticipacion NOT IN (8,10)
-                                              AND Vigencia = 1
-                                               ORDER BY Nombres ASC, Paterno ASC, Materno ASC";
+                            $equipo_docente = "SELECT DISTINCT
+													spre_profesorescurso.rut,
+													spre_personas.Nombres,
+													spre_personas.Paterno,
+													spre_personas.Materno
+												FROM
+													spre_profesorescurso
+												INNER JOIN spre_personas ON spre_profesorescurso.rut = spre_personas.Rut
+												INNER JOIN spre_tipoparticipacion ON spre_profesorescurso.idTipoParticipacion = spre_tipoparticipacion.idTipoParticipacion
+												WHERE
+													idcurso = '$idCurso' AND spre_profesorescurso.idTipoParticipacion NOT IN(8, 10) AND Vigencia = 1
+												ORDER BY
+													Nombres ASC,
+													Paterno ASC,
+													Materno ASC;";
                             $result_docentes = mysqli_query($conexion3, $equipo_docente);
                             
                             function obtenerFoto($rut) {
