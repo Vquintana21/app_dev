@@ -162,15 +162,15 @@ function validarAntesGuardar($conn, $data) {
     }
 }
 
-function estaDisponible($conn, $idSala, $fecha, $horaInicio, $horaFin) {
-    $queryReserva = "SELECT * FROM reserva_2 
+function estaDisponible($reserva2, $idSala, $fecha, $horaInicio, $horaFin) {
+    $queryReserva = "SELECT * FROM reserva 
                      WHERE re_idSala = ?
                      AND re_FechaReserva = ?
                      AND ((re_HoraReserva <= ? AND re_HoraTermino > ?) 
                           OR (re_HoraReserva < ? AND re_HoraTermino >= ?) 
                           OR (? <= re_HoraReserva AND ? >= re_HoraTermino))";
     
-    $stmtReserva = $conn->prepare($queryReserva);
+    $stmtReserva = $reserva2->prepare($queryReserva);
     $stmtReserva->bind_param("ssssssss", 
         $idSala, $fecha, 
         $horaInicio, $horaFin,

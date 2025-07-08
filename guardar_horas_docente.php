@@ -65,7 +65,7 @@ try {
     error_log("Procesando datos: ID=$idProfesoresCurso, RUT=$rutDocente, Curso=$idCurso, Horas=$horas");
     
     // PASO 1: Desactivar todas las entradas existentes para este docente en este curso
-    $queryDesactivar = "UPDATE docenteclases_copy 
+    $queryDesactivar = "UPDATE docenteclases 
                        SET vigencia = 0, 
                            fechaModificacion = ?, 
                            usuarioModificacion = ?
@@ -89,7 +89,7 @@ try {
     
     // PASO 2: Solo insertar nuevo registro si las horas son mayor a 0
     if ($horas > 0) {
-        $queryInsertar = "INSERT INTO docenteclases_copy 
+        $queryInsertar = "INSERT INTO docenteclases 
                          (rutDocente, idPlanClases, idCurso, horas, unidadAcademica, vigencia, usuarioModificacion, fechaModificacion) 
                          VALUES (?, NULL, ?, ?, ?, 1, ?, ?)";
         

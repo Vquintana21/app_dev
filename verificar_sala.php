@@ -29,7 +29,7 @@ if (!$idplanclases || empty($tipoNuevo)) {
 
 try {
     // Obtener el tipo actual
-    $queryTipoActual = "SELECT pcl_TipoSesion FROM a_planclases WHERE idplanclases = ?";
+    $queryTipoActual = "SELECT pcl_TipoSesion FROM planclases WHERE idplanclases = ?";
     $stmtTipoActual = $conn->prepare($queryTipoActual);
     $stmtTipoActual->bind_param("i", $idplanclases);
     $stmtTipoActual->execute();
@@ -75,7 +75,7 @@ try {
     
     // Verificar si hay asignaciones existentes (cualquier estado excepto liberadas)
     $queryAsignaciones = "SELECT idEstado, COUNT(*) as cantidad 
-                         FROM asignacion_piloto 
+                         FROM asignacion 
                          WHERE idplanclases = ? AND idEstado != 4
                          GROUP BY idEstado";
     $stmtAsignaciones = $conn->prepare($queryAsignaciones);

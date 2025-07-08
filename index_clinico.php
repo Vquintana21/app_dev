@@ -1,18 +1,17 @@
 <?php
-
-//index.php 99677 ultimo profesor
-include("conexion.php");
+include_once("conexion.php");
 include_once 'login/control_sesion.php';
-// Obtener el ID del curso desde la URL
+session_start();
+$ruti = $_SESSION['sesion_idLogin'];
+$rut = str_pad($ruti, 10, "0", STR_PAD_LEFT);
+
 $idCurso = $_GET['curso']; 
-//$idCurso = 8942; // 8158
-$rut = "0167847811";
-$ano = 2024; 
+
 // Consulta SQL
 $query = "SELECT `idplanclases`, pcl_tituloActividad, `pcl_Fecha`, `pcl_Inicio`, `pcl_Termino`, 
           `pcl_nSalas`, `pcl_Seccion`, `pcl_TipoSesion`, `pcl_SubTipoSesion`, 
           `pcl_Semana`, `pcl_AsiCodigo`, `pcl_AsiNombre`, `Sala`, `Bloque`, `dia`, `pcl_condicion`, `pcl_ActividadConEvaluacion`, pcl_BloqueExtendido, cursos_idcursos
-          FROM `planclases_test` 
+          FROM `planclases` 
           WHERE `cursos_idcursos` = ?
 		  order by pcl_Fecha, pcl_Inicio asc";
 
@@ -581,6 +580,10 @@ $conn->close();
         // Manejar subtipo
         if (tipoInfo.subtipo_activo === "1") {
             subtypeContainer.style.display = 'block';
+			const label = subtypeContainer.querySelector('label');
+if (label && !label.innerHTML.includes('*')) {
+    label.innerHTML = label.innerHTML.replace('Sub Tipo actividad', 'Sub Tipo actividad <span style="color: red;">*</span>');
+}
             selectSubtipo.innerHTML = '<option value="">Seleccione un subtipo</option>';
             
             // Filtrar y agregar subtipos correspondientes
@@ -592,6 +595,10 @@ $conn->close();
                 });
         } else {
             subtypeContainer.style.display = 'none';
+			const label = subtypeContainer.querySelector('label');
+if (label) {
+    label.innerHTML = label.innerHTML.replace(/ <span style="color: red;">\*<\/span>/, '');
+}
         }
     }
 	
@@ -773,6 +780,8 @@ function resetForm() {
 const today = new Date().toISOString().split('T')[0];
 document.getElementById('activity-date').value = today;
 document.getElementById('activity-date').min = today; // ✅ Solo evita fechas pasadas
+
+aplicarFechaLimite();
     
     // Cargar bloques como checkboxes para modo inserción
     loadBloques(false);
@@ -790,6 +799,27 @@ if (!dateInput.hasAttribute('data-has-change-listener')) {
     dateInput.setAttribute('data-has-change-listener', 'true');
 }
 
+}
+
+// 🆕 NUEVA FUNCIÓN: Obtener y aplicar fecha límite del curso
+async function aplicarFechaLimite() {
+    try {
+        const idCurso = document.getElementById('cursos_idcursos').value;
+        
+        const response = await fetch(`get_fecha_limite.php?idCurso=${idCurso}`);
+        const data = await response.json();
+        
+        if (data.success && data.fecha_fin) {
+            const dateInput = document.getElementById('activity-date');
+            dateInput.max = data.fecha_fin;
+            
+            console.log(`📅 Fecha límite aplicada: ${data.fecha_fin}`);
+        } else {
+            console.warn('⚠️ No se pudo obtener fecha límite:', data.error);
+        }
+    } catch (error) {
+        console.error('❌ Error obteniendo fecha límite:', error);
+    }
 }
     
     function editActivity(idplanclases) {
@@ -833,6 +863,8 @@ if (!dateInput.hasAttribute('data-has-change-listener')) {
             
             console.log('Fecha extraída:', fechaFormateada);
             document.getElementById('activity-date').value = fechaFormateada;
+			
+			aplicarFechaLimite();
             
             // Limpiar cualquier selección anterior
             actividadesPorBloque.clear();
@@ -938,12 +970,38 @@ function validarFormularioActividad() {
         if (fecha < hoyStr) {
             errores.push('La fecha no puede ser de días anteriores');
         }
+		
+		  const dateInput = document.getElementById('activity-date');
+        const fechaLimite = dateInput.max;
+        
+        if (fechaLimite && fecha > fechaLimite) {
+            errores.push(`La fecha no puede ser posterior al ${fechaLimite} (fin del período académico)`);
+        }
+		
     }
     
     return errores;
 }
     
     function saveActivity() {
+		
+		const activityType = document.getElementById('activity-type').value;
+const subtypeSelect = document.getElementById('activity-subtype');
+
+// Buscar si este tipo requiere subtipo
+const tipoInfo = tiposSesion.find(t => t.tipo_sesion === activityType);
+
+if (tipoInfo && tipoInfo.subtipo_activo === "1") {
+    const subtypeValue = subtypeSelect.value.trim();
+    
+    if (!subtypeValue) {
+        mostrarToast('Debe seleccionar un subtipo de actividad', 'danger');
+        subtypeSelect.focus();
+        subtypeSelect.style.borderColor = '#dc3545';
+        return; // DETENER GUARDADO
+    }
+}
+		
     console.log('Iniciando proceso de guardado...');
     
     // Validar formulario con mensajes amigables
@@ -1173,6 +1231,14 @@ function configurarValidacionTiempoReal() {
                 this.classList.add('is-invalid');
                 mostrarErrorCampo(this, 'La fecha no puede ser de días anteriores');
             }
+			
+			 const fechaLimite = this.max;
+            if (fechaLimite && fecha > fechaLimite) {
+                this.classList.add('is-invalid');
+                mostrarErrorCampo(this, `La fecha no puede ser posterior al ${fechaLimite} (fin del período académico)`);
+                return;
+            }
+			
         });
         dateInput.setAttribute('data-validation-configured', 'true');
     }
@@ -4101,6 +4167,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
+
+// ✅ LIMPIAR ERROR CUANDO SELECCIONA SUBTIPO
+document.addEventListener('DOMContentLoaded', function() {
+    const subtypeSelect = document.getElementById('activity-subtype');
+    if (subtypeSelect) {
+        subtypeSelect.addEventListener('change', function() {
+            if (this.value.trim()) {
+                this.style.borderColor = '';
+            }
+        });
+    }
+});
+
 </script>
 
 <!-- Justo antes del cierre del body -->

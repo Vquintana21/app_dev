@@ -19,7 +19,7 @@ $query = "SELECT
     pcl_Termino,
     pcl_TipoSesion,
     pcl_SubTipoSesion
-FROM a_planclases 
+FROM planclases 
 WHERE idplanclases = ?";
 
 $stmt = $conn->prepare($query);

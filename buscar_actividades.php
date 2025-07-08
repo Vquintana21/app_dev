@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/json');
-include("conexion.php");
+include_once("conexion.php");
 
 try {
     // Obtener parámetros
@@ -21,7 +21,7 @@ try {
     // Construir consulta base
     $query = "SELECT idplanclases, pcl_tituloActividad, pcl_Fecha, DAYNAME(pcl_Fecha) AS dia_semana, pcl_Inicio, pcl_Termino, 
              pcl_TipoSesion, pcl_SubTipoSesion, dia
-             FROM a_planclases 
+             FROM planclases 
              WHERE cursos_idcursos = ? 
              AND pcl_TipoSesion != '' 
              AND pcl_TipoSesion != 'Autoaprendizaje'

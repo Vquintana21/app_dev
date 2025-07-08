@@ -1,7 +1,9 @@
 <?php
-include("conexion.php");
-include("login/control_sesion.php"); 
+include_once("conexion.php");
+include_once("login/control_sesion.php"); 
 session_start();
+include_once("log_ip.php");
+registrarIP(); 
 $rut = $_SESSION['sesion_idLogin'];
 $name = $_SESSION['sesion_usuario']; 
 $viene= array("Ã¡","Ã©","Ã","Ã³","Ãº");
@@ -70,6 +72,10 @@ function InfoDocenteUcampus($rut_niv){
 
 $foto_docente = InfoDocenteUcampus($rut_niv);
 
+
+
+
+
 ?>
 	<!DOCTYPE html>
 <html lang="en">
@@ -135,7 +141,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
       <h1><i class="bi bi-house-door"></i> Gestión de docencia - pregrado 2025.2</h1>
       <nav>
         <ol class="breadcrumb">
-          <li class="breadcrumb-item"><a href="index.html">Inicio</a></li>
+          <li class="breadcrumb-item"><a href="#">Inicio</a></li>
         </ol>
       </nav>
     </div><!-- End Page Title -->
@@ -164,7 +170,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
               <ul class="nav nav-tabs nav-tabs-bordered">
 
                 <li class="nav-item">
-                  <button class="nav-link" data-bs-toggle="tab" data-bs-target="#profile-overview">Resumen</button>
+                  <button class="nav-link" data-bs-toggle="tab" data-bs-target="#profile-overview">Guía inicial</button>
                 </li>
 
                 <li class="nav-item">
@@ -186,11 +192,59 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
                   <h5 class="card-title">¿Cómo usar la plataforma?</h5>
                   <p class="h6">
 				  La plataforma de calendario es la bitácora institucional oficial y única vía de solicitud de salas de las asignaturas asociadas a los diferentes planes de estudios de pregrado. Además, permite organizar los contenidos del curso en función de las fechas correspondiente al semestre/año en que se imparte y el docente responsable en cada una de las actividades calendarizadas. Por último, incluye el detalle de las horas directas efectuadas por cada docente.
-				   <a href="https://dpi.med.uchile.cl/test/calendarios/pages-faq.php"> Te invitamos a leer una guía sobre el uso de calendario. </a>
+				   <a href="https://dpi.med.uchile.cl/calendario/pages-faq.php"> Te invitamos a leer una guía sobre el uso de calendario. </a>
 				  </p>
 
-                  <h5 class="card-title">Tutorial de uso de plataforma</h5>
-				  <!--<iframe width="50%" height="500" src="https://www.youtube.com/embed/p7U5yRgQ93A?si=hk9LyudYrBlD6a54" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>-->
+                  <h5 class="card-title">Tutoriales de uso de plataforma</h5>
+					<div class="container my-4">
+					  <div class="row">
+						
+						<!-- Card 1 -->
+						<div class="col-md-6 col-lg-3 mb-4">
+						  <div class="card h-100">
+							<div class="card-body d-flex flex-column">
+							  <h5 class="card-title">Ingreso al sistema </h5>
+							  <p class="card-text">Tutorial sobre como ingresar a la plataforma. </p>
+							  <a href="https://youtu.be/K5oKkuyZkdk?si=ze-L1Y_kwnzMyboI" target="_blank" class="btn btn-danger mt-auto">Ver en YouTube</a>
+							</div>
+						  </div>
+						</div>
+
+						<!-- Card 2 -->
+						<div class="col-md-6 col-lg-3 mb-4">
+						  <div class="card h-100">
+							<div class="card-body d-flex flex-column">
+							  <h5 class="card-title">Actividades</h5>
+							  <p class="card-text">Tutorial sobre el ingreso de actividades en calendario. </p>
+							  <a href="https://youtu.be/32wzVsjPT54?si=D1S-0_E_KaNp8VQE" target="_blank" class="btn btn-danger mt-auto">Ver en YouTube</a>
+							</div>
+						  </div>
+						</div>
+
+						<!-- Card 3 -->
+						<div class="col-md-6 col-lg-3 mb-4">
+						  <div class="card h-100">
+							<div class="card-body d-flex flex-column">
+							  <h5 class="card-title">Equipo docente</h5>
+							  <p class="card-text">Tutorial de ingreso y mantención del equipo docente. </p>
+							  <a href="https://youtu.be/jE0vfA_396U?si=Zid8RFFq_dPoyIPg" target="_blank" class="btn btn-danger mt-auto">Ver en YouTube</a>
+							</div>
+						  </div>
+						</div>
+
+						<!-- Card 4 -->
+						<div class="col-md-6 col-lg-3 mb-4">
+						  <div class="card h-100">
+							<div class="card-body d-flex flex-column">
+							  <h5 class="card-title">Salas</h5>
+							  <p class="card-text">Tutorial sobre como solicitar, modificar y liberar espacios. </p>
+							  <a href="https://youtu.be/2Bo0qeGDkDA?si=lWTxiRP_0iJx0kuO" target="_blank" class="btn btn-danger mt-auto">Ver en YouTube</a>
+							</div>
+						  </div>
+						</div>
+
+					  </div>
+					</div>
            
                 </div>
 
@@ -234,7 +288,8 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 												WHERE spre_profesorescurso.idTipoParticipacion IN ('1','2','3','8','10') 
 												AND rut='$rut_niv' 
 												AND spre_profesorescurso.Vigencia='1' 
-												AND (spre_periodo_calendario.activo= 2 OR spre_periodo_calendario.anterior IN (1))
+												#AND (spre_periodo_calendario.activo= 1 OR spre_periodo_calendario.anterior IN (2))
+												AND spre_periodo_calendario.anterior IN (2)
 												GROUP BY idcurso  
 												ORDER BY NombreCurso ASC";
 									  $cursosQuery = mysqli_query($conexion3,$cursos);
@@ -263,12 +318,12 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 												
 												<?php if($fila_cursos["activo"] == 1){ 
 
-														$link_programa = "https://dpi.med.uchile.cl/programa/nuevo_programa.php?nik=$fila_cursos[codigoCurso]";
+														$link_programa = "https://dpi.med.uchile.cl/programa/controlador.php?nik=$fila_cursos[codigoCurso]";
 														$icon_programa = " bx bx-link-external"; 
 														
 													}else{ 
 
-														$link_programa = "https://dpi.med.uchile.cl/programa/print.php?nik=$fila_cursos[codigoCurso]";
+														$link_programa = "https://dpi.med.uchile.cl/programa/pdf_old.php?nik=$fila_cursos[codigoCurso]";
 														$icon_programa = " ri ri-arrow-go-back-fill"; 
 													
 													}?> <!--Periodo activo-->
@@ -310,7 +365,7 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 
 					<h5 class="card-title">¿Necesitas ayuda de aulas docentes?</h5>
 					
-					informa sobre tu problema a correo de aulas <a target="_blank" href="mailto:felpilla@gmail.com"> gestionaulas.med@uchile.cl </a>
+					Informa sobre tu problema a correo de aulas <a target="_blank" href="mailto:felpilla@gmail.com"> gestionaulas.med@uchile.cl </a>
 
 
                 </div>
@@ -323,6 +378,97 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
         </div>
       </div>
     </section>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<!-- Modal -->
+<?php
+
+	$p_correo = date("Y");	
+	
+	$correos_act = "SELECT * 
+					FROM correos_actualizados
+					WHERE rut = '$rut_niv'
+					AND periodo='$p_correo' ";
+	$correos_actQ = mysqli_query($conn,$correos_act);
+	$n_correos_act = mysqli_num_rows($correos_actQ);
+	
+	if ($n_correos_act == 0) {
+		echo $rut_niv; 
+		echo '<script>$(document).ready(function(){ 
+	  
+			$("#modal_correo").modal("show");
+		  
+		});</script>'; 
+	}
+?>
+  
+
+
+<!-- Modal -->
+<div class="modal fade" id="modal_correo"  tabindex="-1" aria-labelledby="exampleModalLabel"  data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"> 
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="h5" id="modal_correo"><i class="far fa-envelope text-danger"></i> Bienvenido(a), antes de empezar, actualice su correo institucional. </h5>
+      </div>
+	  <form action="actualizar_correo.php" method="POST" id="compareForm">
+	  <input type="text" name="rut" value="<?php echo $rut_niv; ?>"  hidden />
+			<div class="modal-body">
+			  <div class="alert alert-primary">
+				<i class="fas fa-info-circle"></i> <b>Importante:</b> A este correo le enviaremos la confirmación y recordatorios de salas asignadas.
+			  </div>
+			  <?php
+			  
+				$correo_usuario = "SELECT * FROM spre_personas WHERE Rut = '$rut_niv' ";
+				$correo_usuarioQ = mysqli_query($conexion3,$correo_usuario);
+				$fila_correo = mysqli_fetch_assoc($correo_usuarioQ);
+			  
+			  ?>
+				<div class="input-group mb-3">
+				  <span class="input-group-text" id="basic-addon1"><i class="far fa-envelope"></i></span>
+				  <input type="email" name="correo" id="correo" class="form-control" placeholder="Ingrese correo" aria-label="Correo" aria-describedby="basic-addon1" value="<?php echo $fila_correo["EmailReal"]; ?>">
+				</div>
+				
+				<b>Confirme su correo: </b>
+				
+				<div class="input-group mb-3 mt-2">
+				  <span class="input-group-text" id="basic-addon1"><i class="far fa-envelope"></i></span>
+				  <input type="email" name="correo2" id="correo2"  onkeyup="comparar_correo()" class="form-control" placeholder="Ingrese correo" aria-label="Correo" aria-describedby="basic-addon1" value="<?php echo $fila_correo["EmailReal"]; ?>">
+				</div>
+				
+				<div id="message" class="mt-3"></div>
+			</div>
+		  <div class="modal-footer">
+			<button type="submit" id="submitBtn" class="btn btn-primary">Guardar cambios</button>
+		  </div>
+	  </form>
+    </div>
+  </div>
+</div>
+  <script>
+  
+  function comparar_correo(){
+	  
+	var input1 = $('#correo').val();
+	var input2 = $('#correo2').val();
+	var message = $('#message');
+	var submitBtn = $('#submitBtn');
+
+		if (input1 && input2) {
+			if (input1 === input2) {
+				message.text('Correos coinciden.').css('color', 'green');
+				submitBtn.prop('disabled', false);
+			} else {
+				message.text('Correos no coinciden.').css('color', 'red');
+				submitBtn.prop('disabled', true);
+			}
+		} else {
+			message.text('');
+			submitBtn.prop('disabled', true);
+		}
+    }
+  
+  
+  </script>
 
   </main><!-- End #main -->
 

@@ -21,8 +21,8 @@ if(isset($_POST['idProfesoresCurso'])) {
             $query1 = "UPDATE spre_profesorescurso SET Vigencia = '0' WHERE idProfesoresCurso = $id";
             mysqli_query($conexion3, $query1);
             
-            // 2. Actualizar vigencia en docenteclases_copy para todas las actividades del curso
-            $query2 = "DELETE FROM docenteclases_copy
+            // 2. Actualizar vigencia en docenteclases para todas las actividades del curso
+            $query2 = "DELETE FROM docenteclases
 						   WHERE rutDocente = '$rut' 
 						   AND idCurso = '$idCurso'";
             mysqli_query($conn, $query2);

@@ -1,6 +1,6 @@
 <?php
 // regulares
-include("conexion.php");
+include_once("conexion.php");
 header('Content-Type: application/json');
 
 error_reporting(E_ALL);
@@ -36,7 +36,7 @@ try {
    $conn->begin_transaction();
 
    // Obtener el tipo anterior ANTES de cualquier actualización
-   $queryTipoAnterior = "SELECT pcl_TipoSesion FROM a_planclases WHERE idplanclases = ?";
+   $queryTipoAnterior = "SELECT pcl_TipoSesion FROM planclases WHERE idplanclases = ?";
    $stmtTipoAnterior = $conn->prepare($queryTipoAnterior);
    $stmtTipoAnterior->bind_param("i", $idplanclases);
    $stmtTipoAnterior->execute();
@@ -81,7 +81,7 @@ try {
    $stmtRequiereSala->close();
 
 // CONSULTAR VALOR ACTUAL SIEMPRE, ANTES DE CUALQUIER LÓGICA
-$queryNsalasActual = "SELECT pcl_nSalas FROM a_planclases WHERE idplanclases = ?";
+$queryNsalasActual = "SELECT pcl_nSalas FROM planclases WHERE idplanclases = ?";
 $stmtNsalasActual = $conn->prepare($queryNsalasActual);
 $stmtNsalasActual->bind_param("i", $idplanclases);
 $stmtNsalasActual->execute();
@@ -92,7 +92,7 @@ $stmtNsalasActual->close();
 // AHORA SÍ, aplicar tu filosofía
 if ($tipo === 'Clase') {
     // Verificar si ya tiene asignaciones para decidir si mantener o establecer 1
-    $queryTieneAsignaciones = "SELECT COUNT(*) as total FROM asignacion_piloto WHERE idplanclases = ?";
+    $queryTieneAsignaciones = "SELECT COUNT(*) as total FROM asignacion WHERE idplanclases = ?";
     $stmtTieneAsignaciones = $conn->prepare($queryTieneAsignaciones);
     $stmtTieneAsignaciones->bind_param("i", $idplanclases);
     $stmtTieneAsignaciones->execute();
@@ -116,7 +116,7 @@ if ($tipo === 'Clase') {
 }
 
    // Actualizar planclases incluyendo pcl_nSalas
-   $query = "UPDATE a_planclases SET 
+   $query = "UPDATE planclases SET 
                pcl_tituloActividad = ?, 
                pcl_TipoSesion = ?,
                pcl_SubTipoSesion = ?,
@@ -177,7 +177,7 @@ if ($tipo === 'Clase') {
 
     // Solo si el tipo anterior permitía docentes y el nuevo NO
     if ($permiteDocentesAnterior === 1 && $permiteDocentesNuevo === 0) {
-        $queryUpdateVigencia = "UPDATE docenteclases_copy 
+        $queryUpdateVigencia = "UPDATE docenteclases 
                                 SET vigencia = 0, 
                                     fechaModificacion = NOW(),
                                     usuarioModificacion = 'sistema'
@@ -198,7 +198,7 @@ if ($tipo === 'Clase') {
                 $horasActividad = ($time2 - $time1) / 3600; // Convertir a horas
                 
                 // Obtener el ID del curso desde planclases
-                $queryCurso = "SELECT cursos_idcursos FROM a_planclases WHERE idplanclases = ?";
+                $queryCurso = "SELECT cursos_idcursos FROM planclases WHERE idplanclases = ?";
                 $stmtCurso = $conn->prepare($queryCurso);
                 $stmtCurso->bind_param("i", $idplanclases);
                 $stmtCurso->execute();
@@ -225,7 +225,7 @@ if ($tipo === 'Clase') {
                     $stmtUnidad->close();
                     
                     // Verificar si ya existe el registro
-                    $queryExiste = "SELECT idDocenteClases FROM docenteclases_copy 
+                    $queryExiste = "SELECT idDocenteClases FROM docenteclases 
                                    WHERE rutDocente = ? AND idPlanClases = ? AND idCurso = ?";
                     $stmtExiste = $conn->prepare($queryExiste);
                     $stmtExiste->bind_param("sii", $rutDocente, $idplanclases, $idCurso);
@@ -235,7 +235,7 @@ if ($tipo === 'Clase') {
                     if ($resultExiste->num_rows > 0) {
                         // Actualizar registro existente a vigencia = 1
                         $rowExiste = $resultExiste->fetch_assoc();
-                        $queryUpdate = "UPDATE docenteclases_copy 
+                        $queryUpdate = "UPDATE docenteclases 
                                        SET vigencia = 1, 
                                            horas = ?,
                                            unidadAcademica = ?,
@@ -248,7 +248,7 @@ if ($tipo === 'Clase') {
                         $stmtUpdate->close();
                     } else {
                         // Crear nuevo registro
-                        $queryInsert = "INSERT INTO docenteclases_copy 
+                        $queryInsert = "INSERT INTO docenteclases 
                                        (rutDocente, idPlanClases, idCurso, horas, vigencia, 
                                         unidadAcademica, fechaModificacion, usuarioModificacion)
                                        VALUES (?, ?, ?, ?, 1, ?, NOW(), 'cambio_tipo_actividad')";
@@ -263,6 +263,188 @@ if ($tipo === 'Clase') {
                 // Log para debug
                 error_log("✅ DOCENTES GUARDADOS: " . count($docentesSeleccionados) . " docentes asignados a actividad $idplanclases por cambio de tipo");
             }
+        }
+    } else if ($permiteDocentesNuevo === 1 && isset($_POST['docentes_seleccionados'])) {
+    // ✅ NUEVA LÓGICA: Procesar docentes en modo edición general
+    $docentesSeleccionados = json_decode($_POST['docentes_seleccionados'], true);
+    
+    if (is_array($docentesSeleccionados)) {
+        // Calcular las horas de la actividad
+        $time1 = strtotime($inicio);
+        $time2 = strtotime($termino);
+        $horasActividad = ($time2 - $time1) / 3600;
+        
+        // Obtener el ID del curso
+        $queryCurso = "SELECT cursos_idcursos FROM planclases WHERE idplanclases = ?";
+        $stmtCurso = $conn->prepare($queryCurso);
+        $stmtCurso->bind_param("i", $idplanclases);
+        $stmtCurso->execute();
+        $resultCurso = $stmtCurso->get_result();
+        $rowCurso = $resultCurso->fetch_assoc();
+        $idCurso = $rowCurso['cursos_idcursos'];
+        $stmtCurso->close();
+        
+        // PASO 1: Desactivar TODOS los docentes existentes de esta actividad
+        $queryDesactivar = "UPDATE docenteclases SET vigencia = 0 WHERE idPlanClases = ?";
+        $stmtDesactivar = $conn->prepare($queryDesactivar);
+        $stmtDesactivar->bind_param("i", $idplanclases);
+        $stmtDesactivar->execute();
+        $stmtDesactivar->close();
+        
+        // PASO 2: Insertar/reactivar solo los docentes seleccionados
+        foreach ($docentesSeleccionados as $rutDocente) {
+            // Obtener unidad académica del docente
+            $queryUnidad = "SELECT unidad_academica_docente 
+                           FROM spre_profesorescurso 
+                           WHERE rut = ? AND idcurso = ? AND vigencia = 1 
+                           LIMIT 1";
+            $stmtUnidad = $conexion3->prepare($queryUnidad);
+            $stmtUnidad->bind_param("si", $rutDocente, $idCurso);
+            $stmtUnidad->execute();
+            $resultUnidad = $stmtUnidad->get_result();
+            $unidadAcademica = '';
+            if ($rowUnidad = $resultUnidad->fetch_assoc()) {
+                $unidadAcademica = $rowUnidad['unidad_academica_docente'];
+            }
+            $stmtUnidad->close();
+            
+            // Verificar si ya existe el registro
+            $queryExiste = "SELECT idDocenteClases FROM docenteclases 
+                           WHERE rutDocente = ? AND idPlanClases = ? AND idCurso = ?";
+            $stmtExiste = $conn->prepare($queryExiste);
+            $stmtExiste->bind_param("sii", $rutDocente, $idplanclases, $idCurso);
+            $stmtExiste->execute();
+            $resultExiste = $stmtExiste->get_result();
+            
+            if ($resultExiste->num_rows > 0) {
+                // Reactivar registro existente
+                $queryReactivar = "UPDATE docenteclases SET 
+                                  vigencia = 1,
+                                  horas = ?,
+                                  unidadAcademica = ?,
+                                  usuarioModificacion = 'edicion_actividad',
+                                  fechaModificacion = NOW()
+                                  WHERE rutDocente = ? AND idPlanClases = ? AND idCurso = ?";
+                $stmtReactivar = $conn->prepare($queryReactivar);
+                $stmtReactivar->bind_param("dssii", $horasActividad, $unidadAcademica, $rutDocente, $idplanclases, $idCurso);
+                $stmtReactivar->execute();
+                $stmtReactivar->close();
+            } else {
+                // Crear nuevo registro
+                $queryInsertar = "INSERT INTO docenteclases 
+                                 (rutDocente, idPlanClases, idCurso, horas, unidadAcademica, vigencia, usuarioModificacion, fechaModificacion) 
+                                 VALUES (?, ?, ?, ?, ?, 1, 'edicion_actividad', NOW())";
+                $stmtInsertar = $conn->prepare($queryInsertar);
+                $stmtInsertar->bind_param("siids", $rutDocente, $idplanclases, $idCurso, $horasActividad, $unidadAcademica);
+                $stmtInsertar->execute();
+                $stmtInsertar->close();
+            }
+            
+            $stmtExiste->close();
+        }
+        
+        // Log para debug
+        error_log("✅ DOCENTES ACTUALIZADOS: " . count($docentesSeleccionados) . " docentes en actividad $idplanclases (edición general)");
+    }
+}
+}
+
+
+
+// ✅ PROCESAR DOCENTES CUANDO NO HAY CAMBIO DE TIPO
+if ($tipoAnterior === $tipo && isset($_POST['docentes_seleccionados'])) {
+    // Verificar si el tipo permite docentes
+    $permiteDocentesActual = 1;
+    $stmtDocentesActual = $conn->prepare("SELECT docentes FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1");
+    $stmtDocentesActual->bind_param("s", $tipo);
+    $stmtDocentesActual->execute();
+    $resActual = $stmtDocentesActual->get_result();
+    if ($rowActual = $resActual->fetch_assoc()) {
+        $permiteDocentesActual = (int)$rowActual['docentes'];
+    }
+    $stmtDocentesActual->close();
+    
+    // Solo procesar si el tipo permite docentes
+    if ($permiteDocentesActual === 1) {
+        $docentesSeleccionados = json_decode($_POST['docentes_seleccionados'], true);
+        
+        if (is_array($docentesSeleccionados)) {
+            // Calcular las horas de la actividad
+            $time1 = strtotime($inicio);
+            $time2 = strtotime($termino);
+            $horasActividad = ($time2 - $time1) / 3600;
+            
+            // Obtener el ID del curso
+            $queryCurso = "SELECT cursos_idcursos FROM planclases WHERE idplanclases = ?";
+            $stmtCurso = $conn->prepare($queryCurso);
+            $stmtCurso->bind_param("i", $idplanclases);
+            $stmtCurso->execute();
+            $resultCurso = $stmtCurso->get_result();
+            $rowCurso = $resultCurso->fetch_assoc();
+            $idCurso = $rowCurso['cursos_idcursos'];
+            $stmtCurso->close();
+            
+            // PASO 1: Desactivar TODOS los docentes existentes de esta actividad
+            $queryDesactivar = "UPDATE docenteclases SET vigencia = 0 WHERE idPlanClases = ?";
+            $stmtDesactivar = $conn->prepare($queryDesactivar);
+            $stmtDesactivar->bind_param("i", $idplanclases);
+            $stmtDesactivar->execute();
+            $stmtDesactivar->close();
+            
+            // PASO 2: Insertar/reactivar solo los docentes seleccionados
+            foreach ($docentesSeleccionados as $rutDocente) {
+                // Obtener unidad académica del docente
+                $queryUnidad = "SELECT unidad_academica_docente 
+                               FROM spre_profesorescurso 
+                               WHERE rut = ? AND idcurso = ? AND vigencia = 1 
+                               LIMIT 1";
+                $stmtUnidad = $conexion3->prepare($queryUnidad);
+                $stmtUnidad->bind_param("si", $rutDocente, $idCurso);
+                $stmtUnidad->execute();
+                $resultUnidad = $stmtUnidad->get_result();
+                $unidadAcademica = '';
+                if ($rowUnidad = $resultUnidad->fetch_assoc()) {
+                    $unidadAcademica = $rowUnidad['unidad_academica_docente'];
+                }
+                $stmtUnidad->close();
+                
+                // Verificar si ya existe el registro
+                $queryExiste = "SELECT idDocenteClases FROM docenteclases 
+                               WHERE rutDocente = ? AND idPlanClases = ? AND idCurso = ?";
+                $stmtExiste = $conn->prepare($queryExiste);
+                $stmtExiste->bind_param("sii", $rutDocente, $idplanclases, $idCurso);
+                $stmtExiste->execute();
+                $resultExiste = $stmtExiste->get_result();
+                
+                if ($resultExiste->num_rows > 0) {
+                    // Reactivar registro existente
+                    $queryReactivar = "UPDATE docenteclases SET 
+                                      vigencia = 1,
+                                      horas = ?,
+                                      unidadAcademica = ?,
+                                      usuarioModificacion = 'edicion_sin_cambio_tipo',
+                                      fechaModificacion = NOW()
+                                      WHERE rutDocente = ? AND idPlanClases = ? AND idCurso = ?";
+                    $stmtReactivar = $conn->prepare($queryReactivar);
+                    $stmtReactivar->bind_param("dssii", $horasActividad, $unidadAcademica, $rutDocente, $idplanclases, $idCurso);
+                    $stmtReactivar->execute();
+                    $stmtReactivar->close();
+                } else {
+                    // Crear nuevo registro
+                    $queryInsertar = "INSERT INTO docenteclases 
+                                     (rutDocente, idPlanClases, idCurso, horas, unidadAcademica, vigencia, usuarioModificacion, fechaModificacion) 
+                                     VALUES (?, ?, ?, ?, ?, 1, 'edicion_sin_cambio_tipo', NOW())";
+                    $stmtInsertar = $conn->prepare($queryInsertar);
+                    $stmtInsertar->bind_param("siids", $rutDocente, $idplanclases, $idCurso, $horasActividad, $unidadAcademica);
+                    $stmtInsertar->execute();
+                    $stmtInsertar->close();
+                }
+                
+                $stmtExiste->close();
+            }
+            
+            // Log para debug
+            error_log("✅ DOCENTES ACTUALIZADOS SIN CAMBIO TIPO: " . count($docentesSeleccionados) . " docentes en actividad $idplanclases");
         }
     }
 }
@@ -320,7 +502,7 @@ if ($tipo === 'Clase') {
    $stmtTipoAnterior->close();
 
    // Actualizar explícitamente el campo pcl_DeseaSala en planclases
-   $queryUpdateDeseaSala = "UPDATE a_planclases SET pcl_DeseaSala = ? WHERE idplanclases = ?";
+   $queryUpdateDeseaSala = "UPDATE planclases SET pcl_DeseaSala = ? WHERE idplanclases = ?";
    $stmtUpdateDeseaSala = $conn->prepare($queryUpdateDeseaSala);
    $valorDeseaSala = $requiereSala ? 1 : 0;
    $stmtUpdateDeseaSala->bind_param("ii", $valorDeseaSala, $idplanclases);
@@ -329,7 +511,7 @@ if ($tipo === 'Clase') {
 
    // Verificar estados actuales de las asignaciones
    $queryEstados = "SELECT idEstado, COUNT(*) as cantidad 
-                   FROM asignacion_piloto 
+                   FROM asignacion 
                    WHERE idplanclases = ? 
                    GROUP BY idEstado";
    $stmtEstados = $conn->prepare($queryEstados);
@@ -366,7 +548,7 @@ if ($tipo === 'Clase') {
            
            // Si hay asignaciones confirmadas, cambiarlas a estado "modificada"
            if ($asignacionesConfirmadas > 0) {
-               // $queryModificar = "UPDATE asignacion_piloto 
+               // $queryModificar = "UPDATE asignacion 
                //                 SET idEstado = 1, 
                //                     Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Datos de actividad modificados')
                //                 WHERE idplanclases = ? AND idEstado = 3";
@@ -385,7 +567,7 @@ if ($tipo === 'Clase') {
            /* CASO 5: ACTIVIDAD GRUPAL/TP/EV/EX → ACTIVIDAD GRUPAL/TP/EV/EX */
            
            // Actualizar tipo en asignaciones existentes sin cambiar estado
-           $queryActualizarTipo = "UPDATE asignacion_piloto 
+           $queryActualizarTipo = "UPDATE asignacion 
                                SET tipoSesion = ?
                                WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
            $stmtActualizarTipo = $conn->prepare($queryActualizarTipo);
@@ -406,7 +588,7 @@ if ($tipo === 'Clase') {
                
                // Actualizar tipo a 'Clase' en asignaciones existentes
                if ($asignacionesConfirmadas > 0 || $asignacionesPendientes > 0 || $asignacionesModificadas > 0) {
-					$queryActualizarTipo = "UPDATE asignacion_piloto 
+					$queryActualizarTipo = "UPDATE asignacion 
 										   SET tipoSesion = 'Clase',
 											   Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Tipo cambiado a Clase')
 										   WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
@@ -428,7 +610,7 @@ if ($tipo === 'Clase') {
                
                // Actualizar tipo en asignaciones existentes (NO eliminar)
                if ($asignacionesConfirmadas > 0 || $asignacionesPendientes > 0 || $asignacionesModificadas > 0) {
-                   $queryActualizarTipo = "UPDATE asignacion_piloto 
+                   $queryActualizarTipo = "UPDATE asignacion 
                                           SET tipoSesion = ?, 
                                               Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Tipo cambiado de Clase a ', ?)
                                           WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
@@ -456,15 +638,15 @@ if ($tipo === 'Clase') {
 						$mensajeConfirmacion = "Al cambiar a un tipo sin sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
 					}
 
-					// 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
-					$queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
-					$stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+					// 1. PRIMERO: Eliminar de reserva (liberar salas físicas)
+					$queryBorrarReservas = "DELETE FROM reserva WHERE re_idRepeticion = ?";
+					$stmtBorrarReservas = $reserva2->prepare($queryBorrarReservas);
 					$stmtBorrarReservas->bind_param("i", $idplanclases);
 					$stmtBorrarReservas->execute();
 					$stmtBorrarReservas->close();
 
-					// 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
-					$queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
+					// 2. SEGUNDO: Eliminar de asignacion (limpiar seguimiento)
+					$queryEliminarTodas = "DELETE FROM asignacion WHERE idplanclases = ?";
 					$stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
 					$stmtEliminarTodas->bind_param("i", $idplanclases);
 					$stmtEliminarTodas->execute();
@@ -480,15 +662,15 @@ if ($tipo === 'Clase') {
 					$mensajeConfirmacion = "Al cambiar a un tipo sin sala, se eliminarán todas las asignaciones existentes. ¿Desea continuar?";
 				}
 
-				// 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
-				$queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
-				$stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+				// 1. PRIMERO: Eliminar de reserva (liberar salas físicas)
+				$queryBorrarReservas = "DELETE FROM reserva WHERE re_idRepeticion = ?";
+				$stmtBorrarReservas = $reserva2->prepare($queryBorrarReservas);
 				$stmtBorrarReservas->bind_param("i", $idplanclases);
 				$stmtBorrarReservas->execute();
 				$stmtBorrarReservas->close();
 
-				// 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
-				$queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
+				// 2. SEGUNDO: Eliminar de asignacion (limpiar seguimiento)
+				$queryEliminarTodas = "DELETE FROM asignacion WHERE idplanclases = ?";
 				$stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
 				$stmtEliminarTodas->bind_param("i", $idplanclases);
 				$stmtEliminarTodas->execute();

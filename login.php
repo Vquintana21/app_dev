@@ -1,8 +1,9 @@
- <?php
-header ('Content-type: text/html; charset=utf-8');
-error_reporting(0);
-include_once 'conexion.php';
+<?php
+ob_start();           // inicia un búfer de salida
+header('Content-Type: text/html; charset=utf-8');
 session_start();
+include_once 'conexion.php';
+//error_reporting(0);
 $rut = $_SESSION['sesion_idLogin'];
 $name = $_SESSION['sesion_usuario']; 
 $viene= array("Ã¡","Ã©","Ã","Ã³","Ãº");
@@ -10,10 +11,8 @@ $queda= array("Á","É","Í","Ó","Ú");
 $nombre = str_replace($viene, $queda, $name);
 $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
 
-$res_pregrado = mysqli_query($conexion3,"SELECT * FROM `pm_EstudianteCarrera` where `rutEstudiante`='$rut_niv' and idEstadoEstudiante in (3,15) and TipoCarrera='Pregrado' and rutEstudiante not in ('017517415K','016784781K')");
+$res_pregrado = mysqli_query($conexion3,"SELECT * FROM `pm_EstudianteCarrera` where `rutEstudiante`='$rut_niv' and idEstadoEstudiante in (3,15) and TipoCarrera='Pregrado' and rutEstudiante not in ('017517415K','016784781K', '0185643530')");
 $numpregrado = mysqli_num_rows($res_pregrado);
-
-
 
 ?>
 <!DOCTYPE html>
@@ -196,24 +195,36 @@ $expirada = isset($_GET['expirada']) ? $_GET['expirada'] : '0';
       <div class="col-lg-6 col-md-8">
         <div class="login-card">
           <div class="login-header">
-            <h2><i class="fas fa-chalkboard-teacher mr-2"></i> Calendario Académico.</h2>
+            <h2><i class="fas fa-chalkboard-teacher mr-2"></i> Calendario académico</h2>
             <p>Facultad de Medicina - Universidad de Chile</p>
           </div>
           
           <div class="login-body">
-            <h4 class="text-center mb-4">Bienvenido(a) al Calendario Académico</h4>
+            <h4 class="text-center mb-4">Bienvenido(a) a la plataforma de Calendario académico</h4>
             
             <div class="alert alert-warning" role="alert">
-			  Este sistema es exclusivo para <b>Académicos/as</b>.</br>
-			  Si eres <b>Estudiante</b>, ingresa a este <a href="https://dpi.med.uchile.cl/estudiantes/" class="alert-link">ENLACE</a>. 
+			  <p>
+				Te recordamos que esta plataforma es exclusivamente para la <strong>gestión del segundo semestre 2025</strong> y su acceso está habilitado solo para <strong>equipos docentes</strong>.
+			  </p>
+			  <p>
+				Para terminar de gestionar el primer semestre, ingresa a este <a href="https://dpi.med.uchile.cl/CALENDARIO/" class="alert-link">enlace</a>.
+			  </p>
+			  <p>
+				Si eres <strong>estudiante</strong>, ingresa a este <a href="https://dpi.med.uchile.cl/estudiantes/" class="alert-link">enlace</a>.
+			  </p>
 			</div>
+
             
             <div class="text-center">
-              <p class="mb-4">Para continuar, inicie sesión con su cuenta institucional</p>
+              <p class="mb-4"><b>Para continuar, inicie sesión con su cuenta institucional</b></p>
+			  <div class="alert alert-primary" role="alert">
+				   El usuario es solo el nombre de usuario de su cuenta pasaporte (no colocar el postfijo que va después del @)
+				</div>
               
               <a href="login/login.php" class="btn btn-login btn-primary shadow">
                 <i class="fas fa-sign-in-alt mr-2"></i> Ingresar con Cuenta Pasaporte
               </a>
+			  
               
               <div class="help-links">
                 <p>
@@ -257,9 +268,9 @@ $expirada = isset($_GET['expirada']) ? $_GET['expirada'] : '0';
 						Swal.fire({
 						type: 'error',
 						title: '¡Lo sentimos!',
-						html: 'Estimado Estudiante, el acceso es solo para Dirección Académica.'
+						html: 'Acceso Denegado. cuanquier consulta a dpi.med@uchile.cl'
 						}).then(function() {
-    window.location = "https://dpi.med.uchile.cl/gestion/login/close.php";
+    window.location = "https://dpi.med.uchile.cl/calendario/login/close.php";
 });
 						
 					</script>
@@ -267,7 +278,7 @@ $expirada = isset($_GET['expirada']) ? $_GET['expirada'] : '0';
   	 <?php }else{ ?>
   	 <script>
   	     //window.location.replace("https://dpi.med.uchile.cl/gestion/controlador.php");
-  	     window.location.replace("https://dpi.med.uchile.cl/test/calendarios/inicio.php");
+  	     window.location.replace("https://dpi.med.uchile.cl/calendario/inicio.php");
   	 </script>
 	
   </div>

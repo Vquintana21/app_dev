@@ -11,7 +11,7 @@ try {
     $idplanclases = (int)$_GET['id'];
     
     // Obtener la actividad principal
-    $query = "SELECT * FROM planclases_test WHERE idplanclases = ?";
+    $query = "SELECT * FROM planclases WHERE idplanclases = ?";
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $idplanclases);
     $stmt->execute();
@@ -26,7 +26,7 @@ try {
     // Obtener todos los bloques asociados a esta actividad (mismo titulo, fecha y tipo)
     $queryBloques = "
         SELECT p.idplanclases, p.pcl_Inicio, p.pcl_Termino, b.bloque 
-        FROM planclases_test p
+        FROM planclases p
         LEFT JOIN Bloques_ext b ON TIME(p.pcl_Inicio) = TIME(b.inicio) AND TIME(p.pcl_Termino) = TIME(b.termino)
         WHERE 
             p.pcl_tituloActividad = ? AND 
@@ -34,7 +34,7 @@ try {
             p.pcl_TipoSesion = ? AND
             (p.idplanclases = ? OR (
                 p.pcl_grupoactividad IS NOT NULL AND 
-                p.pcl_grupoactividad = (SELECT pcl_grupoactividad FROM planclases_test WHERE idplanclases = ?)
+                p.pcl_grupoactividad = (SELECT pcl_grupoactividad FROM planclases WHERE idplanclases = ?)
             ))
     ";
     

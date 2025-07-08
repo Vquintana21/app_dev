@@ -2,12 +2,14 @@
 
 //index.php 99677 ultimo profesor
 header('Content-type: text/html; charset=utf-8');
-include("conexion.php");
+include_once("conexion.php");
 include_once 'login/control_sesion.php';
 // Obtener el ID del curso desde la URL
 $idCurso = $_GET['curso']; 
+
 //$idCurso = 8942; // 8158
 //$rut = "016784781K";
+session_start();
 $ruti = $_SESSION['sesion_idLogin'];
 $rut = str_pad($ruti, 10, "0", STR_PAD_LEFT);
 //$ano = 2024; 
@@ -15,7 +17,7 @@ $rut = str_pad($ruti, 10, "0", STR_PAD_LEFT);
 $query = "SELECT `idplanclases`, pcl_tituloActividad, pcl_Periodo, `pcl_Fecha`, `pcl_Inicio`, `pcl_Termino`, 
           `pcl_nSalas`, `pcl_Seccion`, `pcl_TipoSesion`, `pcl_SubTipoSesion`, 
           `pcl_Semana`, `pcl_AsiCodigo`, `pcl_AsiNombre`, `Sala`, `Bloque`, `dia`, `pcl_condicion`, `pcl_ActividadConEvaluacion`, pcl_BloqueExtendido
-          FROM `a_planclases` 
+          FROM `planclases` 
           WHERE `cursos_idcursos` = ?
 		  AND pcl_Semana >= 1";
 
@@ -297,7 +299,7 @@ $conn->close();
 				dataType: "",
 				data: {'idCurso':idCurso
 				},
-				url: 'https://dpi.med.uchile.cl/test/calendarios/replica/validar_reglas.php',
+				url: 'https://dpi.med.uchile.cl/calendario/replica/validar_reglas.php',
 				type: 'POST',
 				beforeSend: function() {
 					//Lo que se hace antes de enviar el formulario
@@ -327,7 +329,7 @@ $conn->close();
 				dataType: "",
 				data: {'idCurso': idCurso, 'accion': accion
 				},
-				url: 'https://dpi.med.uchile.cl/test/calendarios/replica/ejecutar_replica.php',
+				url: 'https://dpi.med.uchile.cl/calendario/replica/ejecutar_replica.php',
 				type: 'POST',
 				beforeSend: function() {
 					//Lo que se hace antes de enviar el formulario
@@ -350,7 +352,7 @@ $conn->close();
 						alert(respuesta);
 					}
 					
-					window.location.href = 'https://dpi.med.uchile.cl/test/calendarios/index.php?curso='+idCurso;
+					window.location.href = 'https://dpi.med.uchile.cl/calendario/index.php?curso='+idCurso;
 				},
 				error: function(xhr, err) {
 					alert("readyState: " + xhr.readyState + "\nstatus: " + xhr.status + "\n \n responseText: " + xhr.responseText);
@@ -1024,6 +1026,49 @@ function createActivityButton(activity) {
         // No agregamos data-bs-toggle ni onclick para que no sea clickeable
         return button;
     }
+	
+	
+	// NUEVA CONDICIÓN: Verificar si es Trabajo Autonomo en semana específica de noviembre
+    if (activity.pcl_TipoSesion === 'Trabajo Autonomo') {
+        // Función auxiliar para verificar si está en semana de trabajo autónomo
+        const isTrabajoAutonomoNoviembre = () => {
+            const fechaActividad = new Date(activity.pcl_Fecha);
+            const año = fechaActividad.getFullYear();
+            const mes = fechaActividad.getMonth(); // 0-11 (noviembre = 10)
+            const dia = fechaActividad.getDate();
+            
+            // Verificar si está en el rango 24-28 de noviembre
+            return (
+                mes === 10 && // noviembre 
+                dia >= 24 && 
+                dia <= 28
+            );
+        };
+        
+        if (isTrabajoAutonomoNoviembre()) {
+            // Comportamiento similar a Bloque Protegido - NO EDITABLE
+            button.className = 'btn btn-lg activity-button btn-warning trabajo-autonomo-bloqueado';
+            
+            // Formatear la fecha
+            const fecha = new Date(activity.pcl_Fecha);
+            const day = fecha.getDate().toString().padStart(2, '0');
+            const month = (fecha.getMonth() + 1).toString().padStart(2, '0');
+            const fechaFormateada = `${day}-${month}`;
+            
+            let content = `
+                <div class="class-date"><i class="fas fa-calendar-days me-1"></i>${fechaFormateada}</div>
+                <div class="class-time"><i class="fas fa-clock me-1"></i>${activity.pcl_Inicio.substring(0,5)} - ${activity.pcl_Termino.substring(0,5)}</div>
+                <div class="activity-title"><i class="fas fa-user-graduate me-1"></i>${activity.pcl_TipoSesion}</div>
+                <div class="activity-subtitle"><small class="text-muted">Semana dedicada a trabajo autómono.</small></div>
+            `;
+            
+            button.innerHTML = content;
+            // NO agregamos onclick ni data-bs-toggle para que no sea clickeable
+            return button;
+        }
+        // Si no está en la semana bloqueada, continúa al flujo normal (no agregamos return aquí)
+    }
+	
 	
 	// NUEVA CONDICIÓN: Verificar si es un Bloque Protegido
     if (activity.pcl_TipoSesion === 'Bloque Protegido') {
@@ -1884,17 +1929,25 @@ function procesarGuardado() {
         permiteDocentes: tipoPermiteDocentes
     });
     
-    // ✅ SI HAY CAMBIO DE TIPO Y EL NUEVO PERMITE DOCENTES, ENVIAR DOCENTES
-    if (huboChangioTipo && tipoPermiteDocentes && docentesSeleccionados.length > 0) {
-        formData.append('docentes_seleccionados', JSON.stringify(docentesSeleccionados));
-        console.log('✅ Enviando docentes seleccionados por cambio de tipo');
-    }
-    
-    // ✅ TAMBIÉN ENVIAR SI NO HAY CAMBIO DE TIPO PERO SÍ HAY DOCENTES SELECCIONADOS
-    else if (!huboChangioTipo && tipoPermiteDocentes && docentesSeleccionados.length > 0) {
-        formData.append('docentes_seleccionados', JSON.stringify(docentesSeleccionados));
-        console.log('✅ Enviando docentes seleccionados (sin cambio de tipo)');
-    }
+				  // Obtener el ID de la actividad para verificar si estamos editando
+				const idplanclases = document.getElementById('idplanclases').value;
+				const isEditing = idplanclases && idplanclases !== '0';
+
+				// ✅ SI HAY CAMBIO DE TIPO Y EL NUEVO PERMITE DOCENTES, ENVIAR DOCENTES
+				if (huboChangioTipo && tipoPermiteDocentes) {
+					formData.append('docentes_seleccionados', JSON.stringify(docentesSeleccionados));
+					console.log('✅ Enviando docentes seleccionados por cambio de tipo');
+				}
+				// ✅ SI ESTAMOS EDITANDO Y EL TIPO PERMITE DOCENTES, SIEMPRE ENVIAR LA SELECCIÓN ACTUAL
+				else if (isEditing && tipoPermiteDocentes) {
+					formData.append('docentes_seleccionados', JSON.stringify(docentesSeleccionados));
+					console.log('✅ Enviando docentes seleccionados (modo edición - puede incluir array vacío)');
+				}
+				// ✅ SI ESTAMOS CREANDO Y HAY DOCENTES SELECCIONADOS, ENVIAR
+				else if (!isEditing && tipoPermiteDocentes && docentesSeleccionados.length > 0) {
+					formData.append('docentes_seleccionados', JSON.stringify(docentesSeleccionados));
+					console.log('✅ Enviando docentes seleccionados (modo creación)');
+				}
 
     // Primero guardar la actividad
     fetch('guardar_actividad.php', {
@@ -5002,7 +5055,7 @@ function guardar_docente() {
                     $btnGuardar.prop('disabled', false).html(textoOriginal);
                     
                     console.error('Error:', xhr.responseText);
-                    mostrarToast('Error de comunicación con el servidor', 'danger');
+                    mostrarToast('El docente no fue creado, posiblemente ya este registrado y solo deba asignarlo.', 'danger');
                 }
             });
         } else {
@@ -5540,7 +5593,7 @@ function volverYRecargarTabla() {
     
     // 3. Estrategia simple: esperar un poco y recargar
     setTimeout(() => {
-        console.log('🔄 Ejecutando recarga...');
+        console.log('🔄 Ejecutando recarga...'); 
         recargarSoloTablaDocentes();
     }, 500); // Más tiempo para que se cierre el modal
 }

@@ -44,7 +44,7 @@ try {
         $grupoActividad = uniqid('grupo_', true);
     } else {
         // Obtener el grupo de la actividad principal (si existe)
-        $queryGrupo = "SELECT pcl_grupoactividad FROM planclases_test WHERE idplanclases = ?";
+        $queryGrupo = "SELECT pcl_grupoactividad FROM planclases WHERE idplanclases = ?";
         $stmt = $conn->prepare($queryGrupo);
         $stmt->bind_param("i", $idplanclases);
         $stmt->execute();
@@ -55,7 +55,7 @@ try {
                 $grupoActividad = uniqid('grupo_', true);
                 
                 // Actualizar el grupo en la actividad principal
-                $updateGrupo = "UPDATE planclases_test SET pcl_grupoactividad = ? WHERE idplanclases = ?";
+                $updateGrupo = "UPDATE planclases SET pcl_grupoactividad = ? WHERE idplanclases = ?";
                 $stmt = $conn->prepare($updateGrupo);
                 $stmt->bind_param("si", $grupoActividad, $idplanclases);
                 $stmt->execute();
@@ -97,7 +97,7 @@ try {
         
         if ($bloquePlanClasesId) {
             // Actualizar bloque existente
-            $query = "UPDATE planclases_test SET 
+            $query = "UPDATE planclases SET 
                       pcl_tituloActividad = ?, 
                       pcl_TipoSesion = ?,
                       pcl_SubTipoSesion = ?,
@@ -141,7 +141,7 @@ try {
             $semana = date('W', strtotime($fecha)) - date('W', strtotime(date('Y') . '-01-01')) + 1;
             if ($semana < 1) $semana = 1;
             
-            $query = "INSERT INTO planclases_test 
+            $query = "INSERT INTO planclases 
                      (cursos_idcursos, pcl_Periodo, pcl_tituloActividad, pcl_TipoSesion, pcl_SubTipoSesion, 
                       pcl_Fecha, pcl_Inicio, pcl_Termino, dia, pcl_condicion, pcl_ActividadConEvaluacion, 
                       pcl_HorasPresenciales, pcl_Semana, pcl_fechamodifica, pcl_usermodifica, 
@@ -177,7 +177,7 @@ try {
     
     // Eliminar bloques que ya no están seleccionados
     foreach ($bloquesExistentes as $bloque => $idActividad) {
-        $query = "DELETE FROM planclases_test WHERE idplanclases = ?";
+        $query = "DELETE FROM planclases WHERE idplanclases = ?";
         $stmt = $conn->prepare($query);
         $stmt->bind_param("i", $idActividad);
         $stmt->execute();

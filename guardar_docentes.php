@@ -1,8 +1,11 @@
 <?php
-include("conexion.php");
+include_once("conexion.php");
 header('Content-Type: application/json');
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+session_start();
+$ruti = $_SESSION['sesion_idLogin'];
+$rut = str_pad($ruti, 10, "0", STR_PAD_LEFT);
 
 try {
     // Validación de datos de entrada
@@ -20,7 +23,7 @@ try {
     }
 
     // Primero desactivar todos los docentes existentes
-     $queryDesactivar = "UPDATE docenteclases_copy SET vigencia = 0 WHERE idPlanClases = ?";
+     $queryDesactivar = "UPDATE docenteclases SET vigencia = 0 WHERE idPlanClases = ?";
      $stmtDesactivar = $conn->prepare($queryDesactivar);
      if (!$stmtDesactivar) {
          throw new Exception('Error preparando query de desactivación: ' . $conn->error);
@@ -31,7 +34,7 @@ try {
     // Procesar cada docente
     foreach ($docentesSeleccionados as $rutDocente) {
         // Verificar si ya existe
-        $queryVerificar = "SELECT idDocenteClases FROM docenteclases_copy WHERE rutDocente = ? AND idPlanClases = ?";
+        $queryVerificar = "SELECT idDocenteClases FROM docenteclases WHERE rutDocente = ? AND idPlanClases = ?";
         $stmtVerificar = $conn->prepare($queryVerificar);
         if (!$stmtVerificar) {
             throw new Exception('Error preparando query de verificación: ' . $conn->error);
@@ -58,30 +61,30 @@ try {
         if ($resultadoVerificar->num_rows > 0) {
             // Actualizar registro existente
             $row = $resultadoVerificar->fetch_assoc();
-            $queryActualizar = "UPDATE docenteclases_copy SET 
+            $queryActualizar = "UPDATE docenteclases SET 
                                vigencia = 1,
                                horas = ?,
                                unidadAcademica = ?,
-                               usuarioModificacion = 'sistemadpi',
+                               usuarioModificacion = ?,
                                fechaModificacion = NOW()
                                WHERE idDocenteClases = ?";
             $stmtActualizar = $conn->prepare($queryActualizar);
             if (!$stmtActualizar) {
                 throw new Exception('Error preparando query de actualización: ' . $conn->error);
             }
-            $stmtActualizar->bind_param("dsi", $horasActividad, $unidadAcademica, $row['idDocenteClases']);
+            $stmtActualizar->bind_param("dssi", $horasActividad, $unidadAcademica, $rut,  $row['idDocenteClases']);
             $stmtActualizar->execute();
         } else {
             // Insertar nuevo registro
-            $queryInsertar = "INSERT INTO docenteclases_copy 
+            $queryInsertar = "INSERT INTO docenteclases 
                             (rutDocente, idPlanClases, idCurso, horas, unidadAcademica, vigencia, 
                              usuarioModificacion, fechaModificacion)
-                            VALUES (?, ?, ?, ?, ?, 1, 'sistemadpi', NOW())";
+                            VALUES (?, ?, ?, ?, ?, 1, ?, NOW())";
             $stmtInsertar = $conn->prepare($queryInsertar);
             if (!$stmtInsertar) {
                 throw new Exception('Error preparando query de inserción: ' . $conn->error);
             }
-            $stmtInsertar->bind_param("siids", $rutDocente, $idplanclases, $idcurso, $horasActividad, $unidadAcademica);
+            $stmtInsertar->bind_param("siidss", $rutDocente, $idplanclases, $idcurso, $horasActividad, $rut, $unidadAcademica);
             $stmtInsertar->execute();
         }
     }

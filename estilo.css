@@ -23,6 +23,36 @@ body.modal-open {
     transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
+/* Estilos específicos para Trabajo Autonomo Bloqueado (Noviembre) */
+.activity-button.trabajo-autonomo-bloqueado {
+    background-color: #6EA7E0 !important; /* Color warning de Bootstrap */
+    border-color: #6EA7E0 !important;
+    cursor: default; /* Cursor normal en lugar de pointer */
+    color: #212529 !important; /* Texto oscuro para mejor contraste con amarillo */
+}
+
+.activity-button.trabajo-autonomo-bloqueado:hover {
+    background-color: #e0a800 !important; /* Color más oscuro al hover */
+    transform: none; /* Sin efecto de escala al hover */
+    border-color: #e0a800 !important;
+}
+
+.activity-button.trabajo-autonomo-bloqueado .fa-user-graduate {
+    color: #212529 !important;
+}
+
+.activity-button.trabajo-autonomo-bloqueado .activity-subtitle {
+    font-size: 0.75rem;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+/* Color más oscuro para las fechas/horas en trabajo autónomo bloqueado */
+.activity-button.trabajo-autonomo-bloqueado .class-date,
+.activity-button.trabajo-autonomo-bloqueado .class-time {
+    color: #000000;
+}
+
 /* Estilos base */
 
 .auto-expand {

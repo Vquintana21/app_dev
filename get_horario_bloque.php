@@ -1,5 +1,5 @@
 <?php
-include("conexion.php");
+include_once("conexion.php");
 
 $bloque = $_GET['bloque'];
 $extendido = $_GET['extendido'];

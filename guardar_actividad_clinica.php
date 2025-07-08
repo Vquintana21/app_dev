@@ -6,6 +6,10 @@ header('Content-Type: application/json');
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+include_once 'login/control_sesion.php';
+$ruti = $_SESSION['sesion_idLogin'];
+$rut = str_pad($ruti, 10, "0", STR_PAD_LEFT);
+
 $cursos_idcursos = isset($_POST['cursos_idcursos']) ? (int)$_POST['cursos_idcursos'] :9090;
 
 try {
@@ -27,6 +31,27 @@ if ($esActualizacion) {
     $dia = isset($_POST['dia']) ? mysqli_real_escape_string($conn, $_POST['dia']) : '';
     $condicion = isset($_POST['pcl_condicion']) && $_POST['pcl_condicion'] === 'Obligatorio' ? "Obligatorio" : "Libre";
 	$evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_ActividadConEvaluacion'] === 'S' ? "S" : "N";
+	
+	if (!empty($tipo)) {
+    $stmt = $conn->prepare("SELECT subtipo_activo FROM pcl_TipoSesion WHERE tipo_sesion = ? AND tipo_activo = 1 LIMIT 1");
+    if ($stmt) {
+        $stmt->bind_param("s", $tipo);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $tipoInfo = $result->fetch_assoc();
+        $stmt->close();
+        
+        // Si requiere subtipo y no hay subtipo
+        if ($tipoInfo && $tipoInfo['subtipo_activo'] == 1 && empty($subtipo)) {
+            http_response_code(400);
+            echo json_encode(array(
+                'success' => false,
+                'message' => 'Debe seleccionar un subtipo de actividad para el tipo seleccionado'
+            ));
+            exit;
+        }
+    }
+}
 
     // Calcular semana basada en la nueva fecha
     $semana = date('W', strtotime($fecha)) - date('W', strtotime(date('Y') . '-01-01')) + 1;
@@ -40,7 +65,7 @@ if ($esActualizacion) {
     $conn->begin_transaction();
 
     // Obtener el tipo anterior ANTES de cualquier actualización
-    $queryTipoAnterior = "SELECT pcl_TipoSesion FROM planclases_test WHERE idplanclases = ?";
+    $queryTipoAnterior = "SELECT pcl_TipoSesion FROM planclases WHERE idplanclases = ?";
     $stmtTipoAnterior = $conn->prepare($queryTipoAnterior);
     $stmtTipoAnterior->bind_param("i", $idplanclases);
     $stmtTipoAnterior->execute();
@@ -81,7 +106,7 @@ if ($esActualizacion) {
     if ($tipo === 'Clase') {
         $nsalasCalculado = 1;
     } else if ($requiereSalaActual == 1) {
-        $queryNsalasActual = "SELECT pcl_nSalas FROM planclases_test WHERE idplanclases = ?";
+        $queryNsalasActual = "SELECT pcl_nSalas FROM planclases WHERE idplanclases = ?";
         $stmtNsalasActual = $conn->prepare($queryNsalasActual);
         $stmtNsalasActual->bind_param("i", $idplanclases);
         $stmtNsalasActual->execute();
@@ -94,8 +119,8 @@ if ($esActualizacion) {
         $nsalasCalculado = 0;
     }
 
-    // Actualizar planclases_test incluyendo pcl_nSalas
-    $query = "UPDATE planclases_test SET 
+    // Actualizar planclases incluyendo pcl_nSalas
+    $query = "UPDATE planclases SET 
                 pcl_tituloActividad = ?, 
                 pcl_TipoSesion = ?,
                 pcl_SubTipoSesion = ?,
@@ -108,14 +133,14 @@ if ($esActualizacion) {
                 pcl_ActividadConEvaluacion = ?,
                 pcl_nSalas = ?,
                 pcl_fechamodifica = NOW(),
-                pcl_usermodifica = 'EditorClinico'
+                pcl_usermodifica = ?
               WHERE idplanclases = ?";
 
     if (!$stmt = $conn->prepare($query)) {
         throw new Exception('Error en la preparación de la consulta: ' . $conn->error);
     }
 
-    if (!$stmt->bind_param("sssssssissii",
+    if (!$stmt->bind_param("sssssssissisi",
         $titulo,
         $tipo,
         $subtipo,
@@ -127,6 +152,7 @@ if ($esActualizacion) {
         $condicion,
         $evaluacion,
         $nsalasCalculado,
+		$rut,
         $idplanclases
     )) {
         throw new Exception('Error en el bind_param: ' . $stmt->error);
@@ -162,7 +188,7 @@ if ($esActualizacion) {
 //
 //       // Solo si el tipo anterior permitía docentes y el nuevo NO
 //       if ($permiteDocentesAnterior === 1 && $permiteDocentesNuevo === 0) {
-//           $queryUpdateVigencia = "UPDATE docenteclases_copy 
+//           $queryUpdateVigencia = "UPDATE docenteclases 
 //                                   SET vigencia = 0, 
 //                                       fechaModificacion = NOW(),
 //                                       usuarioModificacion = 'sistema'
@@ -222,8 +248,8 @@ if ($esActualizacion) {
     }
     $stmtTipoAnterior->close();
 
-    // Actualizar explícitamente el campo pcl_DeseaSala en planclases_test
-    $queryUpdateDeseaSala = "UPDATE planclases_test SET pcl_DeseaSala = ? WHERE idplanclases = ?";
+    // Actualizar explícitamente el campo pcl_DeseaSala en planclases
+    $queryUpdateDeseaSala = "UPDATE planclases SET pcl_DeseaSala = ? WHERE idplanclases = ?";
     $stmtUpdateDeseaSala = $conn->prepare($queryUpdateDeseaSala);
     $valorDeseaSala = $requiereSala ? 1 : 0;
     $stmtUpdateDeseaSala->bind_param("ii", $valorDeseaSala, $idplanclases);
@@ -232,7 +258,7 @@ if ($esActualizacion) {
 
     // Verificar estados actuales de las asignaciones
     $queryEstados = "SELECT idEstado, COUNT(*) as cantidad 
-                    FROM asignacion_piloto 
+                    FROM asignacion 
                     WHERE idplanclases = ? 
                     GROUP BY idEstado";
     $stmtEstados = $conn->prepare($queryEstados);
@@ -265,7 +291,7 @@ if ($esActualizacion) {
             
             // Si hay asignaciones confirmadas, cambiarlas a estado "modificada"
             if ($asignacionesConfirmadas > 0) {
-                //$queryModificar = "UPDATE asignacion_piloto 
+                //$queryModificar = "UPDATE asignacion 
                 //                SET idEstado = 1, 
                 //                    Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Datos de actividad clínica modificados')
                 //                WHERE idplanclases = ? AND idEstado = 3";
@@ -284,7 +310,7 @@ if ($esActualizacion) {
             /* CASO 5: ACTIVIDAD GRUPAL/TP/EV/EX → ACTIVIDAD GRUPAL/TP/EV/EX */
             
             // Actualizar tipo en asignaciones existentes sin cambiar estado
-            $queryActualizarTipo = "UPDATE asignacion_piloto 
+            $queryActualizarTipo = "UPDATE asignacion 
                                 SET tipoSesion = ?
                                 WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
             $stmtActualizarTipo = $conn->prepare($queryActualizarTipo);
@@ -305,7 +331,7 @@ if ($esActualizacion) {
                 
                 // Actualizar tipo a 'Clase' en asignaciones existentes
                 if ($asignacionesConfirmadas > 0 || $asignacionesPendientes > 0 || $asignacionesModificadas > 0) {
-                    $queryActualizarTipo = "UPDATE asignacion_piloto 
+                    $queryActualizarTipo = "UPDATE asignacion 
                                           SET tipoSesion = 'Clase',
                                               Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Tipo cambiado a Clase (clínico)')
                                           WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
@@ -323,7 +349,7 @@ if ($esActualizacion) {
   //            
   //            // Liberar asignaciones existentes (reservas) si hay
   //            if ($asignacionesConfirmadas > 0) {
-  //                $queryLiberarExistentes = "UPDATE asignacion_piloto 
+  //                $queryLiberarExistentes = "UPDATE asignacion 
   //                                        SET idEstado = 4, 
   //                                            Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Liberada por cambio a tipo Clase (clínico)')
   //                                        WHERE idplanclases = ? AND idEstado = 3";
@@ -334,7 +360,7 @@ if ($esActualizacion) {
   //            }
   //            
   //            // Eliminar asignaciones en proceso
-  //            $queryEliminarEnProceso = "DELETE FROM asignacion_piloto 
+  //            $queryEliminarEnProceso = "DELETE FROM asignacion 
   //                                    WHERE idplanclases = ? AND idEstado IN (0, 1)";
   //            $stmtEliminarEnProceso = $conn->prepare($queryEliminarEnProceso);
   //            $stmtEliminarEnProceso->bind_param("i", $idplanclases);
@@ -353,7 +379,7 @@ if ($esActualizacion) {
                 
                 // Actualizar tipo en asignaciones existentes (NO eliminar)
                 if ($asignacionesConfirmadas > 0 || $asignacionesPendientes > 0 || $asignacionesModificadas > 0) {
-                    $queryActualizarTipo = "UPDATE asignacion_piloto 
+                    $queryActualizarTipo = "UPDATE asignacion 
                                           SET tipoSesion = ?, 
                                               Comentario = CONCAT(IFNULL(Comentario, ''), '\n', NOW(), ' - Tipo cambiado de Clase a ', ?)
                                           WHERE idplanclases = ? AND idEstado IN (0, 1, 3)";
@@ -383,15 +409,15 @@ if ($esActualizacion) {
                 }
                 
                 // ✅ CORRECCIÓN CRÍTICA: Eliminar PRIMERO las reservas físicas (igual que regulares)
-                // 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
-                $queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
-                $stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+                // 1. PRIMERO: Eliminar de reserva (liberar salas físicas)
+                $queryBorrarReservas = "DELETE FROM reserva WHERE re_idRepeticion = ?";
+                $stmtBorrarReservas = $reserva2->prepare($queryBorrarReservas);
                 $stmtBorrarReservas->bind_param("i", $idplanclases);
                 $stmtBorrarReservas->execute();
                 $stmtBorrarReservas->close();
 
-                // 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
-                $queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
+                // 2. SEGUNDO: Eliminar de asignacion (limpiar seguimiento)
+                $queryEliminarTodas = "DELETE FROM asignacion WHERE idplanclases = ?";
                 $stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
                 $stmtEliminarTodas->bind_param("i", $idplanclases);
                 $stmtEliminarTodas->execute();
@@ -410,15 +436,15 @@ if ($esActualizacion) {
                 }
                 
                 // ✅ CORRECCIÓN CRÍTICA: Eliminar PRIMERO las reservas físicas (igual que regulares)
-                // 1. PRIMERO: Eliminar de reserva_2 (liberar salas físicas)
-                $queryBorrarReservas = "DELETE FROM reserva_2 WHERE re_idRepeticion = ?";
-                $stmtBorrarReservas = $conn->prepare($queryBorrarReservas);
+                // 1. PRIMERO: Eliminar de reserva (liberar salas físicas)
+                $queryBorrarReservas = "DELETE FROM reserva WHERE re_idRepeticion = ?";
+                $stmtBorrarReservas = $reserva2->prepare($queryBorrarReservas);
                 $stmtBorrarReservas->bind_param("i", $idplanclases);
                 $stmtBorrarReservas->execute();
                 $stmtBorrarReservas->close();
 
-                // 2. SEGUNDO: Eliminar de asignacion_piloto (limpiar seguimiento)
-                $queryEliminarTodas = "DELETE FROM asignacion_piloto WHERE idplanclases = ?";
+                // 2. SEGUNDO: Eliminar de asignacion (limpiar seguimiento)
+                $queryEliminarTodas = "DELETE FROM asignacion WHERE idplanclases = ?";
                 $stmtEliminarTodas = $conn->prepare($queryEliminarTodas);
                 $stmtEliminarTodas->bind_param("i", $idplanclases);
                 $stmtEliminarTodas->execute();
@@ -553,13 +579,13 @@ $stmtCurso->close();
 
 
         
-        $query = "INSERT INTO planclases_test 
+        $query = "INSERT INTO planclases 
                  (cursos_idcursos, pcl_Periodo, pcl_tituloActividad, pcl_TipoSesion, pcl_SubTipoSesion, 
                   pcl_Fecha, pcl_Inicio, pcl_Termino, dia, pcl_condicion, pcl_ActividadConEvaluacion, 
                   pcl_HorasPresenciales, pcl_nSalas, pcl_DeseaSala, pcl_Semana, pcl_Seccion, pcl_alumnos,
                   pcl_AsiCodigo, Bloque, pcl_AsiNombre, pcl_fechamodifica, pcl_usermodifica, pcl_FechaCreacion, pcl_Modalidad) 
                  VALUES 
-                 (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'EditorClinico', NOW(), 'Sincrónico')";
+                 (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), 'Sincrónico')";
         
         $stmt = $conn->prepare($query);
         if (!$stmt) {
@@ -567,7 +593,7 @@ $stmtCurso->close();
         }
         
         //$paramTypes = "issssssssssiiiisisi";
-        $paramTypes = "isssssssssssiiiiisss";
+        $paramTypes = "isssssssssssiiiiissss";
         
         // DEBUG: Verificar valores justo antes del bind_param INSERT
         error_log("DEBUG BIND_PARAM INSERT - Valores finales:");
@@ -611,7 +637,8 @@ $stmtCurso->close();
             $alumnos,
             $codigoCurso,
             $bloque,
-			$nombreCurso
+			$nombreCurso,
+			$rut
         );
         
         if (!$stmt->execute()) {

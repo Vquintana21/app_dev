@@ -10,7 +10,7 @@ try {
     
     $idplanclases = (int)$_GET['id'];
     
-    $query = "SELECT * FROM planclases_test WHERE idplanclases = ?";
+    $query = "SELECT * FROM planclases WHERE idplanclases = ?";
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $idplanclases);
     $stmt->execute();

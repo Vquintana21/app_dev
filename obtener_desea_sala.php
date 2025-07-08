@@ -26,7 +26,7 @@ try {
             
             // Obtener datos básicos de planclases
             $query = "SELECT pcl_DeseaSala, pcl_campus, pcl_nSalas 
-                     FROM a_planclases 
+                     FROM planclases 
                      WHERE idplanclases = ?";
             
             $stmt = $conn->prepare($query);
@@ -58,10 +58,10 @@ try {
             
             // Obtener datos básicos
             $queryBasicos = "SELECT p.pcl_campus, p.pcl_nSalas, p.pcl_DeseaSala,
-                           (SELECT COUNT(*) FROM asignacion_piloto 
+                           (SELECT COUNT(*) FROM asignacion 
                             WHERE idplanclases = p.idplanclases 
                             AND idEstado = 3) as salas_asignadas
-                           FROM a_planclases p 
+                           FROM planclases p 
                            WHERE p.idplanclases = ?";
             
             $stmtBasicos = $conn->prepare($queryBasicos);
@@ -78,7 +78,7 @@ try {
             
             // Obtener historial de observaciones (separado por timestamps)
             $queryHistorial = "SELECT Comentario, timestamp 
-                             FROM asignacion_piloto 
+                             FROM asignacion 
                              WHERE idplanclases = ? 
                              AND Comentario IS NOT NULL 
                              AND Comentario != ''

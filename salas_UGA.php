@@ -107,7 +107,7 @@ include("conexion.php");
                             <?php
                             $aulas = "SELECT * FROM sala 
                                      WHERE sa_UnidadAdmin = 'UGA' 
-                                     ORDER BY sa_UbicCampus ASC, sa_Nombre ASC";
+                                     ORDER BY sa_UbicCampus ASC, sa_Capacidad DESC, sa_Nombre ASC";
                             $aulasQ = mysqli_query($conexion5, $aulas);
                             $cont = 1;
                             

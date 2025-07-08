@@ -62,7 +62,7 @@ function obtenerDatosMultiplesSecciones($codigoCurso, $periodo, $conn) {
 function calcularAlumnosReales($idplanclases, $conn, $tipoCurso = 'regular') {
     try {
         // Determinar tabla según tipo de curso
-        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases_test' : 'a_planclases';
+        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases' : 'planclases';
         
         // Obtener datos de planclases
         $stmt = $conn->prepare("SELECT pcl_AulaDescripcion, pcl_alumnos, cursos_idcursos, pcl_AsiCodigo, pcl_Periodo 
@@ -175,7 +175,7 @@ function calcularAlumnosPorSala($cupoTotal, $numeroSalas) {
  */
 function actualizarPclAulaDescripcion($idplanclases, $juntarSecciones, $conn, $tipoCurso = 'regular') {
     try {
-        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases_test' : 'a_planclases';
+        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases' : 'planclases';
         $valor = $juntarSecciones ? 'S' : 'N';
         
         $stmt = $conn->prepare("UPDATE $tablaPlanclases SET pcl_AulaDescripcion = ? WHERE idplanclases = ?");
@@ -211,7 +211,7 @@ function actualizarPclAulaDescripcion($idplanclases, $juntarSecciones, $conn, $t
  */
 function obtenerEstadoJuntarSecciones($idplanclases, $conn, $tipoCurso = 'regular') {
     try {
-        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases_test' : 'a_planclases';
+        $tablaPlanclases = ($tipoCurso === 'clinico') ? 'planclases' : 'planclases';
         
         $stmt = $conn->prepare("SELECT pcl_AulaDescripcion FROM $tablaPlanclases WHERE idplanclases = ?");
         

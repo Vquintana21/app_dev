@@ -18,7 +18,7 @@ try {
     
     // Verificar primero si la actividad existe y obtener su grupo
     $checkQuery = "SELECT idplanclases, pcl_grupoactividad, pcl_tituloActividad, pcl_Fecha, pcl_TipoSesion 
-                  FROM planclases_test 
+                  FROM planclases 
                   WHERE idplanclases = ?";
     
     $checkStmt = $conn->prepare($checkQuery);
@@ -37,13 +37,13 @@ try {
     // Definir criterios de eliminación dependiendo de si tiene grupo o no
     if ($grupoActividad) {
         // Eliminar todas las actividades del mismo grupo
-        $query = "DELETE FROM planclases_test 
+        $query = "DELETE FROM planclases 
                   WHERE pcl_grupoactividad = ?";
         $stmt = $conn->prepare($query);
         $stmt->bind_param("s", $grupoActividad);
     } else {
         // Si no tiene grupo, eliminar solo por coincidencia de título, fecha y tipo
-        $query = "DELETE FROM planclases_test 
+        $query = "DELETE FROM planclases 
                   WHERE pcl_tituloActividad = ? 
                   AND pcl_Fecha = ? 
                   AND pcl_TipoSesion = ?";

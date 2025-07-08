@@ -4,7 +4,7 @@ header ('Content-type: text/html; charset=utf-8');
 session_start(); 
 error_reporting(0);
 //include("conn.php");
-include("conexion.php");
+include_once("conexion.php");
 //$rut = $_SESSION['sesion_idLogin']; 
 $rut = '162083015';
 $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
@@ -155,7 +155,7 @@ if($rut!='' && $control_profe > 0){
 								
 								 // Consulta para obtener total de horas
 									$query_horas = "SELECT sum(`horas`) as total_horas 
-													FROM `docenteclases_copy` 
+													FROM `docenteclases` 
 													WHERE `idCurso` = $_GET[idcurso] 
 													AND `rutDocente`='$fila_profesores[rut]' 
 													AND vigencia=1";

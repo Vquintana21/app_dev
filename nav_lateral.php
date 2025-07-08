@@ -41,7 +41,7 @@
       
       <!-- 2. Tutorial -> Redirige al tutorial en youtube del sistema en nueva pestaña -->
       <li class="nav-item">
-        <a class="nav-link" href="https://www.youtube.com/watch?v=TU_VIDEO_ID" target="_blank" rel="noopener noreferrer">
+        <a class="nav-link" href="https://www.youtube.com/watch?v=K5oKkuyZkdk&list=PLHuyiWG8YYX5lxW0grg1Uqcdb29RnMfDd" target="_blank" rel="noopener noreferrer">
           <i class="bi bi-play-circle"></i>
           <span>Tutorial de uso</span>
           <i class="bi bi-box-arrow-up-right ms-auto" style="font-size: 0.8rem; opacity: 0.7;"></i>
@@ -73,7 +73,7 @@
       <li class="nav-item">
         <a class="nav-link disabled" href="#" onclick="return false;" style="opacity: 0.5; cursor: not-allowed;">
           <i class="bi bi-file-earmark-text"></i>
-          <span>Reglamento calendario</span>
+          <span>Reglamento calendario y salas</span>
           <small class="text-muted ms-auto" style="font-size: 0.7rem;">(Próximamente)</small>
         </a>
       </li>
