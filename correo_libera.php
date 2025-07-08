@@ -5,7 +5,7 @@ require "phpmailer/PHPMailerAutoload.php";
 function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
     // Datos de la actividad
     $querycurso = mysqli_query($conn,"SELECT usuario, `CodigoCurso`, `Seccion`, `NombreCurso`, tipoSesion, fecha, hora_inicio, hora_termino 
-                                      FROM asignacion_piloto
+                                      FROM asignacion
                                       WHERE idplanclases = $idpcl LIMIT 1");
     $rowcurso = mysqli_fetch_assoc($querycurso);
     $curso = $rowcurso['NombreCurso']." - ".$rowcurso['CodigoCurso']."-".$rowcurso['Seccion'];
@@ -17,7 +17,7 @@ function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
 
     // Info de salas
     $querySalas = mysqli_query($conn, "SELECT a.idSala, s.sa_Nombre, s.sa_UbicCampus, s.sa_UbicOtraInf, s.sa_Capacidad 
-                                       FROM asignacion_piloto a 
+                                       FROM asignacion a 
                                        LEFT JOIN sala s ON a.idSala = s.idSala 
                                        WHERE a.idplanclases = $idpcl AND a.idSala != '' AND a.idSala != '1'");
     $salas_liberadas = [];
