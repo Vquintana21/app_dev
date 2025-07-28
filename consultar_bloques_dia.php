@@ -39,6 +39,7 @@ try {
         COUNT(a.idplanclases) as salas_solicitadas
     FROM planclases p
     LEFT JOIN asignacion a ON p.idplanclases = a.idplanclases
+	AND a.idEstado != 4
     WHERE p.cursos_idcursos = ? 
       AND p.pcl_Fecha = ?
       AND p.pcl_TipoSesion IN (

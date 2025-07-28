@@ -157,18 +157,28 @@ $expirada = isset($_GET['expirada']) ? $_GET['expirada'] : '0';
 
 <?php if ($expirada === '1'): ?>
 <script>
-  Swal.fire({
+ Swal.fire({
     icon: 'info',
     title: 'Sesión expirada',
-    text: 'Tu sesión caducó por inactividad. Inicia sesión nuevamente.',
-    confirmButtonText: 'Iniciar sesión',
+    text: 'Tu sesión caducó por inactividad. Serás redirigido automáticamente en 10 segundos.',
+    confirmButtonText: 'Iniciar sesión ahora',
     allowOutsideClick: false,
-    allowEscapeKey: false
-  }).then(() => {
-    sessionStorage.setItem('mensajePostLogin', 'Tu sesión anterior expiró por inactividad.');
-    // Limpia la URL para evitar repetición
-    history.replaceState(null, '', window.location.pathname);
-    window.location.href = 'login/login.php';
+    allowEscapeKey: false,
+    timer: 10000, // 15 segundos en milisegundos
+    timerProgressBar: true, // Muestra barra de progreso
+    willClose: () => {
+      // Se ejecuta cuando el timer termina o se presiona el botón
+      sessionStorage.setItem('mensajePostLogin', 'Tu sesión anterior expiró por inactividad.');
+      history.replaceState(null, '', window.location.pathname);
+      window.location.href = 'login/login.php';
+    }
+  }).then((result) => {
+    // Solo se ejecuta si el usuario presiona el botón antes del timer
+    if (result.isConfirmed) {
+      sessionStorage.setItem('mensajePostLogin', 'Tu sesión anterior expiró por inactividad.');
+      history.replaceState(null, '', window.location.pathname);
+      window.location.href = 'login/login.php';
+    }
   });
 </script>
 

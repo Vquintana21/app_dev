@@ -190,6 +190,49 @@ function shutdown_handler() {
 // Registrar el manejador de errores fatales
 register_shutdown_function('shutdown_handler');
 
+/**
+ * Función para obtener nombres de salas desde la base de datos de reservas
+ */
+function obtenerNombresSalas($salasIds, $reserva2) {
+    if (empty($salasIds)) {
+        return [];
+    }
+    
+    // Filtrar valores vacíos o nulos
+    $salasIds = array_filter($salasIds, function($id) {
+        return !empty($id) && trim($id) !== '';
+    });
+    
+    if (empty($salasIds)) {
+        return [];
+    }
+    
+    try {
+        $placeholders = str_repeat('?,', count($salasIds) - 1) . '?';
+        $query = "SELECT idSala, sa_Nombre FROM sala WHERE idSala IN ($placeholders)";
+        $stmt = $reserva2->prepare($query);
+        
+        if ($stmt) {
+            // Crear string de tipos para bind_param (todos son strings)
+            $types = str_repeat('s', count($salasIds));
+            $stmt->bind_param($types, ...array_values($salasIds));
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            $nombres = [];
+            while ($row = $result->fetch_assoc()) {
+                $nombres[$row['idSala']] = $row['sa_Nombre'];
+            }
+            $stmt->close();
+            return $nombres;
+        }
+    } catch (Exception $e) {
+        error_log("Error obteniendo nombres de salas: " . $e->getMessage());
+    }
+    
+    return [];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $input = file_get_contents('php://input');
@@ -290,11 +333,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if ($requiereSala == 0) {
             // Si NO requiere sala, liberar asignaciones
+			$fechaActual = date('Y-m-d H:i:s'); 
             $stmt = $conn->prepare("UPDATE asignacion 
                                    SET idEstado = 4, 
                                        Comentario = CONCAT(IFNULL(Comentario, ''), '\n\n', ?, ' - NO REQUIERE SALA') 
                                    WHERE idplanclases = ? AND idEstado != 4");
-            $stmt->bind_param("si", date('Y-m-d H:i:s'), $data['idplanclases']);
+            $stmt->bind_param("si", $fechaActual, $data['idplanclases']);
             $stmt->execute();
             
             $conn->commit();
@@ -834,6 +878,7 @@ if ($estadosInfo['activas'] == 0 && $estadosInfo['liberadas'] > 0) {
     break;
 
 case 'modificar_asignada':
+ global $reserva2;
     try {
         $conn->begin_transaction();
 		
@@ -841,6 +886,18 @@ case 'modificar_asignada':
         if (!isset($data['idplanclases']) || empty($data['idplanclases'])) {
             throw new Exception('ID de planclases no proporcionado');
         }
+		
+		
+		$querySalasAnteriores = "SELECT GROUP_CONCAT(idSala SEPARATOR ', ') as salas_anteriores 
+                        FROM asignacion 
+                        WHERE idplanclases = ? AND idEstado = 3 AND idSala != ''";
+						$stmtSalasAnteriores = $conn->prepare($querySalasAnteriores);
+						$stmtSalasAnteriores->bind_param("i", $data['idplanclases']);
+						$stmtSalasAnteriores->execute();
+						$resultSalasAnteriores = $stmtSalasAnteriores->get_result();
+						$rowSalasAnteriores = $resultSalasAnteriores->fetch_assoc();
+						$salasAnteriores = isset($rowSalasAnteriores['salas_anteriores']) ? $rowSalasAnteriores['salas_anteriores'] : '';
+						$stmtSalasAnteriores->close();
         
         $idplanclases = intval($data['idplanclases']);
         
@@ -1219,6 +1276,7 @@ case 'obtener_salas_asignadas':
     break;
 
 case 'liberar':
+global $reserva2; 
     try {
         $conn->begin_transaction();
         
@@ -1301,6 +1359,7 @@ case 'liberar':
     // salas computacion
     
     case 'guardar_con_computacion':
+	 global $reserva2;
     try {
        $juntaSeccion = !empty($data['juntarSecciones']) ? 1 : 0;
 	   $juntaSeccionPlanclase = !empty($data['juntarSecciones']) ? 'S' : 'N'; // Para planclases
@@ -1821,6 +1880,7 @@ foreach ($salasComputacion as $index => $idSala) {
     // fin salas compu
 	
 	case 'obtener_detalles_inconsistencia':
+	global $reserva2;
     try {
         // Log inicial para debugging
         // ✅ PHP 5.6
@@ -2120,6 +2180,8 @@ WHERE
     p.cursos_idcursos = ? AND p.pcl_tituloActividad != '' AND(
         t.tipo_activo = 1 OR p.pcl_DeseaSala = 0
     ) AND t.pedir_sala = 1
+	AND DAYOFWEEK(p.pcl_Fecha) != 1
+	
 ORDER BY
     p.pcl_Fecha ASC,
     p.pcl_Inicio ASC;
@@ -2139,16 +2201,21 @@ $result = $stmt->get_result();
 	<div class="accordion mb-4" id="accordionInstrucciones">
     <div class="accordion-item border-warning">
         <h2 class="accordion-header">
-            <button class="accordion-button collapsed bg-warning bg-opacity-10 text-warning fw-bold" 
-                    type="button" 
-                    data-bs-toggle="collapse" 
-                    data-bs-target="#collapseInstrucciones"
-                    aria-expanded="false" 
-                    aria-controls="collapseInstrucciones">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                Instrucciones Importantes para Uso de Salas
-            </button>
-        </h2>
+			<button class="accordion-button collapsed bg-warning bg-opacity-10 text-warning fw-bold d-flex justify-content-between align-items-center" 
+					type="button" 
+					data-bs-toggle="collapse" 
+					data-bs-target="#collapseInstrucciones"
+					aria-expanded="false" 
+					aria-controls="collapseInstrucciones">
+				<span>
+					<i class="bi bi-exclamation-triangle-fill me-2"></i>
+					Instrucciones Importantes para Uso de Salas
+				</span>
+				 <span class="badge bg-info ms-3">Pinche aquí</span>
+				
+			</button>
+		</h2>
+
         <div id="collapseInstrucciones" 
              class="accordion-collapse collapse" 
              data-bs-parent="#accordionInstrucciones">
@@ -2289,6 +2356,15 @@ $result = $stmt->get_result();
             }
         }
 
+		$todasLasSalas = array_unique(array_merge($salasConReserva, $salasInconsistentes));
+        $nombresSalas = obtenerNombresSalas($todasLasSalas, $reserva2);
+        
+        // Log para debugging (opcional)
+        if (!empty($todasLasSalas)) {
+            error_log("🏢 Salas encontradas: " . implode(', ', $todasLasSalas));
+            error_log("🏢 Nombres obtenidos: " . json_encode($nombresSalas));
+        }
+		
         // ✅ LÓGICA DE ESTADOS ACTUALIZADA
         $countSalasConReserva = count($salasConReserva);
         $tieneAsignaciones = !empty($salasConReserva);
@@ -2333,56 +2409,63 @@ $result = $stmt->get_result();
         
         <!-- ✅ COLUMNA SALA CORREGIDA -->
         <td>
-            <?php if(!empty($salasConReserva)): ?>
-                <ul class="list-unstyled m-0">
-                    <?php foreach($salasConReserva as $sala): ?>
-                        <?php 
-                        $detalle = $detallesVerificacion[$sala];
-                        $iconoMetodo = '';
+    <?php if(!empty($salasConReserva)): ?>
+        <ul class="list-unstyled m-0">
+            <?php foreach($salasConReserva as $sala): ?>
+                <?php 
+                $detalle = $detallesVerificacion[$sala];
+                $iconoMetodo = '';
+                $colorBadge = 'bg-success';
+                $tooltip = 'Reserva confirmada';
+                
+                // ✅ OBTENER NOMBRE DE LA SALA (fallback al ID si no se encuentra)
+                $nombreSala = isset($nombresSalas[$sala]) ? $nombresSalas[$sala] : $sala;
+                
+                switch($detalle['metodo']) {
+                    case 'paso1':
+                        $iconoMetodo = '🎯'; // Encontrada directamente
+                        $tooltip = 'Reserva encontrada por ID de repetición';
+                        break;
+                    case 'paso2':
+                        $iconoMetodo = '🔍'; // Encontrada por búsqueda
                         $colorBadge = 'bg-success';
-                        $tooltip = 'Reserva confirmada';
-                        
-                        switch($detalle['metodo']) {
-                            case 'paso1':
-                                $iconoMetodo = '🎯'; // Encontrada directamente
-                                $tooltip = 'Reserva encontrada por ID de repetición';
-                                break;
-                            case 'paso2':
-                                $iconoMetodo = '🔍'; // Encontrada por búsqueda
-                                $colorBadge = 'bg-success';
-                                $tooltip = 'Reserva encontrada por código-sección y horario';
-                                break;
-                        }
-                        ?>
-                        <li>
-                            <span class="badge <?php echo $colorBadge; ?>" 
-                                  data-bs-toggle="tooltip" 
-                                  title="<?php echo $tooltip; ?>">
-                                <?php echo $iconoMetodo; ?> <?php echo $sala; ?>
-                            </span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-            
-            <?php if(!empty($salasInconsistentes)): ?>
-                <ul class="list-unstyled m-0 mt-1">
-                    <?php foreach($salasInconsistentes as $sala): ?>
-                        <li>
-                            <span class="badge bg-danger text-white" 
-                                  data-bs-toggle="tooltip" 
-                                  title="❌ <?php echo $detallesVerificacion[$sala]['detalle']; ?>">
-                                ❌ <?php echo $sala; ?>
-                            </span>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-            
-            <?php if(empty($salasConReserva) && empty($salasInconsistentes)): ?>
-                <span class="badge bg-secondary">Sin sala</span>
-            <?php endif; ?>
-        </td>
+                        $tooltip = 'Reserva encontrada por código-sección y horario';
+                        break;
+                }
+                ?>
+                <li>
+                    <span class="badge <?php echo $colorBadge; ?>" 
+                          data-bs-toggle="tooltip" 
+                          title="<?php echo $tooltip; ?> - ID: <?php echo $sala; ?>">
+                        <?php echo $iconoMetodo; ?> <?php echo htmlspecialchars($nombreSala, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+    
+    <?php if(!empty($salasInconsistentes)): ?>
+        <ul class="list-unstyled m-0 mt-1">
+            <?php foreach($salasInconsistentes as $sala): ?>
+                <?php 
+                // ✅ OBTENER NOMBRE DE LA SALA (fallback al ID si no se encuentra)
+                $nombreSala = isset($nombresSalas[$sala]) ? $nombresSalas[$sala] : $sala; 
+                ?>
+                <li>
+                    <span class="badge bg-danger text-white" 
+                          data-bs-toggle="tooltip" 
+                          title="❌ <?php echo $detallesVerificacion[$sala]['detalle']; ?> - ID: <?php echo $sala; ?>">
+                        ❌ <?php echo htmlspecialchars($nombreSala, ENT_QUOTES, 'UTF-8'); ?>
+                    </span>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+    
+    <?php if(empty($salasConReserva) && empty($salasInconsistentes)): ?>
+        <span class="badge bg-secondary">Sin sala</span>
+    <?php endif; ?>
+</td>
 
         <!-- ✅ COLUMNA ESTADO CORREGIDA -->
         <td>

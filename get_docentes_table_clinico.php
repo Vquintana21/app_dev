@@ -117,12 +117,12 @@ if (!isset($conn)) {
                             echo '<tr><td colspan="6" class="text-center">No hay docentes asignados a este curso</td></tr>';
                         } else {
                             while ($row = $result->fetch_assoc()) {
-                                // Obtener las horas clínicas reales desde docenteclases_copy
+                                // Obtener las horas clínicas reales desde docenteclases
                                 $horas_formateadas = 0;
                                 
                                 try {
                                     $queryHoras = "SELECT SUM(horas) as total_horas 
-                                                   FROM docenteclases_copy 
+                                                   FROM docenteclases 
                                                    WHERE rutDocente = ? AND idCurso = ? AND vigencia = 1";
                                     $stmtHoras = $conn->prepare($queryHoras);
                                     

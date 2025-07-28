@@ -2,7 +2,7 @@
 include("conexion.php");
 
 
-function registrarLogSala2($conn, $idplanclases, $accion, $idSala = '') {   
+function registrarLogSala2($conn, $idplanclases, $accion, $idSala) {   
     
 	$usuarioX = isset($_SESSION['sesion_idLogin']) ? $_SESSION['sesion_idLogin'] : 
                (isset($_SESSION['usuario']) ? $_SESSION['usuario'] : '167847811');
@@ -33,6 +33,8 @@ function registrarLogSala2($conn, $idplanclases, $accion, $idSala = '') {
         case 'modificar_asignada':
             $idEstado = 1;
             $comentario = "Usuario(a) $usuario ha solicitado modificación de sala asignada para la actividad $idplanclases. Sala anterior: $idSala";
+            
+            error_log("Debug - En modificar_asignada, idSala: '" . $idSala . "'");
             break;
             
         case 'liberar':

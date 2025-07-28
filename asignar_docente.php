@@ -9,19 +9,13 @@ ini_set('log_errors', 1);
 function limpiarTexto($texto) {
     if ($texto === null) return null;
     
-    // Convertir a UTF-8 válido
-    $texto = mb_convert_encoding($texto, 'UTF-8', 'UTF-8');
-    
-    // Eliminar caracteres de control y caracteres no válidos
-    $texto = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $texto);
-    
-    // Eliminar caracteres Unicode problemáticos
-    $texto = preg_replace('/[\x{FFF0}-\x{FFFF}]/u', '', $texto);
+    // Convertir a UTF-8 y eliminar caracteres problemáticos
+    $texto = utf8_encode(utf8_decode($texto)); // Normalizar UTF-8
+    $texto = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $texto); // Eliminar caracteres de control
     
     return trim($texto);
 }
 
-// Función para JSON seguro
 function jsonSeguro($data) {
     // Limpiar recursivamente todos los strings en el array
     array_walk_recursive($data, function(&$item) {
@@ -30,18 +24,21 @@ function jsonSeguro($data) {
         }
     });
     
-    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+    // Para PHP 5.6 solo usar JSON_UNESCAPED_UNICODE (disponible desde PHP 5.4)
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE);
     
     if ($json === false) {
-        error_log("ERROR JSON: " . json_last_error_msg());
+        // json_last_error_msg() no siempre está en PHP 5.6, usar código de error
+        $error_code = json_last_error();
+        error_log("ERROR JSON - Código: " . $error_code);
         error_log("Datos problemáticos: " . print_r($data, true));
         
-        // Fallback: crear JSON básico manualmente
-        return json_encode([
+        // Fallback simple
+        return json_encode(array(
             'success' => isset($data['success']) ? $data['success'] : false,
-            'message' => 'Respuesta procesada con encoding limitado',
-            'error' => 'Problema de codificación de caracteres'
-        ]);
+            'message' => 'Error de codificacion',
+            'error' => 'Problema con caracteres especiales'
+        ));
     }
     
     return $json;

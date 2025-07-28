@@ -316,17 +316,13 @@ $foto_docente = InfoDocenteUcampus($rut_niv);
 											<td>
 												<a type="button" class="btn btn-outline-primary btn-sm" target="" href="<?php echo ($fila_cursos["VersionCalendario"] == 1) ? 'index_clinico.php' : 'index.php'; ?>?curso=<?php echo $fila_cursos["idcurso"]; ?>"><i class="ri ri-calendar-check-fill"></i> Calendario</a>
 												
-												<?php if($fila_cursos["activo"] == 1){ 
-
-														$link_programa = "https://dpi.med.uchile.cl/programa/controlador.php?nik=$fila_cursos[codigoCurso]";
-														$icon_programa = " bx bx-link-external"; 
-														
-													}else{ 
-
-														$link_programa = "https://dpi.med.uchile.cl/programa/pdf_old.php?nik=$fila_cursos[codigoCurso]";
-														$icon_programa = " ri ri-arrow-go-back-fill"; 
-													
-													}?> <!--Periodo activo-->
+												<?php if ($fila_cursos["idperiodo"] >= "2025.2" || $fila_cursos["activo"] == 1) { 
+															$link_programa = "https://dpi.med.uchile.cl/programa/controlador.php?nik=" . $fila_cursos["codigoCurso"];
+															$icon_programa = "bx bx-link-external"; 
+														} else { 
+															$link_programa = "https://dpi.med.uchile.cl/programa/pdf_old.php?nik=" . $fila_cursos["codigoCurso"];
+															$icon_programa = "ri ri-arrow-go-back-fill"; 
+														}?> <!--Periodo activo-->
 												
 												<a type="button" class="btn btn-outline-success btn-sm " target="_blank" href="<?php echo $link_programa; ?>" > <i class="<?php echo $icon_programa; ?>"></i> Programa</a>
 												<a type="button" class="btn btn-outline-danger btn-sm" target="_blank" href="<?php echo $url_ucursos; ?>" > <i class="bx bx-link-external"></i> U cursos</a>

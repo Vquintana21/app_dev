@@ -503,7 +503,7 @@ if ($esActualizacion) {
         $dia = mysqli_real_escape_string($conn, $_POST['dia']);
 		$obligatorio = isset($_POST['pcl_condicion']) && $_POST['pcl_condicion'] === 'Obligatorio' ? "Obligatorio" : "Libre";
 		$evaluacion = isset($_POST['pcl_ActividadConEvaluacion']) && $_POST['pcl_ActividadConEvaluacion'] === 'S' ? "S" : "N";
-        $bloque = isset($_POST['Bloque']) ? (int)$_POST['Bloque'] : null;
+        $bloque = isset($_POST['Bloque']) ? $_POST['Bloque'] : null;
         
         // CORRECCIÓN: Forzar subtipo correcto para tipo "Clase"
         if ($tipo === 'Clase') {
@@ -570,7 +570,7 @@ if ($resultCurso && $resultCurso->num_rows > 0) {
     $codigoCurso = $cursoRow['CodigoCurso'];
 	$nombreCurso = mb_convert_encoding($cursoRow['nombreCurso'], 'UTF-8', 'ISO-8859-1');
     $alumnos = $cursoRow['Cupo'];
-    $periodo = $cursoRow['idperiodo']; // Sobrescribe el cálculo anterior
+    $periodo = str_replace('.', '', $cursoRow['idperiodo']);
 } else {
     error_log("❌ No se encontraron datos para curso ID: $cursos_idcursos en spre_cursos");
 }
@@ -583,9 +583,9 @@ $stmtCurso->close();
                  (cursos_idcursos, pcl_Periodo, pcl_tituloActividad, pcl_TipoSesion, pcl_SubTipoSesion, 
                   pcl_Fecha, pcl_Inicio, pcl_Termino, dia, pcl_condicion, pcl_ActividadConEvaluacion, 
                   pcl_HorasPresenciales, pcl_nSalas, pcl_DeseaSala, pcl_Semana, pcl_Seccion, pcl_alumnos,
-                  pcl_AsiCodigo, Bloque, pcl_AsiNombre, pcl_fechamodifica, pcl_usermodifica, pcl_FechaCreacion, pcl_Modalidad) 
+                  pcl_AsiCodigo, Bloque, pcl_AsiNombre, pcl_fechamodifica, pcl_usermodifica, pcl_FechaCreacion, pcl_Modalidad, pcl_campus) 
                  VALUES 
-                 (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), 'Sincrónico')";
+                 (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, NOW(), 'Sincrónico', 'Norte')";
         
         $stmt = $conn->prepare($query);
         if (!$stmt) {

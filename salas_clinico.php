@@ -1,6 +1,9 @@
 <?php
 // clinicos
 // Capturar la salida de errores en lugar de mostrarla
+header('Content-Type: text/html; charset=UTF-8');
+mysqli_set_charset($conn, "utf8mb4");
+mysqli_set_charset($conexion3, "utf8mb4");
 ob_start();
 include_once("conexion.php");
 $error_output = ob_get_clean();
@@ -256,6 +259,49 @@ function liberarReservaCompleta($reserva2, $idplanclases, $idSala = null) {
     }
 }
 
+/**
+ * Función para obtener nombres de salas desde la base de datos de reservas
+ */
+function obtenerNombresSalas($salasIds, $reserva2) {
+    if (empty($salasIds)) {
+        return [];
+    }
+    
+    // Filtrar valores vacíos o nulos
+    $salasIds = array_filter($salasIds, function($id) {
+        return !empty($id) && trim($id) !== '';
+    });
+    
+    if (empty($salasIds)) {
+        return [];
+    }
+    
+    try {
+        $placeholders = str_repeat('?,', count($salasIds) - 1) . '?';
+        $query = "SELECT idSala, sa_Nombre FROM sala WHERE idSala IN ($placeholders)";
+        $stmt = $reserva2->prepare($query);
+        
+        if ($stmt) {
+            // Crear string de tipos para bind_param (todos son strings)
+            $types = str_repeat('s', count($salasIds));
+            $stmt->bind_param($types, ...array_values($salasIds));
+            $stmt->execute();
+            $result = $stmt->get_result();
+            
+            $nombres = [];
+            while ($row = $result->fetch_assoc()) {
+                $nombres[$row['idSala']] = $row['sa_Nombre'];
+            }
+            $stmt->close();
+            return $nombres;
+        }
+    } catch (Exception $e) {
+        error_log("Error obteniendo nombres de salas: " . $e->getMessage());
+    }
+    
+    return [];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $input = file_get_contents('php://input');
@@ -402,6 +448,7 @@ case 'solicitar':
         $stmt->execute();
         
         // ===== PASO 6: INSERTAR EN asignacion (COMO REGULARES) =====
+		
         $queryInsert = "INSERT INTO asignacion (
             idplanclases, idSala, capacidadSala, nAlumnos, tipoSesion, campus,
             fecha, hora_inicio, hora_termino, idCurso, CodigoCurso, Seccion,
@@ -412,7 +459,7 @@ case 'solicitar':
         $usuario = $rut;
         
         // Preparar comentario para asignacion
-        $comentarioAsignacion = date('Y-m-d H:i:s') . $observaciones;
+        $comentarioAsignacion = date('Y-m-d H:i:s') . " - " . $observaciones;
         
         // ===== PASO 7: RECURSIVIDAD - INSERTAR N REGISTROS =====
         for ($i = 0; $i < $nSalas; $i++) {
@@ -1530,6 +1577,15 @@ $result = $stmt->get_result();
                         $tieneSolicitudes = $row['salas_solicitadas'] > 0;
                         $tieneModificaciones = $row['salas_modificacion'] > 0;
                         $tieneInconsistencias = $salasInconsistentes > 0;
+						
+						$todasLasSalas = array_column($salasData, 'idSala');
+                        $nombresSalas = obtenerNombresSalas($todasLasSalas, $reserva2);
+                        
+                        // Log para debugging (opcional)
+                        if (!empty($todasLasSalas)) {
+                            error_log("🏢 Salas clínicas encontradas: " . implode(', ', $todasLasSalas));
+                            error_log("🏢 Nombres obtenidos: " . json_encode($nombresSalas));
+                        }
                     ?>
                     <tr data-id="<?php echo $row['idplanclases']; ?>" data-alumnos="<?php echo $cupoCurso; ?>"
                         class="<?php echo $tieneInconsistencias ? 'estado-inconsistente' : 
@@ -1550,8 +1606,19 @@ $result = $stmt->get_result();
                             <?php if($tieneAsignaciones): ?>
                                 <ul class="list-unstyled m-0">
                                     <?php foreach($salasData as $sala): ?>
+                                        <?php 
+                                        $nombreSala = isset($nombresSalas[$sala['idSala']]) ? $nombresSalas[$sala['idSala']] : $sala['idSala'];
+                                        $estadoReserva = $sala['verificacion']['encontrado'] ? 'bg-success' : 'bg-danger';
+                                        $tooltip = $sala['verificacion']['encontrado'] ? 
+                                                  'Reserva confirmada - ID: ' . $sala['idSala'] : 
+                                                  'Sin reserva - ID: ' . $sala['idSala'];
+                                        ?>
                                         <li>
-                                            <span class="badge bg-success"><?php echo $sala['idSala']; ?></span>
+                                            <span class="badge <?php echo $estadoReserva; ?>" 
+                                                  data-bs-toggle="tooltip" 
+                                                  title="<?php echo $tooltip; ?>">
+                                                <?php echo htmlspecialchars($nombreSala, ENT_QUOTES, 'UTF-8'); ?>
+                                            </span>
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>

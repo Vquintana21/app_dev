@@ -67,19 +67,30 @@ $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
     </nav>
   </header>
   
-  <script>
+
+<script>
   let tiempoRestante = <?php echo TIEMPO_RESTANTE; ?>;
   let alertaMostrada = false;
+  
+  // Variables para tiempo real
+  const tiempoInicialSesion = <?php echo TIEMPO_RESTANTE; ?>;
+  const momentoInicioConteo = Date.now();
+  let timeoutId = null;
 
   const cronometro = document.getElementById("tiempoRestante");
 
   function actualizarCronometro() {
+    // Calcular tiempo real transcurrido (resistente a pausas del navegador)
+    const tiempoTranscurrido = Math.floor((Date.now() - momentoInicioConteo) / 1000);
+    tiempoRestante = tiempoInicialSesion - tiempoTranscurrido;
+    
     if (tiempoRestante <= 0) {
+      console.log('⏰ Sesión expirada exactamente a los 15 minutos');
       window.location.href = "login/close.php?expirada=1";
       return;
     }
 
-    // Mostrar alerta cuando queda 1 minuto (60 segundos) — una sola vez
+    // Mostrar alerta cuando queda 1 minuto
     if (tiempoRestante <= 60 && !alertaMostrada) {
       Swal.fire({
         icon: 'warning',
@@ -92,14 +103,41 @@ $rut_niv = str_pad($rut, 10, "0", STR_PAD_LEFT);
       alertaMostrada = true;
     }
 
+    // Actualizar display
     const minutos = Math.floor(tiempoRestante / 60);
     const segundos = tiempoRestante % 60;
     cronometro.textContent = `${minutos}:${segundos.toString().padStart(2, '0')}`;
-    tiempoRestante--;
+    
+    // 🔥 CLAVE: setTimeout recursivo en lugar de setInterval
+    timeoutId = setTimeout(actualizarCronometro, 1000);
   }
 
+  // Detectar cambios de visibilidad de pestaña
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      // Pestaña inactiva - limpiar timeout para evitar acumulación
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      console.log('📱 Pestaña inactiva - pausando cronómetro visual');
+    } else {
+      // Pestaña activa - reiniciar con cálculo actualizado
+      console.log('👀 Pestaña activa - recalculando tiempo real');
+      if (timeoutId) clearTimeout(timeoutId); // Prevenir duplicados
+      actualizarCronometro(); // Ejecutar inmediatamente con tiempo correcto
+    }
+  });
+
+  // Iniciar el cronómetro
   actualizarCronometro();
-  setInterval(actualizarCronometro, 1000);
+  
+  // Cleanup al salir de la página
+  window.addEventListener('beforeunload', function() {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
 </script>
 
 

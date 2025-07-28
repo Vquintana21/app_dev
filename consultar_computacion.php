@@ -40,6 +40,7 @@ try {
 }
 
 function consultarDisponibilidad($conn, $data) {
+	 global $reserva2;
     // Validar parámetros requeridos
     $requiredParams = ['campus', 'fecha', 'hora_inicio', 'hora_fin', 'n_salas', 'total_alumnos'];
     foreach ($requiredParams as $param) {
@@ -107,7 +108,7 @@ function consultarDisponibilidad($conn, $data) {
     // Verificar disponibilidad de cada sala
     $salasDisponibles = [];
     foreach ($salasComputacion as $sala) {
-        if (estaDisponible($conn, $sala['idSala'], $fecha, $horaInicio, $horaFin)) {
+        if (estaDisponible($reserva2, $sala['idSala'], $fecha, $horaInicio, $horaFin)) {
             $salasDisponibles[] = $sala;
         }
     }
@@ -135,6 +136,7 @@ function consultarDisponibilidad($conn, $data) {
 }
 
 function validarAntesGuardar($conn, $data) {
+	 global $reserva2;
     $salasSeleccionadas = $data['salas_seleccionadas'];
     $fecha = $data['fecha'];
     $horaInicio = $data['hora_inicio'];
@@ -143,7 +145,7 @@ function validarAntesGuardar($conn, $data) {
     $salasNoDisponibles = [];
     
     foreach ($salasSeleccionadas as $idSala) {
-        if (!estaDisponible($conn, $idSala, $fecha, $horaInicio, $horaFin)) {
+        if (!estaDisponible($reserva2, $idSala, $fecha, $horaInicio, $horaFin)) {
             $salasNoDisponibles[] = $idSala;
         }
     }
@@ -163,6 +165,7 @@ function validarAntesGuardar($conn, $data) {
 }
 
 function estaDisponible($reserva2, $idSala, $fecha, $horaInicio, $horaFin) {
+	 
     $queryReserva = "SELECT * FROM reserva 
                      WHERE re_idSala = ?
                      AND re_FechaReserva = ?

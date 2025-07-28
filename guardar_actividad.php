@@ -640,10 +640,16 @@ if ($tipoAnterior === $tipo && isset($_POST['docentes_seleccionados'])) {
 
 					// 1. PRIMERO: Eliminar de reserva (liberar salas físicas)
 					$queryBorrarReservas = "DELETE FROM reserva WHERE re_idRepeticion = ?";
-					$stmtBorrarReservas = $reserva2->prepare($queryBorrarReservas);
-					$stmtBorrarReservas->bind_param("i", $idplanclases);
-					$stmtBorrarReservas->execute();
-					$stmtBorrarReservas->close();
+					$stmtBorrarReservas = mysqli_prepare($reserva2, $queryBorrarReservas);
+
+					if ($stmtBorrarReservas === false) {
+						error_log("❌ ERROR PREPARE reserva: " . mysqli_error($reserva2));
+					} else {
+						mysqli_stmt_bind_param($stmtBorrarReservas, "s", $idplanclases);
+						mysqli_stmt_execute($stmtBorrarReservas);
+						mysqli_stmt_close($stmtBorrarReservas);
+						error_log("✅ Reservas eliminadas para idplanclases: " . $idplanclases);
+					}
 
 					// 2. SEGUNDO: Eliminar de asignacion (limpiar seguimiento)
 					$queryEliminarTodas = "DELETE FROM asignacion WHERE idplanclases = ?";
@@ -663,11 +669,17 @@ if ($tipoAnterior === $tipo && isset($_POST['docentes_seleccionados'])) {
 				}
 
 				// 1. PRIMERO: Eliminar de reserva (liberar salas físicas)
-				$queryBorrarReservas = "DELETE FROM reserva WHERE re_idRepeticion = ?";
-				$stmtBorrarReservas = $reserva2->prepare($queryBorrarReservas);
-				$stmtBorrarReservas->bind_param("i", $idplanclases);
-				$stmtBorrarReservas->execute();
-				$stmtBorrarReservas->close();
+					$queryBorrarReservas = "DELETE FROM reserva WHERE re_idRepeticion = ?";
+					$stmtBorrarReservas = mysqli_prepare($reserva2, $queryBorrarReservas);
+
+					if ($stmtBorrarReservas === false) {
+						error_log("❌ ERROR PREPARE reserva: " . mysqli_error($reserva2));
+					} else {
+						mysqli_stmt_bind_param($stmtBorrarReservas, "s", $idplanclases);
+						mysqli_stmt_execute($stmtBorrarReservas);
+						mysqli_stmt_close($stmtBorrarReservas);
+						error_log("✅ Reservas eliminadas para idplanclases: " . $idplanclases);
+					}
 
 				// 2. SEGUNDO: Eliminar de asignacion (limpiar seguimiento)
 				$queryEliminarTodas = "DELETE FROM asignacion WHERE idplanclases = ?";

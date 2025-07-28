@@ -44,7 +44,15 @@
         <a class="nav-link" href="https://www.youtube.com/watch?v=K5oKkuyZkdk&list=PLHuyiWG8YYX5lxW0grg1Uqcdb29RnMfDd" target="_blank" rel="noopener noreferrer">
           <i class="bi bi-play-circle"></i>
           <span>Tutorial de uso</span>
-          <i class="bi bi-box-arrow-up-right ms-auto" style="font-size: 0.8rem; opacity: 0.7;"></i>
+          <i class="bi bi-box-arrow-up-right ms-auto" style="font-size: 0.8rem; opacity: 0.7;"></i> 
+        </a>
+      </li>
+      
+      <li class="nav-item">
+        <a class="nav-link" href="capacitaciones.php">
+          <i class="bi bi-camera-video"></i>
+          <span>Capacitaciones</span>
+          <span class="badge bg-info ms-auto" style="font-size: 0.7rem;"><i class="bi bi-camera-reels ms-auto" style="font-size: 0.8rem; opacity: 0.7;"></i></span>
         </a>
       </li>
       

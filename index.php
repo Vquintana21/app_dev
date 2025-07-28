@@ -419,11 +419,16 @@ $conn->close();
                            
                             </br>
                             <nav>
-                                
+								<div class="card mb-4">
+									<div class="card-body text-center">
+										<h4> <i class="bi bi-person-raised-hand text-danger fs-2"></i> Importante</h4>
+										Antes de solicitar salas, debe declarar la actividad correspondiente. Solo después de realizar este paso podrá gestionar la solicitud de salas.
+									</div>
+								</div>   
                             </nav>
                         </div>
                         <div class="card-body" id="calendar-container">
-                            <!-- Aquí se generará el calendario -->
+                            <!-- #######################Aquí se generará el calendario -->
                         </div>
                     </div>
 
@@ -1001,17 +1006,39 @@ function limpiarErrorSubtipo() {
 function getMonthRange() {
     if (!planClases || planClases.length === 0) return [];
     
+    // Convertir todas las fechas y encontrar min/max
     const dates = planClases.map(activity => new Date(activity.pcl_Fecha));
     const firstDate = new Date(Math.min.apply(null, dates));
     const lastDate = new Date(Math.max.apply(null, dates));
     
-    const months = [];
-    const currentDate = new Date(firstDate);
+    // 🔍 DEBUG: Verificar fechas calculadas
+    console.log('🗓️ DEBUG getMonthRange - Primera fecha:', firstDate);
+    console.log('🗓️ DEBUG getMonthRange - Última fecha:', lastDate);
+    console.log('🗓️ DEBUG getMonthRange - Primer mes:', firstDate.getMonth(), firstDate.getFullYear());
+    console.log('🗓️ DEBUG getMonthRange - Último mes:', lastDate.getMonth(), lastDate.getFullYear());
     
-    while (currentDate <= lastDate) {
+    const months = [];
+    
+    // Crear fecha del primer día del primer mes
+    const currentDate = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+    
+    // Crear fecha del primer día del último mes
+    const endDate = new Date(lastDate.getFullYear(), lastDate.getMonth(), 1);
+    
+    console.log('🗓️ DEBUG getMonthRange - Fecha inicio loop:', currentDate);
+    console.log('🗓️ DEBUG getMonthRange - Fecha fin loop:', endDate);
+    
+    // Iterar mes por mes hasta incluir el último mes
+    while (currentDate <= endDate) {
+        console.log('🗓️ DEBUG getMonthRange - Agregando mes:', currentDate.getMonth(), currentDate.getFullYear());
         months.push(new Date(currentDate));
         currentDate.setMonth(currentDate.getMonth() + 1);
     }
+    
+    console.log('🗓️ DEBUG getMonthRange - Total meses generados:', months.length);
+    months.forEach((month, index) => {
+        console.log(`🗓️ DEBUG getMonthRange - Mes ${index}:`, month.toLocaleString('es-ES', { month: 'long', year: 'numeric' }));
+    });
     
     return months;
 }

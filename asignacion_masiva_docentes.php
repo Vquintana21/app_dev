@@ -277,7 +277,8 @@ $fila_curso = mysqli_fetch_assoc($CURSO_query);
 													spre_profesorescurso.rut,
 													spre_personas.Nombres,
 													spre_personas.Paterno,
-													spre_personas.Materno
+													spre_personas.Materno,
+													spre_tipoparticipacion.CargoTexto
 												FROM
 													spre_profesorescurso
 												INNER JOIN spre_personas ON spre_profesorescurso.rut = spre_personas.Rut

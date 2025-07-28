@@ -436,12 +436,12 @@ $conn->close();
                                 <input type="hidden" id="cursos_idcursos" name="cursos_idcursos" value="<?php echo $idCurso; ?>">
                                 
                                 <div class="mb-3">
-                                    <label class="form-label">Título de la actividad</label>
+                                    <label class="form-label fw-bold">Título de la actividad</label>
                                     <textarea class="form-control" id="activity-title" name="activity-title" rows="3"></textarea>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label class="form-label">Tipo actividad</label>
+                                    <label class="form-label fw-bold">Tipo actividad</label>
                                     <select class="form-control" id="activity-type" name="type" onchange="updateSubTypes()">
                                         <option value="">Seleccione un tipo</option>
                                         <!-- Se llenará dinámicamente -->
@@ -449,7 +449,7 @@ $conn->close();
                                 </div>
                                 
                                 <div class="mb-3" id="subtype-container" style="display: none;">
-                                    <label class="form-label">Sub Tipo actividad</label>
+                                    <label class="form-label fw-bold">Sub Tipo actividad</label>
                                     <select class="form-control" id="activity-subtype" name="subtype">
                                         <!-- Se llenará dinámicamente -->
                                     </select>
@@ -457,13 +457,17 @@ $conn->close();
                                 
                                 <div class="row mb-3">
                                     <div class="col-md-6">
-                                        <label class="form-label">Fecha</label>
+                                        <label class="form-label fw-bold">Fecha</label>
                                         <input type="date" class="form-control" id="activity-date" name="date" required>
+										 <div class="form-text">
+											<i class="bi bi-calendar3 me-1"></i>
+											Solo días de lunes a viernes
+										</div>
                                     </div>
                                 </div>
                                 
                                 <div class="mb-4">
-                                    <label class="form-label">Bloques de horario</label>
+                                    <label class="form-label fw-bold">Bloques de horario</label>
                                     <div id="bloques-container" class="border rounded p-3">
                                         <!-- Se llenará dinámicamente con los bloques -->
                                     </div>
@@ -473,14 +477,14 @@ $conn->close();
                                 <div class="mb-3">
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="mandatory" name="mandatory">
-                                        <label class="form-check-label">Asistencia obligatoria</label>
+                                        <label class="form-check-label fw-bold">Asistencia obligatoria</label>
                                     </div>
                                 </div>
                                 
                                 <div class="mb-3">
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" id="is-evaluation" name="is_evaluation">
-                                        <label class="form-check-label">Esta actividad incluye una evaluación</label>
+                                        <label class="form-check-label fw-bold">Esta actividad incluye una evaluación</label>
                                     </div>
                                 </div>
                             </form>
@@ -702,7 +706,7 @@ function loadBloques(isEditing = false) {
     } else {
         // MODO INSERCIÓN: Checkboxes
         const titleDiv = document.createElement('div');
-        titleDiv.className = 'mb-2 fw-bold';
+        titleDiv.className = 'mb-2';
         
         // Texto dinámico según si hay bloques específicos o no
         if (numerosBloquesCurso && numerosBloquesCurso.length > 0) {
@@ -873,7 +877,18 @@ async function aplicarFechaLimite() {
             const bloqueActual = activity.Bloque;
             if (bloqueActual) {
                 console.log('Registrando bloque actual:', bloqueActual);
-                actividadesPorBloque.set(String(bloqueActual), activity.idplanclases);
+                if (bloqueActual) {
+						// Extraer solo el número quitando la letra inicial
+						const numeroBloque = bloqueActual.replace(/^[A-Z]/, ''); // "L1" → "1"
+						
+						console.log('🔍 Extracción de bloque:', {
+							bloqueOriginal: bloqueActual,
+							numeroExtraido: numeroBloque
+						});
+						
+						// Guardar usando el número extraído
+						actividadesPorBloque.set(String(numeroBloque), activity.idplanclases);
+					}
             }
             
            if (!document.getElementById('activity-date').hasAttribute('data-has-change-listener')) {
@@ -1044,11 +1059,18 @@ if (tipoInfo && tipoInfo.subtipo_activo === "1") {
         selectedBloques = document.querySelectorAll('.bloque-checkbox:checked');
     }
     
-    // Obtener valores para el día
-    const dateStr = document.getElementById('activity-date').value;
-    const date = new Date(dateStr);
-    const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    const dia = dayNames[date.getDay()];
+    // Obtener valores para el día 
+	const dateStr = document.getElementById('activity-date').value;
+	// Usar una fecha que no dependa de zona horaria
+	const [year, month, day] = dateStr.split('-').map(Number);
+	const date = new Date(year, month - 1, day); // mes es 0-indexed
+	const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+	const dia = dayNames[date.getDay()];
+	
+	const letrasSemanales = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+	const letraDia = letrasSemanales[date.getDay()]; 
+	
+	
     
     // Otros valores comunes
     const idCurso = document.getElementById('cursos_idcursos').value;
@@ -1066,10 +1088,37 @@ if (tipoInfo && tipoInfo.subtipo_activo === "1") {
     const savePromises = [];
     
     // Procesar cada bloque seleccionado
-    selectedBloques.forEach(bloqueElement => {
-        const bloque = bloqueElement.value;
+   
+      selectedBloques.forEach(bloqueElement => {
+    // ✅ DEBUG: Ver qué está pasando
+    console.log('DEBUG COMPLETO:', {
+        elemento: bloqueElement,
+        value: bloqueElement.value,
+        id: bloqueElement.id,
+        name: bloqueElement.name,
+        checked: bloqueElement.checked,
+        tagName: bloqueElement.tagName,
+        type: bloqueElement.type,
+        innerHTML: bloqueElement.innerHTML,
+        outerHTML: bloqueElement.outerHTML.substring(0, 200)
+    });
+    
+    const numeroBloque = bloqueElement.value;
+    
+    // ✅ DEBUG: Ver los valores
+    console.log('Valores extraídos:', {
+        numeroBloque: numeroBloque,
+        letraDia: letraDia,
+        concatenacion: letraDia + numeroBloque,
+        tipoDeNumero: typeof numeroBloque,
+        estaVacio: numeroBloque === ''
+    });
+    
+    const bloqueNomenclatura = letraDia + numeroBloque;
         const inicio = bloqueElement.dataset.inicio;
         const termino = bloqueElement.dataset.termino;
+		
+		
         
         // Crear FormData para este bloque
         const formData = new FormData();
@@ -1089,7 +1138,7 @@ if (tipoInfo && tipoInfo.subtipo_activo === "1") {
         formData.append('dia', dia);
         formData.append('pcl_condicion', obligatorio);
         formData.append('pcl_ActividadConEvaluacion', evaluacion);
-        formData.append('Bloque', bloque);
+        formData.append('Bloque', bloqueNomenclatura);
         
         // Guardar actividad
         const savePromise = fetch('guardar_actividad_clinica.php', {
@@ -4177,6 +4226,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.style.borderColor = '';
             }
         });
+    }
+});
+
+document.getElementById('activity-date').addEventListener('change', function() {
+    const fecha = this.value;
+    if (fecha) {
+        const dia = new Date(fecha + 'T00:00:00').getDay();
+        if (dia === 0 || dia === 6) {
+            this.value = '';
+            mostrarToast('Solo se pueden seleccionar días de lunes a viernes', 'warning');
+        }
     }
 });
 
