@@ -714,7 +714,8 @@ if ($estadosInfo['activas'] == 0 && $estadosInfo['liberadas'] > 0) {
 // ✅ Si hay asignaciones activas, continuar con flujo normal...
         
         // Solo modificar si están en estado 0 (solicitado)
-        if ($currentState['maxEstado'] == 0) {
+        //if ($currentState['maxEstado'] == 0) {
+			if ($currentState['maxEstado'] == 0 || $currentState['maxEstado'] == 2) {
             // Obtener observaciones existentes de asignacion
             $queryObs = "SELECT Comentario FROM asignacion 
                          WHERE idplanclases = ? LIMIT 1";
@@ -756,7 +757,7 @@ if ($estadosInfo['activas'] == 0 && $estadosInfo['liberadas'] > 0) {
                                       campus = ?,
                                       cercania = ?,
                                       junta_seccion = ?
-                                  WHERE idplanclases = ? AND idEstado = 0");
+                                  WHERE idplanclases = ? AND (idEstado = 0 OR idEstado = 2)");
             
             // ✅ CORREGIR: String de tipos correcto
             $stmt->bind_param("sissii", 
@@ -847,7 +848,7 @@ if ($estadosInfo['activas'] == 0 && $estadosInfo['liberadas'] > 0) {
                 // Eliminar asignaciones sobrantes
                 error_log("🗑️ ELIMINANDO " . abs($diff) . " asignaciones sobrantes");
                 $stmt = $conn->prepare("DELETE FROM asignacion 
-                                      WHERE idplanclases = ? AND idEstado = 0 
+                                      WHERE idplanclases = ? AND (idEstado = 0 OR idEstado = 2)
                                       LIMIT ?");
                 $limit = abs($diff);
                 $stmt->bind_param("ii", $data['idplanclases'], $limit);
@@ -1295,6 +1296,32 @@ global $reserva2;
         
         $idplanclases = $infoAsignacion['idplanclases'];
         $idSala = $infoAsignacion['idSala'];
+		
+		//Obtener detalles de la sala ANTES de liberar
+
+        $detalleSala = null;
+
+        if (!empty($idSala) && $idSala !== '1') {
+
+            $querySalaDetalle = "SELECT s.idSala, s.sa_Nombre, s.sa_UbicCampus, s.sa_UbicOtraInf, s.sa_Capacidad 
+
+                                FROM sala s 
+
+                                WHERE s.idSala = ?";
+
+            $stmtSalaDetalle = $conn->prepare($querySalaDetalle);
+
+            $stmtSalaDetalle->bind_param("s", $idSala);
+
+            $stmtSalaDetalle->execute();
+
+            $resultSalaDetalle = $stmtSalaDetalle->get_result();
+
+            $detalleSala = $resultSalaDetalle->fetch_assoc();
+
+            $stmtSalaDetalle->close();
+
+        }
         
         // PASO 1: Liberar la asignación (cambiar estado a 4)
         $stmt = $conn->prepare("UPDATE asignacion 
@@ -1333,6 +1360,21 @@ global $reserva2;
                               WHERE p.idplanclases = ?");
         $stmt->bind_param("i", $idplanclases);
         $stmt->execute();
+		
+		 try {
+
+            require_once 'correo_liberacion_simple.php';
+
+            enviarCorreoLiberacionSimple($conn, $idplanclases, $detalleSala);
+
+        } catch (Exception $emailError) {
+
+            error_log("⚠️ Error en correo (no afecta liberación): " . $emailError->getMessage());
+
+            // No fallar la liberación por error de correo
+
+        }
+		
         
         $conn->commit();
 		
@@ -1493,7 +1535,7 @@ global $reserva2;
 		
 
         // ✅ NUEVA LÓGICA: GESTIONAR ASIGNACIONES EXISTENTES
-        $queryExistentes = "SELECT COUNT(*) as count FROM asignacion WHERE idplanclases = ? AND idEstado = 0";
+        $queryExistentes = "SELECT COUNT(*) as count FROM asignacion WHERE idplanclases = ? AND (idEstado = 0 OR idEstado = 2)";
         $stmtExistentes = $conn->prepare($queryExistentes);
         $stmtExistentes->bind_param("i", $idplanclases);
         $stmtExistentes->execute();
@@ -1513,7 +1555,7 @@ global $reserva2;
             if ($diferencia > 0) {
                 error_log("🗑️ ELIMINANDO {$diferencia} asignaciones sobrantes");
                 $stmtEliminar = $conn->prepare("DELETE FROM asignacion 
-                                               WHERE idplanclases = ? AND idEstado in  (0, 1 ,4)
+                                               WHERE idplanclases = ? AND idEstado in  (0, 1, 2 ,4)
                                                LIMIT ?");
                 $stmtEliminar->bind_param("ii", $idplanclases, $diferencia);
                 $stmtEliminar->execute();
@@ -1538,7 +1580,7 @@ global $reserva2;
                                        cercania = ?,
                                        junta_seccion = ?,
                                        Comentario = CONCAT(IFNULL(Comentario, ''), '\n\n', ?)
-                                   WHERE idplanclases = ? AND idEstado = 0 
+                                   WHERE idplanclases = ? AND AND (idEstado = 0 OR idEstado = 2)
                                    LIMIT 1";
                 
                 $stmtActualizar = $conn->prepare($queryActualizar);
@@ -2223,7 +2265,7 @@ $result = $stmt->get_result();
                 <ul class="list-group list-group-flush">
             <li class="list-group-item">
                 <i class="bi bi-clipboard-check text-primary me-2"></i>
-                Las actividades de tipo clase se solicitan automáticamente. Para las demás, haga clic en “Solicitar”.
+                Las actividades de tipo clase se solicitan automáticamente (sólo si ha declarado la actividad en la pestaña calendario). Para las demás, haga clic en “Solicitar”.
             </li>
             <li class="list-group-item">
                 <i class="bi bi-pencil-square text-success me-2"></i>
@@ -2313,8 +2355,11 @@ $result = $stmt->get_result();
         // Determinar cantidades por estado
         $estado0 = isset($estados[0]) ? $estados[0] : 0;
         $estado1 = isset($estados[1]) ? $estados[1] : 0;
+		$estado2 = isset($estados[2]) ? $estados[2] : 0;
         $estado3 = isset($estados[3]) ? $estados[3] : 0;
         $estado4 = isset($estados[4]) ? $estados[4] : 0;
+		
+		$solicitudesPendientes = $estado0 + $estado2;		
 
         // Total de asignaciones
         $totalAsignaciones = array_sum($estados);
@@ -2368,12 +2413,14 @@ $result = $stmt->get_result();
         // ✅ LÓGICA DE ESTADOS ACTUALIZADA
         $countSalasConReserva = count($salasConReserva);
         $tieneAsignaciones = !empty($salasConReserva);
-        $tieneSolicitudes = $row['salas_solicitadas'] > 0;
+        //$tieneSolicitudes = $row['salas_solicitadas'] > 0;
+		$tieneSolicitudes = $solicitudesPendientes > 0; // ✅ Incluye estados 0 y 2
         $todasLiberadas = ($totalAsignaciones > 0 && $estado4 == $totalAsignaciones);
         $todasAsignadas = ($totalActivas > 0 && $countSalasConReserva == $row['pcl_nSalas'] && $countSalasConReserva > 0);
         $parcialmenteAsignadas = ($countSalasConReserva > 0 && ($estado0 > 0 || $estado1 > 0 || $countSalasConReserva < $row['pcl_nSalas']));
         $enModificacion = ($estado1 > 0 && $countSalasConReserva == 0);
-        $solicitadas = ($estado0 == $totalActivas && $totalActivas > 0);
+        //$solicitadas = ($estado0 == $totalActivas && $totalActivas > 0);
+		$solicitadas = ($solicitudesPendientes == $totalActivas && $totalActivas > 0);
         $pendiente = ($totalActivas == 0);
         $tieneInconsistencias = !empty($salasInconsistentes);
         $todasConfirmadas = $todasAsignadas;

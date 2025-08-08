@@ -1,8 +1,13 @@
 <?php
-include_once 'dbconfig.php';
+include_once 'conexion.php';
 require "phpmailer/PHPMailerAutoload.php";
 
-function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
+$conn_sin_base = new mysqli('localhost', 'dpimeduchile', 'gD5T4)N1FDj1');
+mysqli_query ($conn ,"SET NAMES 'utf8'");
+
+function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion, $detalleSala = null) {
+    error_log("📧 INICIO enviarCorreoLiberacionDesdeProfesor - idpcl: {$idpcl}");
+       global $conn_sin_base;
     // Datos de la actividad
     $querycurso = mysqli_query($conn,"SELECT usuario, `CodigoCurso`, `Seccion`, `NombreCurso`, tipoSesion, fecha, hora_inicio, hora_termino 
                                       FROM asignacion
@@ -15,21 +20,82 @@ function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
     $hora_inicio = $rowcurso['hora_inicio'];
     $hora_termino = $rowcurso['hora_termino'];
 
-    // Info de salas
-    $querySalas = mysqli_query($conn, "SELECT a.idSala, s.sa_Nombre, s.sa_UbicCampus, s.sa_UbicOtraInf, s.sa_Capacidad 
-                                       FROM asignacion a 
-                                       LEFT JOIN sala s ON a.idSala = s.idSala 
-                                       WHERE a.idplanclases = $idpcl AND a.idSala != '' AND a.idSala != '1'");
+    error_log("📋 Datos de actividad obtenidos - Curso: {$curso}, Usuario: {$usuario}");
+
+    // ✅ NUEVA LÓGICA: Usar el detalle de sala pasado como parámetro
     $salas_liberadas = [];
-    while($rowSala = mysqli_fetch_assoc($querySalas)) {
-        $salas_liberadas[] = $rowSala;
+    if ($detalleSala !== null && !empty($detalleSala)) {
+        $salas_liberadas[] = $detalleSala;
+        error_log("✅ Usando detalle de sala del parámetro: " . json_encode($detalleSala));
+    } else {
+        error_log("⚠️ No se recibió detalle de sala como parámetro, intentando consulta fallback");
+        
+        // FALLBACK: Intentar obtener de comentarios o logs (opcional)
+        $querySalas = mysqli_query($conn, "SELECT a.idSala, s.sa_Nombre, s.sa_UbicCampus, s.sa_UbicOtraInf, s.sa_Capacidad 
+                                           FROM asignacion a 
+                                           LEFT JOIN sala s ON a.idSala = s.idSala 
+                                           WHERE a.idplanclases = $idpcl AND a.idSala != '' AND a.idSala != '1'");
+        while($rowSala = mysqli_fetch_assoc($querySalas)) {
+            $salas_liberadas[] = $rowSala;
+        }
+        
+        if (empty($salas_liberadas)) {
+            error_log("⚠️ No se encontraron salas por consulta fallback");
+        }
     }
+
+    error_log("📊 Total salas para incluir en correo: " . count($salas_liberadas));
 
     // Info del docente
     $queryDocente = mysqli_query($conn,"SELECT `Funcionario`, `EmailReal` FROM spre_personas WHERE Rut ='$usuario'");
     $docente = mysqli_fetch_assoc($queryDocente);
     $nombre = $docente['Funcionario'];
     $email = $docente['EmailReal'];
+	
+	 $querypersona = mysqli_query($conn_sin_base,"
+                SELECT DISTINCT
+    p.Rut,
+    p.Funcionario,
+    COALESCE(
+        ca.correo,
+        p.Emailreal,
+        p.Email
+    ) AS email
+FROM
+    (
+    SELECT
+        pc.cursos_idcursos
+    FROM
+        dpimeduc_calendario.planclases pc
+    WHERE
+        pc.idplanclases = '$idpcl'
+) AS plan
+LEFT JOIN dpimeduc_planificacion.spre_profesorescurso prc
+ON
+    plan.cursos_idcursos = prc.idcurso AND prc.Vigencia = 1
+   
+LEFT JOIN dpimeduc_calendario.docenteclases dc
+ON
+    dc.idplanclases = '$idpcl' AND dc.vigencia = 1
+INNER JOIN dpimeduc_planificacion.spre_personas p
+ON
+    p.Rut = COALESCE(prc.rut, dc.rutDocente)
+LEFT JOIN dpimeduc_calendario.correos_actualizados ca
+ON
+    ca.rut = p.Rut
+WHERE
+    COALESCE(
+        ca.correo,
+        p.Emailreal,
+        p.Email
+    ) IS NOT NULL AND(
+        prc.idTipoParticipacion IN(1, 2, 3, 8) OR prc.idTipoParticipacion IS NULL
+    )
+ORDER BY
+    p.Funcionario;
+                ");
+
+    error_log("👤 Docente: {$nombre}, Email: {$email}");
 
     // Mail setup
     $mail = new PHPMailer(true);
@@ -45,8 +111,11 @@ function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
     $mail->setFrom("_mainaccount@dpi.med.uchile.cl", "Sistema de Aulas");
     $mail->Subject = "Liberación de Sala realizada por el Profesor";
 
-	$mail->addAddress('felpilla@gmail.com');
-    //$mail->addAddress($email, $nombre);
+    $mail->addAddress($email, $nombre);
+	while($correos = mysqli_fetch_array($querypersona)){
+		$mail->addCC($correos['email'], $correos['Funcionario']); // ✅ addCC no addAddress
+	}
+	$mail->addCC('felpilla@gmail.com'); 
     //$mail->addCC('gestionaulas.med@uchile.cl', 'Gestión de Aulas');
 
     // Estilos y cuerpo HTML (basado en tu plantilla)
@@ -136,6 +205,7 @@ function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
                 <blockquote style='border-left: 3px solid #ccc; padding-left: 10px; color: #555;'>{$justificacion}</blockquote>";
 
     if (count($salas_liberadas) > 0) {
+        error_log("📋 Generando tabla de salas liberadas");
         $contenidoCorreo .= "
                 <p>Las salas liberadas son las siguientes:</p>
                 <table>
@@ -156,6 +226,7 @@ function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
         }
         $contenidoCorreo .= "</table>";
     } else {
+        error_log("⚠️ No hay salas para mostrar en el correo");
         $contenidoCorreo .= "<p>No hay información detallada de salas liberadas.</p>";
     }
 
@@ -177,8 +248,10 @@ function enviarCorreoLiberacionDesdeProfesor($conn, $idpcl, $justificacion) {
 
     try {
         $mail->send();
+        error_log("✅ Correo enviado exitosamente a: {$email}");
     } catch (Exception $e) {
-        error_log("Error al enviar correo de liberación: " . $mail->ErrorInfo);
+        error_log("❌ Error al enviar correo de liberación: " . $mail->ErrorInfo);
+        throw $e; // Re-throw para que lo capture el backend
     }
 }
 ?>

@@ -16,7 +16,7 @@ $rut = str_pad($ruti, 10, "0", STR_PAD_LEFT);
 // Consulta SQL
 $query = "SELECT `idplanclases`, pcl_tituloActividad, pcl_Periodo, `pcl_Fecha`, `pcl_Inicio`, `pcl_Termino`, 
           `pcl_nSalas`, `pcl_Seccion`, `pcl_TipoSesion`, `pcl_SubTipoSesion`, 
-          `pcl_Semana`, `pcl_AsiCodigo`, `pcl_AsiNombre`, `Sala`, `Bloque`, `dia`, `pcl_condicion`, `pcl_ActividadConEvaluacion`, pcl_BloqueExtendido
+          `pcl_Semana`, `pcl_AsiCodigo`, `pcl_AsiNombre`, `Sala`, `Bloque`, `dia`, `pcl_condicion`, `pcl_ActividadConEvaluacion`, pcl_BloqueExtendido, pcl_HorasNoPresenciales
           FROM `planclases` 
           WHERE `cursos_idcursos` = ?
 		  AND pcl_Semana >= 1";
@@ -202,51 +202,116 @@ function InfoDocenteUcampus($rut){
 
 }
 
-//Consulta para obtener horas no presenciales
-$queryHoras = "SELECT
-    C.idcurso,
-    A.`HNPSemanales`,
-    FLOOR(A.HNPSemanales) AS horas,
-    ROUND(
-        (
-            A.HNPSemanales - FLOOR(A.HNPSemanales)
-        ) * 60
-    ) AS minutos,
-    CONCAT(
-        FLOOR(HNPSemanales),
-        ':',
-        LPAD(
-            ROUND(
-                (
-                    HNPSemanales - FLOOR(HNPSemanales)
-                ) * 60
-            ),
-            2,
-            '0'
-        )
-    ) AS tiempo
-FROM
-    `spre_maestropresencialidad` A
-JOIN spre_ramosperiodo B ON
-    A.SCT = B.SCT AND A.Semanas = B.NroSemanas AND A.idTipoBloque = B.idTipoBloque
-JOIN spre_cursos C ON
-    B.CodigoCurso = C.CodigoCurso
-WHERE
-    C.idcurso = ? AND B.idPeriodo = C.idperiodo;";
+// ===========================================
+// NUEVA CONSULTA: HORAS DISPONIBLES PARA AUTOAPRENDIZAJE
+// Reemplazar la sección //Consulta para obtener horas no presenciales
+// ===========================================
 
-$stmtHoras = $conexion3->prepare($queryHoras);
-$stmtHoras->bind_param("i", $idCurso);
-$stmtHoras->execute();
-$resultHoras = $stmtHoras->get_result();
-$horasData = $resultHoras->fetch_assoc();
+// PASO 1: Obtener horas totales del curso (presenciales + no presenciales)
+$queryHorasTotales = "
+    SELECT 
+        C.idcurso, 
+        SUM((A.Semanas * A.HPSemanales) + (A.Semanas * A.HNPSemanales)) AS total_horas_curso
+    FROM `spre_maestropresencialidad` A 
+    JOIN spre_ramosperiodo B ON A.SCT = B.SCT 
+        AND A.Semanas = B.NroSemanas 
+        AND A.idTipoBloque = B.idTipoBloque 
+    JOIN spre_cursos C ON B.CodigoCurso = C.CodigoCurso 
+    WHERE C.idcurso = ? AND B.idPeriodo = C.idperiodo
+";
 
-// Convertir a minutos para facilitar cálculos
-$horasSemanales = isset($horasData['HNPSemanales']) ? $horasData['HNPSemanales'] : 0;
+$stmtHorasTotales = $conexion3->prepare($queryHorasTotales);
+$stmtHorasTotales->bind_param("i", $idCurso);
+$stmtHorasTotales->execute();
+$resultHorasTotales = $stmtHorasTotales->get_result();
+$horasTotalesData = $resultHorasTotales->fetch_assoc();
+
+// PASO 2: Obtener horas presenciales ya declaradas
+$queryHorasPresenciales = "
+    SELECT
+        COALESCE(SUM(TIME_TO_SEC(p.pcl_HorasPresenciales)) / 3600, 0) AS horas_presenciales_decimales
+    FROM planclases p
+    INNER JOIN pcl_TipoSesion t ON p.pcl_TipoSesion = t.tipo_sesion
+                                AND p.pcl_SubTipoSesion = t.Sub_tipo_sesion
+    WHERE t.docentes = 1
+      AND p.pcl_tituloActividad <> ''
+      AND p.cursos_idcursos = ?
+";
+
+$stmtHorasPresenciales = $conn->prepare($queryHorasPresenciales);
+$stmtHorasPresenciales->bind_param("i", $idCurso);
+$stmtHorasPresenciales->execute();
+$resultHorasPresenciales = $stmtHorasPresenciales->get_result();
+$horasPresencialesData = $resultHorasPresenciales->fetch_assoc();
+
+// PASO 3: Obtener horas de autoaprendizaje ya usadas
+$queryHorasAutoaprendizaje = "
+    SELECT
+        COALESCE(SUM(TIME_TO_SEC(p.pcl_HorasNoPresenciales)) / 3600, 0) AS horas_autoaprendizaje_usadas
+    FROM planclases p
+    WHERE p.pcl_TipoSesion = 'Autoaprendizaje'
+      AND p.pcl_tituloActividad IS NOT NULL
+      AND p.pcl_tituloActividad != ''
+      AND TRIM(p.pcl_tituloActividad) != ''
+      AND p.pcl_HorasNoPresenciales IS NOT NULL
+      AND p.pcl_HorasNoPresenciales != '00:00:00'
+      AND p.cursos_idcursos = ?
+";
+
+$stmtHorasAutoaprendizaje = $conn->prepare($queryHorasAutoaprendizaje);
+$stmtHorasAutoaprendizaje->bind_param("i", $idCurso);
+$stmtHorasAutoaprendizaje->execute();
+$resultHorasAutoaprendizaje = $stmtHorasAutoaprendizaje->get_result();
+$horasAutoaprendizajeData = $resultHorasAutoaprendizaje->fetch_assoc();
+
+// PASO 4: Calcular horas disponibles
+$horasTotalesCurso = isset($horasTotalesData['total_horas_curso']) ? 
+                     (float)$horasTotalesData['total_horas_curso'] : 0;
+$horasPresencialesDeclaradas = isset($horasPresencialesData['horas_presenciales_decimales']) ? 
+                               (float)$horasPresencialesData['horas_presenciales_decimales'] : 0;
+$horasAutoaprendizajeUsadas = isset($horasAutoaprendizajeData['horas_autoaprendizaje_usadas']) ? 
+                              (float)$horasAutoaprendizajeData['horas_autoaprendizaje_usadas'] : 0;
+
+// CÁLCULO FINAL: Total - Presenciales - Autoaprendizajes ya usados
+$horasDisponiblesAutoaprendizaje = $horasTotalesCurso - $horasPresencialesDeclaradas - $horasAutoaprendizajeUsadas;
+
+// Asegurar que no sea negativo
+if ($horasDisponiblesAutoaprendizaje < 0) {
+    $horasDisponiblesAutoaprendizaje = 0;
+}
+
+// PASO 5: Crear array compatible con código existente
+$horasData = array(
+    'horas' => floor($horasDisponiblesAutoaprendizaje),
+    'minutos' => round(($horasDisponiblesAutoaprendizaje - floor($horasDisponiblesAutoaprendizaje)) * 60),
+    'decimales' => $horasDisponiblesAutoaprendizaje,
+    // Datos adicionales para debugging
+    'debug' => array(
+        'total_curso' => $horasTotalesCurso,
+        'presenciales_declaradas' => $horasPresencialesDeclaradas,
+        'autoaprendizaje_usadas' => $horasAutoaprendizajeUsadas,
+        'disponibles' => $horasDisponiblesAutoaprendizaje
+    )
+);
+
+// PASO 6: Variables para JavaScript (mantener compatibilidad)
+$horasSemanales = $horasDisponiblesAutoaprendizaje;
 $horasSemanalesJson = json_encode($horasSemanales);
 
-// Cerrar conexión
-$stmt->close();
-$conn->close();
+// PASO 7: Cerrar statements
+$stmtHorasTotales->close();
+$stmtHorasPresenciales->close();
+$stmtHorasAutoaprendizaje->close();
+
+// DEBUG: Log para verificar cálculos (opcional - remover en producción)
+error_log("=== CÁLCULO HORAS AUTOAPRENDIZAJE ===");
+error_log("Curso ID: " . $idCurso);
+error_log("Total horas curso: " . $horasTotalesCurso);
+error_log("Horas presenciales declaradas: " . $horasPresencialesDeclaradas);
+error_log("Horas autoaprendizaje usadas: " . $horasAutoaprendizajeUsadas);
+error_log("Horas disponibles: " . $horasDisponiblesAutoaprendizaje);
+
+
 ?>
 
 <!DOCTYPE html>
@@ -580,7 +645,7 @@ $conn->close();
 						<div class="row">
 							<div class="col-6">
 								<div class="input-group">
-									<input type="number" class="form-control" id="auto-hours" name="hours" min="0" max="23" placeholder="Horas">
+									<input type="number" class="form-control" id="auto-hours" name="hours" min="0" max="150" placeholder="Horas">
 									<span class="input-group-text">hrs</span>
 								</div>
 							</div>
@@ -591,11 +656,27 @@ $conn->close();
 								</div>
 							</div>
 						</div>
-						<small class="text-muted">Tiempo máximo semanal autorizado por pregrado: <b><?php echo $horasData['horas']; ?></b> Hora <b><?php echo $horasData['minutos']; ?></b> Minutos.</small>
+						<small class="text-muted">
+							Horas disponibles para autoaprendizaje: 
+							<b><?php echo $horasData['horas']; ?></b> hrs 
+							<b><?php echo $horasData['minutos']; ?></b> min
+							<br>
+							<span class="text-info">
+								<i class="fas fa-info-circle"></i> 
+								Total curso: <?php echo number_format($horasData['debug']['total_curso'], 1); ?>hrs | 
+								Presenciales: <?php echo number_format($horasData['debug']['presenciales_declaradas'], 1); ?>hrs | 
+								Autoaprendizaje usado: <?php echo number_format($horasData['debug']['autoaprendizaje_usadas'], 1); ?>hrs
+							</span>
+						</small>
 					</div>
 					<div class="alert alert-warning" id="auto-no-hours-message" style="display: none;">
-						Este curso no posee horas NO presenciales asignadas.
-					</div>
+							<i class="fas fa-exclamation-triangle"></i>
+							<strong>Sin horas disponibles</strong><br>
+							Este curso no tiene horas disponibles para autoaprendizaje. 
+							<small class="d-block mt-1">
+								Las horas totales del curso ya han sido asignadas a actividades presenciales o autoaprendizajes existentes.
+							</small>
+						</div>
 				</form>
 			</div>
 			<div class="modal-footer">
@@ -699,7 +780,7 @@ console.log('🔧 Cargando datos juntar secciones...');
 
 function validateAutoTime(hours, minutes) {
     const totalHours = hours + (minutes / 60);
-    return totalHours <= horasSemanales;
+    return totalHours <= horasSemanales;  // horasSemanales ahora contiene las horas disponibles
 }
 
 /**
@@ -1394,43 +1475,100 @@ function generateFullCalendar() {
 // ===========================================
 // 5. FUNCIONES DE ACTIVIDADES Y CARGA DE DATOS
 // ===========================================
+// ===========================================
+// FUNCIÓN CON DEBUG MEJORADO: loadAutoActivityData
+// ===========================================
 
 function loadAutoActivityData(activity) {
    document.getElementById('auto-idplanclases').value = activity.idplanclases;
    document.getElementById('auto-activity-title').value = activity.pcl_tituloActividad || '';
    document.getElementById('auto-week').textContent = activity.pcl_Semana;
    
-   // Verificar si hay horas no presenciales disponibles
+   // 🔍 DEBUG COMPLETO DE LOS DATOS RECIBIDOS
+   console.group('🔍 DEBUG: loadAutoActivityData');
+   console.log('Activity completa recibida:', activity);
+   console.log('ID:', activity.idplanclases);
+   console.log('Título:', activity.pcl_tituloActividad);
+   console.log('Título trimmed:', activity.pcl_tituloActividad ? activity.pcl_tituloActividad.trim() : 'null/undefined');
+   console.log('pcl_HorasNoPresenciales:', activity.pcl_HorasNoPresenciales);
+   console.log('Tipo de pcl_HorasNoPresenciales:', typeof activity.pcl_HorasNoPresenciales);
+   console.groupEnd();
+   
+   // Verificar si hay horas disponibles para autoaprendizaje
    if (horasSemanales <= 0) {
-       // Ocultar campos de tiempo y mostrar mensaje
+       // Ocultar campos de tiempo y mostrar mensaje actualizado
        document.getElementById('auto-time-fields').style.display = 'none';
        document.getElementById('auto-no-hours-message').style.display = 'block';
        document.getElementById('save-auto-btn').disabled = true;
+       console.log('❌ Sin horas disponibles, modal deshabilitado');
    } else {
        // Mostrar campos de tiempo y ocultar mensaje
        document.getElementById('auto-time-fields').style.display = 'block';
        document.getElementById('auto-no-hours-message').style.display = 'none';
        document.getElementById('save-auto-btn').disabled = false;
        
-       // Si ya tiene horas asignadas, mostrarlas en el formulario
-       if (activity.pcl_HorasNoPresenciales) {
-           const horasMatch = activity.pcl_HorasNoPresenciales.match(/(\d+):(\d+):(\d+)/);
-           if (horasMatch) {
-               document.getElementById('auto-hours').value = parseInt(horasMatch[1]);
-               document.getElementById('auto-minutes').value = parseInt(horasMatch[2]);
+       // 🔥 LÓGICA CORREGIDA: Diferencia entre actividad declarada vs sin declarar
+       const actividadDeclarada = activity.pcl_tituloActividad && 
+                                 activity.pcl_tituloActividad.trim() !== '' &&
+                                 activity.pcl_tituloActividad.trim() !== null;
+       
+       console.log('📝 ¿Actividad declarada?', actividadDeclarada);
+       
+       if (actividadDeclarada) {
+           // ACTIVIDAD YA DECLARADA: Precargar las horas que tiene guardadas
+           console.log('📊 Procesando actividad declarada...');
+           console.log('pcl_HorasNoPresenciales valor:', activity.pcl_HorasNoPresenciales);
+           
+           if (activity.pcl_HorasNoPresenciales && 
+               activity.pcl_HorasNoPresenciales !== '00:00:00' && 
+               activity.pcl_HorasNoPresenciales !== '' &&
+               activity.pcl_HorasNoPresenciales !== null) {
+               
+               console.log('✅ Tiene horas guardadas, intentando parsear...');
+               
+               // Intentar múltiples formatos
+               let horasMatch = null;
+               
+               // Formato HH:MM:SS
+               horasMatch = activity.pcl_HorasNoPresenciales.match(/(\d+):(\d+):(\d+)/);
+               if (!horasMatch) {
+                   // Formato HH:MM
+                   horasMatch = activity.pcl_HorasNoPresenciales.match(/(\d+):(\d+)/);
+                   if (horasMatch) {
+                       horasMatch = [horasMatch[0], horasMatch[1], horasMatch[2], '00']; // Agregar segundos
+                   }
+               }
+               
+               console.log('🔍 Resultado del regex:', horasMatch);
+               
+               if (horasMatch && horasMatch.length >= 3) {
+                   const horas = parseInt(horasMatch[1]);
+                   const minutos = parseInt(horasMatch[2]);
+                   
+                   console.log('🎯 Parseado exitoso - Horas:', horas, 'Minutos:', minutos);
+                   
+                   document.getElementById('auto-hours').value = horas;
+                   document.getElementById('auto-minutes').value = minutos;
+                   
+                   console.log('✅ Campos actualizados con valores guardados');
+                   
+                   // Verificar que se asignaron correctamente
+                   console.log('🔍 Verificación - Campo horas:', document.getElementById('auto-hours').value);
+                   console.log('🔍 Verificación - Campo minutos:', document.getElementById('auto-minutes').value);
+               } else {
+                   console.log('❌ No se pudo parsear el formato de hora:', activity.pcl_HorasNoPresenciales);
+                   document.getElementById('auto-hours').value = '';
+                   document.getElementById('auto-minutes').value = '';
+               }
            } else {
-               // Si no hay horas asignadas, precargar con los valores máximos permitidos
-               const horasMax = <?php echo $horasData['horas']; ?>;
-               const minutosMax = <?php echo $horasData['minutos']; ?>;
-               document.getElementById('auto-hours').value = horasMax;
-               document.getElementById('auto-minutes').value = minutosMax;
+               console.log('📝 Actividad declarada pero sin horas válidas, campos vacíos');
+               document.getElementById('auto-hours').value = '';
+               document.getElementById('auto-minutes').value = '';
            }
        } else {
-           // Si no hay horas asignadas, precargar con los valores máximos permitidos
-           const horasMax = <?php echo $horasData['horas']; ?>;
-           const minutosMax = <?php echo $horasData['minutos']; ?>;
-           document.getElementById('auto-hours').value = horasMax;
-           document.getElementById('auto-minutes').value = minutosMax;
+           console.log('🆕 Actividad nueva (sin título), campos vacíos');
+           document.getElementById('auto-hours').value = '';
+           document.getElementById('auto-minutes').value = '';
        }
    }
    
@@ -1447,6 +1585,8 @@ function loadAutoActivityData(activity) {
    titleField.addEventListener('input', function() {
        saveButton.disabled = this.value.trim() === '';
    });
+   
+   console.log('🏁 loadAutoActivityData completado');
 }
 
 // Modificar la función loadActivityData existente
@@ -2162,7 +2302,13 @@ function saveAutoActivity() {
     
     // Validar horas y minutos
     if (!validateAutoTime(hours, minutes)) {
-        mostrarToast(`Las horas asignadas exceden el máximo semanal (${horasSemanales} horas)`, 'danger');
+        const horasDisponibles = Math.floor(horasSemanales);
+        const minutosDisponibles = Math.round((horasSemanales - horasDisponibles) * 60);
+        
+        mostrarToast(
+            `Las horas asignadas exceden las horas disponibles para autoaprendizaje (${horasDisponibles} hrs ${minutosDisponibles} min disponibles)`, 
+            'danger'
+        );
         return;
     }
     
@@ -3548,9 +3694,8 @@ async function mostrarModalLiberarSalas(idPlanClase) {
 }
 
 async function liberarSala(idAsignacion) {
-    if (!confirm('¿Está seguro que desea liberar esta sala?')) {
+    if (!confirm('¿Está seguro que desea liberar esta sala?'))
         return;
-    }
     
     try {
         const response = await fetch('salas2.php', {
@@ -3564,32 +3709,37 @@ async function liberarSala(idAsignacion) {
             })
         });
         
-        if (response.ok) {
-            // Cerrar el modal de liberar salas
-            const modalLiberar = bootstrap.Modal.getInstance(document.getElementById('liberarSalaModal'));
-            if (modalLiberar) modalLiberar.hide();
-            
-            // Mostrar notificación
-            mostrarToastSalas('Sala liberada correctamente');
-            
-            // Recargar solo la tabla de salas
-            const cursoId = new URLSearchParams(window.location.search).get('curso');
-            fetch('salas2.php?curso=' + cursoId)
-                .then(response => response.text())
-                .then(html => {
-                    document.getElementById('salas-list').innerHTML = html;
-                })
-                .catch(error => {
-                    mostrarToastSalas('Error al actualizar la tabla', 'danger');
-                    console.error('Error al recargar la tabla:', error);
-                });
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Sala liberada correctamente');
+            // Cerrar modal y refrescar
+            bootstrap.Modal.getInstance(document.getElementById('liberarSalaModal')).hide();
+            location.reload();
         } else {
-            mostrarToastSalas('Error al liberar la sala', 'danger');
+            alert('Error: ' + data.error);
         }
     } catch (error) {
         console.error('Error:', error);
-        mostrarToastSalas('Error al procesar la solicitud', 'danger');
+        alert('Error al liberar la sala');
     }
+}
+
+// ===== FUNCIÓN AUXILIAR PARA DEBUGGING =====
+function debugLiberarSala(idAsignacion) {
+    console.group('🐛 DEBUG MODE - Liberar Sala');
+    console.log('🔧 Modo debugging activado');
+    console.log('📋 Parámetros recibidos:', { idAsignacion });
+    console.log('🌍 Estado del DOM:', {
+        sweetAlert2Available: typeof Swal !== 'undefined',
+        bootstrapAvailable: typeof bootstrap !== 'undefined',
+        modalExists: document.getElementById('liberarSalaModal') !== null
+    });
+    
+    liberarSala(idAsignacion).finally(() => {
+        console.log('🏁 DEBUG MODE finalizado');
+        console.groupEnd();
+    });
 }
 
 
@@ -5198,18 +5348,30 @@ document.getElementById('docente-masivo-tab').addEventListener('click', function
     const hoursInput = document.getElementById('auto-hours');
     const minutesInput = document.getElementById('auto-minutes');
     
-    function validateInputs() {
-        const hours = parseInt(hoursInput.value) || 0;
-        const minutes = parseInt(minutesInput.value) || 0;
+  function validateInputs() {
+    const hours = parseInt(document.getElementById('auto-hours').value) || 0;
+    const minutes = parseInt(document.getElementById('auto-minutes').value) || 0;
+    
+    const hoursInput = document.getElementById('auto-hours');
+    const minutesInput = document.getElementById('auto-minutes');
+    
+    if (!validateAutoTime(hours, minutes)) {
+        hoursInput.classList.add('is-invalid');
+        minutesInput.classList.add('is-invalid');
         
-        if (!validateAutoTime(hours, minutes)) {
-            hoursInput.classList.add('is-invalid');
-            minutesInput.classList.add('is-invalid');
-        } else {
-            hoursInput.classList.remove('is-invalid');
-            minutesInput.classList.remove('is-invalid');
-        }
+        // 🆕 AGREGAR TOOLTIP DINÁMICO CON HORAS DISPONIBLES
+        const horasDisponibles = Math.floor(horasSemanales);
+        const minutosDisponibles = Math.round((horasSemanales - horasDisponibles) * 60);
+        
+        hoursInput.title = `Máximo disponible: ${horasDisponibles}hrs ${minutosDisponibles}min`;
+        minutesInput.title = `Máximo disponible: ${horasDisponibles}hrs ${minutosDisponibles}min`;
+    } else {
+        hoursInput.classList.remove('is-invalid');
+        minutesInput.classList.remove('is-invalid');
+        hoursInput.removeAttribute('title');
+        minutesInput.removeAttribute('title');
     }
+}
     
     if (hoursInput) hoursInput.addEventListener('input', validateInputs);
     if (minutesInput) minutesInput.addEventListener('input', validateInputs);
@@ -5625,6 +5787,34 @@ function volverYRecargarTabla() {
     }, 500); // Más tiempo para que se cierre el modal
 }
 
+console.log('🔧 DEBUG: Datos de horas disponibles para autoaprendizaje');
+console.log('Total horas curso:', <?php echo json_encode($horasData['debug']['total_curso']); ?>);
+console.log('Horas presenciales declaradas:', <?php echo json_encode($horasData['debug']['presenciales_declaradas']); ?>);
+console.log('Horas autoaprendizaje usadas:', <?php echo json_encode($horasData['debug']['autoaprendizaje_usadas']); ?>);
+console.log('Horas disponibles:', <?php echo json_encode($horasData['debug']['disponibles']); ?>);
+
+// FUNCIÓN PARA VERIFICAR CÁLCULOS EN CONSOLA (llamar en cualquier momento)
+function debugHorasAutoaprendizaje() {
+    console.group('📊 DEBUG: Horas Autoaprendizaje');
+    console.log('🔢 Horas disponibles (variable JS):', horasSemanales);
+    console.log('📋 Desglose:');
+    console.log('  • Total curso:', <?php echo json_encode($horasData['debug']['total_curso']); ?>, 'hrs');
+    console.log('  • Presenciales declaradas:', <?php echo json_encode($horasData['debug']['presenciales_declaradas']); ?>, 'hrs');
+    console.log('  • Autoaprendizaje usadas:', <?php echo json_encode($horasData['debug']['autoaprendizaje_usadas']); ?>, 'hrs');
+    console.log('  • Disponibles:', <?php echo json_encode($horasData['debug']['disponibles']); ?>, 'hrs');
+    
+    // Verificar que la suma sea correcta
+    const calculoManual = <?php echo json_encode($horasData['debug']['total_curso']); ?> - 
+                         <?php echo json_encode($horasData['debug']['presenciales_declaradas']); ?> - 
+                         <?php echo json_encode($horasData['debug']['autoaprendizaje_usadas']); ?>;
+    
+    console.log('✅ Verificación cálculo manual:', calculoManual.toFixed(2), 'hrs');
+    console.log('🎯 Coincide con variable JS:', Math.abs(calculoManual - horasSemanales) < 0.01 ? '✅ SÍ' : '❌ NO');
+    console.groupEnd();
+}
+
+// LLAMAR AUTOMÁTICAMENTE AL CARGAR LA PÁGINA
+debugHorasAutoaprendizaje();
 
 </script>
 
